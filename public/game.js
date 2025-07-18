@@ -1,0 +1,1 @@
+// Placeholder game.js script with socket connections and UI logic
