@@ -6,7 +6,7 @@ let socket;
 
 if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName")) {
   document.getElementById("join-modal").style.display = "flex";
-  document.getElementById("join-form").addEventListener("submit", function(e) {
+  document.getElementById("join-form").addEventListener("submit", function (e) {
     e.preventDefault();
     const lobby = document.getElementById("lobby-input").value.trim();
     const name = document.getElementById("name-input").value.trim();
@@ -41,6 +41,7 @@ if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName"))
     const othersEl = document.getElementById("opponent-hands");
     const scoresEl = document.getElementById("scoreboard");
 
+    // Render table card
     tableEl.innerHTML = "";
     if (table.length > 0) {
       const card = table[table.length - 1];
@@ -50,6 +51,7 @@ if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName"))
       tableEl.appendChild(img);
     }
 
+    // Render player's hand
     handEl.innerHTML = "";
     hand.forEach(card => {
       const img = document.createElement("img");
@@ -69,20 +71,21 @@ if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName"))
       handEl.appendChild(img);
     });
 
-    othersEl.innerHTML = "";
+    // Render opponent list with emoji indicators
+    othersEl.innerHTML = "<h3>Opponents</h3>";
     others.forEach(op => {
-      const div = document.createElement("div");
-      div.innerHTML = `<strong>${op.name}</strong><br/>`;
-      for (let i = 0; i < op.count; i++) {
-        const img = document.createElement("img");
-        img.src = "assets/cards/back.png";
-        img.style.height = "60px";
-        img.style.margin = "2px";
-        div.appendChild(img);
-      }
-      othersEl.appendChild(div);
+      const isTurn = op.name === state.currentPlayer;
+      const turnEmoji = isTurn ? "👉 " : "";
+      const cardCount = ` 🃏 ${op.count}`;
+
+      const playerRow = document.createElement("div");
+      playerRow.classList.add("opponent-row");
+      playerRow.innerHTML = `${turnEmoji}<strong>${op.name}</strong>${cardCount}`;
+
+      othersEl.appendChild(playerRow);
     });
 
+    // Scoreboard
     scoresEl.innerHTML = "<h4>Scores</h4>";
     for (const [pid, score] of Object.entries(state.scores)) {
       const player = [state.currentPlayer, ...others.map(p => p.name)].find(n => n === pid) || "You";
