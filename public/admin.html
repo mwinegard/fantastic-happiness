@@ -1,62 +1,63 @@
-<!-- public/admin.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>UNO Admin Panel</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: sans-serif; background: #f7f7f7; padding: 20px; }
+    h1 { color: #444; }
+    .lobby { background: white; padding: 10px; margin: 10px 0; border-radius: 8px; }
+    .player { margin-left: 20px; }
+    button { padding: 5px 10px; margin-left: 10px; }
+    #refresh { margin: 10px 0; }
+  </style>
 </head>
 <body>
-  <h1>🎮 UNO Game Admin Panel</h1>
-  <div id="lobby-list"></div>
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
-    const lobbyList = document.getElementById("lobby-list");
+  <h1>🛠 UNO Admin Panel</h1>
+  <button id="refresh">🔄 Refresh</button>
+  <div id="lobby-list">Loading...</div>
 
-    function renderAdmin(data) {
-      if (Object.keys(data).length === 0) {
-        lobbyList.innerHTML = "<p>No active lobbies.</p>";
+  <script>
+    async function loadAdmin() {
+      const res = await fetch("/admin-state");
+      const data = await res.json();
+      const list = document.getElementById("lobby-list");
+      list.innerHTML = "";
+
+      if (data.length === 0) {
+        list.innerHTML = "<em>No active lobbies</em>";
         return;
       }
 
-      lobbyList.innerHTML = "";
-      for (const lobby in data) {
+      data.forEach(lobby => {
         const div = document.createElement("div");
-        div.innerHTML = `<h2>Lobby: ${lobby}</h2>`;
-        const ul = document.createElement("ul");
-        data[lobby].players.forEach(p => {
-          const li = document.createElement("li");
-          li.innerHTML = `
-            ${p.name} 🃏 ${p.handSize} (${p.score})
-            <button onclick="kick('${lobby}', '${p.id}')">Kick</button>
-          `;
-          ul.appendChild(li);
+        div.className = "lobby";
+        div.innerHTML = `<strong>${lobby.id}</strong>
+          <button onclick="closeLobby('${lobby.id}')">Close Lobby</button>`;
+        lobby.players.forEach(p => {
+          const pDiv = document.createElement("div");
+          pDiv.className = "player";
+          pDiv.innerHTML = `${p.name} 🃏 ${p.handSize} (${p.score || 0})
+            <button onclick="kick('${lobby.id}', '${p.id}')">Kick</button>`;
+          div.appendChild(pDiv);
         });
-
-        const closeBtn = document.createElement("button");
-        closeBtn.textContent = "Close Lobby";
-        closeBtn.onclick = () => closeLobby(lobby);
-
-        div.appendChild(ul);
-        div.appendChild(closeBtn);
-        lobbyList.appendChild(div);
-      }
+        list.appendChild(div);
+      });
     }
 
-    function kick(lobby, id) {
-      socket.emit("admin:kick_player", { lobby, id });
+    async function kick(lobby, playerId) {
+      await fetch(`/admin/kick/${lobby}/${playerId}`, { method: "POST" });
+      loadAdmin();
     }
 
-    function closeLobby(lobby) {
-      socket.emit("admin:close_lobby", lobby);
+    async function closeLobby(lobby) {
+      await fetch(`/admin/close/${lobby}`, { method: "POST" });
+      loadAdmin();
     }
 
-    socket.on("admin_data", renderAdmin);
-
-    setInterval(() => {
-      socket.emit("admin:get_lobbies");
-    }, 3000);
+    document.getElementById("refresh").onclick = loadAdmin;
+    loadAdmin();
   </script>
 </body>
 </html>
