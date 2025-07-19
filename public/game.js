@@ -13,6 +13,8 @@ const timerBar = document.getElementById("timer-bar");
 const scoreBoard = document.getElementById("scoreboard");
 const messageBox = document.getElementById("messages");
 const opponentsDiv = document.getElementById("opponents");
+const wildIndicator = document.getElementById("wild-indicator");
+const yourTurnLabel = document.getElementById("your-turn");
 
 let playerId, currentState = {}, saidUNO = false;
 
@@ -22,6 +24,7 @@ joinForm.addEventListener("submit", (e) => {
   const lobby = lobbyInput.value.trim();
   if (name && lobby) {
     socket.emit("join", { name, lobby });
+    playSound("joined");
   }
 });
 
@@ -35,6 +38,7 @@ function renderState(state) {
   playerId = socket.id;
   const hand = state.hands[playerId] || [];
   const topCard = state.discardPile.at(-1);
+  const wildColor = state.wildColor;
 
   handDiv.innerHTML = "";
   hand.forEach(card => {
@@ -51,14 +55,18 @@ function renderState(state) {
   topImg.className = "card";
   discardPile.appendChild(topImg);
 
+  wildIndicator.innerText = wildColor ? `Wild Color: ${wildColor.toUpperCase()}` : "";
+
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
   drawImg.className = "card";
-  drawImg.addEventListener("click", () => socket.emit("drawCard", { lobby: state.players[0].id }));
+  drawImg.addEventListener("click", () => {
+    socket.emit("drawCard", { lobby: state.players[0].id });
+    playSound("draw");
+  });
   drawPile.appendChild(drawImg);
 
-  // Show UNO button if hand size = 2
   if (hand.length === 2 && state.currentTurn === playerId) {
     unoButton.style.display = "inline-block";
     saidUNO = false;
@@ -66,26 +74,26 @@ function renderState(state) {
     unoButton.style.display = "none";
   }
 
-  // Render scoreboard
   scoreBoard.innerHTML = "Scores: " + state.players.map(p => `${p.name} (${p.score})`).join(" | ");
-
-  // Opponents
   opponentsDiv.innerHTML = "Players: " + state.players.map(p => {
     const pointer = p.id === state.currentTurn ? "👉" : "";
     return `${pointer} ${p.name} 🃏 ${p.handSize}`;
   }).join(" | ");
 
-  // Timer reset
-  timerBar.style.width = "100%";
-  animateTimer();
+  if (state.currentTurn === playerId) {
+    yourTurnLabel.style.display = "block";
+  } else {
+    yourTurnLabel.style.display = "none";
+  }
 
+  animateTimer();
   gameDiv.style.display = "block";
   document.getElementById("lobby-form").style.display = "none";
 }
 
 function tryPlayCard(card) {
-  const color = card.split("_")[0];
-  if (color === "wild") {
+  const type = card.includes("wild") ? "wild" : card.split("_")[1];
+  if (type === "wild" || type === "draw4") {
     colorPicker.style.display = "block";
     colorPicker.querySelectorAll("button").forEach(btn => {
       btn.onclick = () => {
@@ -96,6 +104,7 @@ function tryPlayCard(card) {
           chosenColor: btn.dataset.color,
           saidUNO
         });
+        playSound("wild");
       };
     });
   } else {
@@ -104,6 +113,13 @@ function tryPlayCard(card) {
       card,
       saidUNO
     });
+
+    // Play based on card type
+    if (["skip", "reverse", "draw"].some(a => card.includes(a))) {
+      playSound(card.includes("reverse") ? "reverse" : "skip");
+    } else {
+      playSound("number");
+    }
   }
 }
 
@@ -116,12 +132,19 @@ function animateTimer() {
   }, 50);
 }
 
-socket.on("state", (state) => {
-  renderState(state);
-});
+function playSound(id) {
+  const el = document.getElementById("audio-" + id);
+  if (el && el.play) {
+    el.play().catch(() => {});
+  }
+}
+
+socket.on("state", (state) => renderState(state));
 
 socket.on("message", ({ from, text }) => {
   const msg = document.createElement("div");
+  msg.className = "message";
   msg.innerHTML = `<strong>${from}:</strong> ${text}`;
   messageBox.appendChild(msg);
+  messageBox.scrollTop = messageBox.scrollHeight;
 });
