@@ -1,44 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Leaderboard – Fantastic Happiness</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <title>Leaderboard</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: #f9f9f9;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      text-align: center;
+    }
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      width: 300px;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+    }
+    th {
+      background: #004080;
+      color: white;
+    }
+    td {
+      background: #fff;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🏆 Leaderboard</h1>
-    <table id="leaderboardTable">
-      <thead>
-        <tr>
-          <th>Player</th>
-          <th>Score</th>
-        </tr>
-      </thead>
-      <tbody id="leaderboardBody">
-        <tr><td colspan="2">Loading...</td></tr>
-      </tbody>
-    </table>
-    <p><a href="/">⬅️ Back to Game</a></p>
-  </div>
+  <h1>🏆 Top Scores</h1>
+  <table id="leaderboard">
+    <thead>
+      <tr><th>Player</th><th>Score</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script>
-    fetch("/api/leaderboard")
+    fetch('/scores.json')
       .then(res => res.json())
       .then(data => {
-        const body = document.getElementById("leaderboardBody");
-        body.innerHTML = "";
+        const tbody = document.querySelector("#leaderboard tbody");
+        const sorted = Object.entries(data)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10);
 
-        if (!data.length) {
-          body.innerHTML = "<tr><td colspan='2'>No scores yet.</td></tr>";
-        }
-
-        data.forEach(entry => {
+        for (let [name, score] of sorted) {
           const row = document.createElement("tr");
-          row.innerHTML = `<td>${entry.name}</td><td>${entry.score}</td>`;
-          body.appendChild(row);
-        });
+          row.innerHTML = `<td>${name}</td><td>${score}</td>`;
+          tbody.appendChild(row);
+        }
       });
   </script>
 </body>
