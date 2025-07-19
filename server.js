@@ -1,8 +1,8 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
-const { Server } = require("socket.io");
 const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
@@ -36,7 +36,6 @@ function cleanupLobbies() {
     }
   }
 }
-
 setInterval(cleanupLobbies, 3600000);
 
 function initDeck() {
@@ -61,20 +60,29 @@ function emitState(lobby) {
   const state = {
     players: lobby.players.map(p => ({
       name: p.name,
-      cards: p.name === lobby.currentPlayer ? p.cards : p.cards.map(() => "back"),
+      cards: p.cards,
       score: p.score,
     })),
     currentPlayer: lobby.currentPlayer,
-    topCard: lobby.topCard,
+    topCard: lobby.topCard
   };
-  for (const p of lobby.players) {
-    io.to(p.id).emit("updateState", state);
-  }
+
+  lobby.players.forEach(p => {
+    io.to(p.id).emit("updateState", {
+      ...state,
+      players: state.players.map(pl => ({
+        ...pl,
+        cards: pl.name === p.name ? pl.cards : pl.cards.map(() => "back")
+      }))
+    });
+  });
 }
 
 function broadcastChat(lobby, sender, message) {
+  const msg = typeof message === "string" ? message : JSON.stringify(message);
+  const sdr = typeof sender === "string" ? sender : "SUE";
   for (const p of lobby.players) {
-    io.to(p.id).emit("chat", { sender, message });
+    io.to(p.id).emit("chat", { sender: sdr, message: msg });
   }
 }
 
@@ -89,7 +97,12 @@ function startGame(lobby) {
   for (const p of lobby.players) {
     p.cards = lobby.deck.splice(0, 7);
   }
-  lobby.topCard = lobby.deck.pop();
+
+  // Ensure topCard is not wild
+  do {
+    lobby.topCard = lobby.deck.pop();
+  } while (lobby.topCard.startsWith("wild"));
+
   lobby.currentIndex = 0;
   lobby.currentPlayer = lobby.players[0].name;
   broadcastChat(lobby, "SUE", "Game started!");
@@ -107,8 +120,7 @@ function removePlayer(id, lobby) {
       scores[winner.name] = (scores[winner.name] || 0) + 100;
       saveScores(scores);
     } else {
-      const redistributed = removed.cards.length;
-      for (let i = 0; i < redistributed; i++) {
+      for (let i = 0; i < removed.cards.length; i++) {
         const target = lobby.players[i % lobby.players.length];
         target.cards.push(lobby.deck.pop());
       }
@@ -140,32 +152,35 @@ io.on("connection", socket => {
       };
     }
 
-    const existing = lobbies[lobby].players.find(p => p.name === name);
-    if (existing) {
+    const room = lobbies[lobby];
+    if (room.players.find(p => p.name === name)) {
       socket.emit("lobbyFull");
       return;
     }
 
-    if (lobbies[lobby].players.length >= MAX_PLAYERS) {
+    if (room.players.length >= MAX_PLAYERS) {
       socket.emit("lobbyFull");
       return;
     }
 
-    lobbies[lobby].players.push({ name, id: socket.id, cards: [], score: 0 });
+    const player = { name, id: socket.id, cards: [], score: 0 };
+    room.players.push(player);
     socket.join(lobby);
 
-    broadcastChat(lobbies[lobby], "SUE", `${name} has joined the game.`);
+    broadcastChat(room, "SUE", `${name} has joined the game.`);
+    socket.emit("playerJoined", player);  // <- crucial line to unlock UI
+    emitState(room);
 
-    if (lobbies[lobby].players.length === 2) {
-      broadcastChat(lobbies[lobby], "SUE", "Game will start in 30 seconds...");
+    if (room.players.length === 2) {
+      broadcastChat(room, "SUE", "Game will start in 30 seconds...");
       let seconds = 30;
       const interval = setInterval(() => {
         seconds -= 5;
         if (seconds <= 0) {
           clearInterval(interval);
-          startGame(lobbies[lobby]);
+          startGame(room);
         } else {
-          broadcastChat(lobbies[lobby], "SUE", `${seconds} seconds until game starts...`);
+          broadcastChat(room, "SUE", `${seconds} seconds until game starts...`);
         }
       }, 5000);
     }
@@ -193,7 +208,8 @@ io.on("connection", socket => {
     const card = p.cards[index];
     if (!card) return;
 
-    const [topColor] = l.topCard.split("_");
+    const top = l.topCard || "";
+    const [topColor] = top.split("_");
     const [cardColor] = card.split("_");
 
     if (cardColor === topColor || card.startsWith("wild")) {
