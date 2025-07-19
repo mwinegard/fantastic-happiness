@@ -1,283 +1,253 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io'); // ✅ Correct import
+const { Server } = require('socket.io');
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server); // ✅ Fixes the deployment error
+const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-let lobbies = {}; // { lobbyId: { players: [], deck: [], discardPile: [], ... } }
+// Game data
+const lobbies = {};
 
-function createDeck() {
-  const colors = ['red', 'yellow', 'green', 'blue'];
-  const values = ['0','1','2','3','4','5','6','7','8','9','skip','reverse','draw'];
-  const wilds = ['wild', 'wild_draw4'];
-  let deck = [];
+function generateDeck() {
+  const colors = ['red', 'blue', 'green', 'yellow'];
+  const deck = [];
 
-  for (const color of colors) {
-    for (const value of values) {
-      deck.push(`${color}_${value}.png`);
-      if (value !== '0') deck.push(`${color}_${value}.png`); // duplicate non-zero cards
-    }
-  }
+  colors.forEach(color => {
+    for (let i = 0; i <= 9; i++) deck.push(`${color}_${i}.png`);
+    ['skip', 'reverse', 'draw'].forEach(type => {
+      deck.push(`${color}_${type}.png`);
+      deck.push(`${color}_${type}.png`);
+    });
+  });
 
-  for (const wild of wilds) {
-    deck.push(`${wild}.png`);
-    deck.push(`${wild}.png`);
-  }
-
+  deck.push('wild.png', 'wild.png', 'wild_draw4.png', 'wild_draw4.png');
   return shuffle(deck);
 }
 
 function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-  return array;
+  return array.sort(() => Math.random() - 0.5);
+}
+
+function deal(deck, count) {
+  const hand = [];
+  for (let i = 0; i < count; i++) hand.push(deck.pop());
+  return hand;
 }
 
 io.on('connection', socket => {
-  let playerName = '';
-  let currentLobby = '';
-
   socket.on('joinLobby', ({ name, lobbyId }) => {
-    playerName = name;
-    currentLobby = lobbyId;
+    socket.join(lobbyId);
+    socket.data.name = name;
+    socket.data.lobbyId = lobbyId;
 
     if (!lobbies[lobbyId]) {
       lobbies[lobbyId] = {
         players: [],
-        deck: createDeck(),
-        discardPile: [],
+        deck: [],
+        table: [],
         turnIndex: 0,
         direction: 1,
-        wildColor: null,
+        lastWildColor: null,
+        skipNext: false,
         scores: {},
-        missedTurns: {}
+        inactivity: Date.now(),
       };
     }
 
-    const lobby = lobbies[lobbyId];
-    lobby.players.push({ id: socket.id, name, hand: [] });
-    lobby.scores[name] = 0;
-    lobby.missedTurns[socket.id] = 0;
+    const game = lobbies[lobbyId];
 
-    for (let i = 0; i < 7; i++) {
-      const card = lobby.deck.pop();
-      lobby.players[lobby.players.length - 1].hand.push(card);
-    }
+    game.players.push({
+      id: socket.id,
+      name,
+      hand: [],
+      skips: 0
+    });
 
-    if (lobby.discardPile.length === 0) {
-      let topCard = lobby.deck.pop();
-      while (topCard.includes('wild')) topCard = lobby.deck.pop();
-      lobby.discardPile.push(topCard);
+    game.scores[name] = 0;
+
+    if (game.deck.length === 0) {
+      game.deck = generateDeck();
+      game.players.forEach(player => {
+        player.hand = deal(game.deck, 7);
+      });
+      game.table = [game.deck.pop()];
     }
 
     sendGameState(lobbyId);
   });
 
   socket.on('playCard', ({ card, chosenColor }) => {
-    const lobby = lobbies[currentLobby];
-    if (!lobby) return;
+    const lobbyId = socket.data.lobbyId;
+    const name = socket.data.name;
+    const game = lobbies[lobbyId];
+    if (!game) return;
 
-    const player = lobby.players.find(p => p.id === socket.id);
-    if (!player || player !== getCurrentPlayer(lobby)) return;
+    const player = game.players.find(p => p.id === socket.id);
+    if (!player || game.players[game.turnIndex].id !== socket.id) return;
 
-    const top = lobby.discardPile[lobby.discardPile.length - 1];
-    const isValid = validatePlay(card, top, lobby.wildColor);
+    const lastCard = game.table[game.table.length - 1];
+    const validColor = lastCard.split('_')[0];
+    const validType = lastCard.split('_')[1];
 
-    if (!isValid) return;
+    if (!card.includes('wild')) {
+      const playedColor = card.split('_')[0];
+      const playedType = card.split('_')[1];
+      if (
+        playedColor !== validColor &&
+        playedType !== validType &&
+        (!game.lastWildColor || playedColor !== game.lastWildColor)
+      ) return;
+    }
 
     player.hand = player.hand.filter(c => c !== card);
-    lobby.discardPile.push(card);
-    lobby.wildColor = card.includes('wild') ? chosenColor : null;
+    game.table.push(card);
+    game.lastWildColor = card.includes('wild') ? chosenColor : null;
 
-    handleSpecialCard(card, lobby);
+    // Action effects
+    if (card.includes('skip')) {
+      game.skipNext = true;
+    } else if (card.includes('reverse')) {
+      game.direction *= -1;
+    } else if (card.includes('draw')) {
+      const next = getNextPlayer(game);
+      const target = game.players[next];
+      target.hand.push(...deal(game.deck, card.includes('4') ? 4 : 2));
+    }
 
     if (player.hand.length === 0) {
-      const score = calculateScore(lobby);
-      lobby.scores[player.name] += score;
-      io.to(socket.id).emit('gameOver', {
-        message: `Congratulations ${player.name}, you are the Champion!`
+      // Winner
+      let points = 0;
+      game.players.forEach(p => {
+        if (p.name !== name) {
+          points += p.hand.length;
+        }
       });
-      delete lobbies[currentLobby];
+      game.scores[name] += points;
+
+      io.to(lobbyId).emit('gameOver', {
+        message: `🎉 Congratulations ${name}, you are the Champion! You won this round with ${points} points.`,
+      });
+
+      delete lobbies[lobbyId];
       return;
     }
 
-    advanceTurn(lobby);
-    sendGameState(currentLobby);
+    // Advance turn
+    game.turnIndex = getNextPlayer(game);
+    sendGameState(lobbyId);
   });
 
   socket.on('drawCard', () => {
-    const lobby = lobbies[currentLobby];
-    if (!lobby) return;
+    const lobbyId = socket.data.lobbyId;
+    const game = lobbies[lobbyId];
+    const player = game.players.find(p => p.id === socket.id);
+    if (!player) return;
 
-    const player = lobby.players.find(p => p.id === socket.id);
-    if (!player || player !== getCurrentPlayer(lobby)) return;
+    if (game.players[game.turnIndex].id !== socket.id) return;
 
-    const card = lobby.deck.pop();
-    player.hand.push(card);
+    player.hand.push(...deal(game.deck, 1));
+    player.skips = (player.skips || 0) + 1;
 
-    advanceTurn(lobby);
-    sendGameState(currentLobby);
+    if (player.skips >= 3) {
+      leavePlayer(socket, true);
+    } else {
+      game.turnIndex = getNextPlayer(game);
+      sendGameState(lobbyId);
+    }
   });
 
   socket.on('leaveGame', () => {
-    handleLeave(socket.id, currentLobby);
+    leavePlayer(socket, false);
   });
 
   socket.on('disconnect', () => {
-    handleLeave(socket.id, currentLobby);
+    leavePlayer(socket, true);
   });
 });
 
-function handleLeave(socketId, lobbyId) {
-  const lobby = lobbies[lobbyId];
-  if (!lobby) return;
+function getNextPlayer(game) {
+  const total = game.players.length;
+  let next = (game.turnIndex + game.direction + total) % total;
+  if (game.skipNext) {
+    next = (next + game.direction + total) % total;
+    game.skipNext = false;
+  }
+  return next;
+}
 
-  const index = lobby.players.findIndex(p => p.id === socketId);
-  if (index === -1) return;
+function sendGameState(lobbyId) {
+  const game = lobbies[lobbyId];
+  if (!game) return;
 
-  const leaving = lobby.players[index];
-  const leavingHand = leaving.hand.slice();
-  lobby.players.splice(index, 1);
+  const currentPlayer = game.players[game.turnIndex];
+  game.players.forEach(player => {
+    const hand = player.hand;
+    const others = game.players
+      .filter(p => p.id !== player.id)
+      .map(p => ({
+        name: p.name,
+        count: p.hand.length,
+        score: game.scores[p.name] || 0
+      }));
 
-  if (lobby.players.length === 0) {
+    io.to(player.id).emit('gameState', {
+      hand,
+      table: game.table,
+      others,
+      isMyTurn: currentPlayer.id === player.id,
+      currentPlayer: currentPlayer.name,
+      lastWildColor: game.lastWildColor
+    });
+  });
+}
+
+function leavePlayer(socket, silent) {
+  const lobbyId = socket.data.lobbyId;
+  const game = lobbies[lobbyId];
+  if (!game) return;
+
+  const playerIndex = game.players.findIndex(p => p.id === socket.id);
+  if (playerIndex === -1) return;
+
+  const leaving = game.players.splice(playerIndex, 1)[0];
+  if (!leaving) return;
+
+  const hand = leaving.hand;
+  if (game.players.length === 1) {
+    const winner = game.players[0];
+    game.scores[winner.name] += hand.length;
+
+    io.to(lobbyId).emit('gameOver', {
+      message: `🎉 ${winner.name} wins by default and collects all points!`
+    });
+
     delete lobbies[lobbyId];
     return;
   }
 
   // Redistribute cards
-  while (leavingHand.length > 0) {
-    lobby.players.forEach(player => {
-      if (leavingHand.length > 0) {
-        player.hand.push(leavingHand.pop());
-      }
-    });
-  }
+  const share = Math.floor(hand.length / game.players.length);
+  const extras = hand.length % game.players.length;
 
-  if (lobby.players.length === 1) {
-    const winner = lobby.players[0];
-    const score = calculateScore(lobby);
-    lobby.scores[winner.name] += score;
-    io.to(winner.id).emit('gameOver', {
-      message: `Congratulations ${winner.name}, you are the Champion!`
-    });
-    delete lobbies[lobbyId];
-    return;
+  game.players.forEach((p, i) => {
+    const count = share + (i < extras ? 1 : 0);
+    p.hand.push(...hand.splice(0, count));
+  });
+
+  if (game.turnIndex >= playerIndex) {
+    game.turnIndex = getNextPlayer(game);
   }
 
   sendGameState(lobbyId);
 }
 
-function validatePlay(card, topCard, wildColor) {
-  const [cardColor, cardValue] = card.replace('.png', '').split('_');
-  const [topColor, topValue] = topCard.replace('.png', '').split('_');
-
-  return (
-    cardColor === topColor ||
-    cardValue === topValue ||
-    card.includes('wild') ||
-    (wildColor && cardColor === wildColor)
-  );
-}
-
-function handleSpecialCard(card, lobby) {
-  const [color, value] = card.replace('.png', '').split('_');
-  const nextIndex = getNextIndex(lobby);
-
-  switch (value) {
-    case 'skip':
-      lobby.turnIndex = getNextIndex(lobby, 2);
-      break;
-    case 'reverse':
-      lobby.direction *= -1;
-      if (lobby.players.length === 2) {
-        lobby.turnIndex = getNextIndex(lobby);
-      }
-      break;
-    case 'draw':
-      const target = lobby.players[nextIndex];
-      target.hand.push(lobby.deck.pop());
-      target.hand.push(lobby.deck.pop());
-      lobby.turnIndex = getNextIndex(lobby, 2);
-      break;
-    case 'draw4':
-      const target4 = lobby.players[nextIndex];
-      for (let i = 0; i < 4; i++) target4.hand.push(lobby.deck.pop());
-      lobby.turnIndex = getNextIndex(lobby, 2);
-      break;
-    default:
-      // normal card
-      break;
-  }
-}
-
-function advanceTurn(lobby) {
-  lobby.turnIndex = getNextIndex(lobby);
-}
-
-function getNextIndex(lobby, step = 1) {
-  const count = lobby.players.length;
-  return (lobby.turnIndex + step * lobby.direction + count) % count;
-}
-
-function getCurrentPlayer(lobby) {
-  return lobby.players[lobby.turnIndex];
-}
-
-function calculateScore(lobby) {
-  let score = 0;
-  for (const player of lobby.players) {
-    for (const card of player.hand) {
-      if (!card.endsWith('.png')) continue;
-      const base = card.replace('.png', '');
-      if (base.includes('draw4') || base.includes('wild')) {
-        score += 50;
-      } else if (base.includes('draw') || base.includes('skip') || base.includes('reverse')) {
-        score += 20;
-      } else {
-        const val = parseInt(base.split('_')[1]);
-        score += isNaN(val) ? 0 : val;
-      }
-    }
-  }
-  return score;
-}
-
-function sendGameState(lobbyId) {
-  const lobby = lobbies[lobbyId];
-  if (!lobby) return;
-
-  const current = getCurrentPlayer(lobby);
-
-  for (const player of lobby.players) {
-    const others = lobby.players
-      .filter(p => p.id !== player.id)
-      .map(p => ({
-        name: p.name,
-        count: p.hand.length,
-        score: lobby.scores[p.name] || 0
-      }));
-
-    io.to(player.id).emit("gameState", {
-      hand: player.hand,
-      table: lobby.discardPile,
-      others,
-      currentPlayer: current.name,
-      isMyTurn: current.id === player.id,
-      scores: lobby.scores,
-      lastWildColor: lobby.wildColor
-    });
-  }
-}
-
 server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
