@@ -2,38 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Fantastic UNO</title>
+  <title>UNO Game</title>
   <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body>
-  <div id="join-screen">
-    <h1>🎴 Fantastic UNO</h1>
-    <p>Joining default lobby...</p>
+  <div id="lobby-form">
+    <form id="join-form">
+      <input id="name" placeholder="Your Name" maxlength="20" required />
+      <input id="lobby" placeholder="Lobby Name" maxlength="20" required />
+      <button type="submit">Join</button>
+    </form>
   </div>
 
-  <div id="game-screen" class="hidden">
-    <div id="header-bar">
-      <div>Player: <span id="player-name-display"></span></div>
-      <div>Current Turn: <span id="current-turn"></span></div>
+  <div id="game" style="display:none;">
+    <div id="info-panel">
+      <div id="scoreboard"></div>
+      <div id="opponents"></div>
     </div>
-
-    <div id="play-area">
-      <img id="pile-top" class="card hidden" alt="Top Card" />
-      <div id="draw-stack" class="draw-pile" title="Draw a card">
-        <img src="assets/cards/back.png" alt="Draw" />
-      </div>
+    <div id="discard-pile"></div>
+    <div id="draw-pile"></div>
+    <div id="player-hand"></div>
+    <div id="controls">
+      <button id="uno-button" style="display:none;">UNO!</button>
     </div>
-
-    <div id="hand" class="card-hand"></div>
-
-    <div id="chat-container">
-      <div id="chat-box"></div>
-      <form id="chatForm">
-        <input type="text" id="chat-input" maxlength="200" placeholder="Say something..." />
-        <button type="submit" id="chat-send">✉️</button>
-      </form>
+    <div id="wild-color-picker" style="display:none;">
+      <p>Choose a color:</p>
+      <button data-color="red">🔴</button>
+      <button data-color="blue">🔵</button>
+      <button data-color="green">🟢</button>
+      <button data-color="yellow">🟡</button>
     </div>
+    <div id="timer-bar"></div>
+    <div id="messages"></div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
