@@ -1,26 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
   <title>UNO Game</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css" />
+  <script src="/socket.io/socket.io.js"></script>
+  <script defer src="game.js"></script>
 </head>
 <body>
-  <div id="game">
-    <h2 id="turn-info"></h2>
-    <div id="opponent-hands"></div>
-    <div id="table-pile"></div>
-    <h3>Your Hand</h3>
-    <div id="player-hand"></div>
-    <button onclick="drawCard()">Draw</button>
-    <div id="chat">
-      <input id="chatInput" placeholder="Type a message">
-      <button onclick="sendChat()">Send</button>
-    </div>
-    <div id="chatLog"></div>
+  <div class="uno-container">
+    <header>
+      <h1>UNO - Fantastic Happiness</h1>
+      <div id="turn-info">Waiting for game to start...</div>
+    </header>
+
+    <main>
+      <section id="table">
+        <h3>Table</h3>
+        <div id="table-pile"></div>
+      </section>
+
+      <section id="opponent-hands">
+        <h3>Opponents</h3>
+      </section>
+
+      <section id="player-hand">
+        <h3>Your Hand</h3>
+      </section>
+
+      <div class="controls">
+        <button onclick="drawCard()">Draw Card</button>
+        <button onclick="leaveGame()">Leave Game</button>
+      </div>
+
+      <aside id="scoreboard">
+        <h4>Scores</h4>
+      </aside>
+    </main>
   </div>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="game.js"></script>
+
+  <!-- Join Lobby Modal -->
+  <div id="join-modal" class="modal">
+    <div class="modal-content">
+      <h2>Join Game</h2>
+      <form id="join-form">
+        <label>Lobby ID:</label>
+        <input type="text" id="lobby-input" maxlength="12" required />
+        <label>Player Name:</label>
+        <input type="text" id="name-input" maxlength="20" pattern="[a-zA-Z0-9 ]+" required />
+        <button type="submit">Join</button>
+      </form>
+    </div>
+  </div>
 </body>
 </html>
