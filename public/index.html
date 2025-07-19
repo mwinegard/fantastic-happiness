@@ -2,53 +2,54 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fantastic UNO</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#004080" />
-<link rel="apple-touch-icon" href="cards/back.png" />
+  <meta name="theme-color" content="#004080" />
+  <link rel="apple-touch-icon" href="assets/cards/back.png" />
 </head>
 <body>
   <div id="lobby-screen">
-    <h1>UNO</h1>
-    <input type="text" id="nameInput" placeholder="Enter your name" maxlength="20" />
-    <input type="text" id="lobbyInput" placeholder="Enter Lobby ID" />
-    <button id="joinBtn">Join Game</button>
+    <h1>Join UNO Game</h1>
+    <input type="text" id="nameInput" maxlength="20" placeholder="Your Name" />
+    <input type="text" id="lobbyInput" maxlength="20" placeholder="Lobby ID" />
+    <button id="joinBtn">Join</button>
   </div>
 
-  <div id="game-screen" class="hidden">
+  <div id="game-container" style="display: none;">
+    <div id="opponents"></div>
     <div id="table">
       <h3>Discard Pile</h3>
       <div id="pile-container">
-        <img id="discard" src="cards/back.png" />
+        <img id="discard" src="assets/cards/back.png" />
         <div id="draw-stack">
-          <img class="stack-card" src="cards/back.png" />
-          <img class="stack-card" src="cards/back.png" />
-          <img class="stack-card" id="draw-pile" src="cards/back.png" />
+          <img class="stack-card" src="assets/cards/back.png" />
+          <img class="stack-card" src="assets/cards/back.png" />
+          <img class="stack-card" id="draw-pile" src="assets/cards/back.png" />
         </div>
       </div>
       <div id="wild-color"></div>
     </div>
 
-    <div id="hand"></div>
-    <div id="opponents"></div>
+    <div id="hand-container"></div>
+    <button id="leaveBtn">Leave Game</button>
 
-    <div id="chat-sidebar">
+    <div id="chat">
+      <h4>Chat</h4>
       <div id="chat-messages"></div>
       <input type="text" id="chat-input" placeholder="Type a message..." />
+      <button id="send-chat">Send</button>
     </div>
-
-    <button id="leaveBtn">Leave Game</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
   <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js')
-      .then(() => console.log("Service Worker Registered"));
-  }
-</script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log("Service Worker Registered"));
+    }
+  </script>
 </body>
 </html>
