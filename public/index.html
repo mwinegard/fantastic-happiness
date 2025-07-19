@@ -9,16 +9,16 @@
 <body>
   <div id="lobby-screen">
     <h1>UNO</h1>
-    <input type="text" id="nameInput" placeholder="Enter your name (max 20 chars)" maxlength="20" />
+    <input type="text" id="nameInput" placeholder="Enter your name" maxlength="20" />
     <input type="text" id="lobbyInput" placeholder="Enter Lobby ID" />
     <button id="joinBtn">Join Game</button>
   </div>
 
   <div id="game-screen" class="hidden">
     <div id="table">
+      <h3>Discard Pile</h3>
       <div id="pile-container">
-        <h3>Discard Pile</h3>
-        <img id="discard" src="cards/back.png" alt="Discard Pile" />
+        <img id="discard" src="cards/back.png" />
         <div id="draw-stack">
           <img class="stack-card" src="cards/back.png" />
           <img class="stack-card" src="cards/back.png" />
@@ -30,10 +30,12 @@
 
     <div id="hand"></div>
     <div id="opponents"></div>
+
     <div id="chat-sidebar">
       <div id="chat-messages"></div>
       <input type="text" id="chat-input" placeholder="Type a message..." />
     </div>
+
     <button id="leaveBtn">Leave Game</button>
   </div>
 
