@@ -1,95 +1,142 @@
 const socket = io();
-let playerId = null;
-let lobbyId = null;
+let playerId, lobbyId;
+let selectedColor = null;
+let wildColor = null;
+let hand = [];
 
-// Join lobby and name setup
 document.getElementById("joinForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  const nameInput = document.getElementById("playerName");
-  const lobbyInput = document.getElementById("lobbyId");
-
-  const name = nameInput.value.trim().slice(0, 20);
-  const lobby = lobbyInput.value.trim().slice(0, 20);
-
-  if (name && lobby && /^[a-zA-Z0-9]+$/.test(name + lobby)) {
-    socket.emit("joinLobby", { name, lobbyId: lobby });
+  const name = document.getElementById("nameInput").value.trim();
+  const lobby = document.getElementById("lobbyInput").value.trim();
+  if (name && lobby) {
     lobbyId = lobby;
+    socket.emit("joinLobby", { name, lobby });
   }
 });
 
-// Receive player ID
-socket.on("init", (id) => {
-  playerId = id;
+document.getElementById("sendBtn").addEventListener("click", sendChat);
+document.getElementById("chatInput").addEventListener("keypress", (e) => {
+  if (e.key === "Enter") sendChat();
 });
 
-// Update game state
-socket.on("gameState", (state) => {
-  updateUI(state);
-});
-
-// Handle chat messages
-socket.on("chatMessage", (msg) => {
-  const chatBox = document.getElementById("chat");
-  const newMsg = document.createElement("div");
-
-  const sender = msg.from || "System";
-  const color = msg.color || "black";
-
-  newMsg.innerHTML = `<strong style="color:${color}">${sender}:</strong> ${msg.text}`;
-  chatBox.appendChild(newMsg);
-  chatBox.scrollTop = chatBox.scrollHeight;
-});
-
-// Send chat messages
-document.getElementById("chatForm").addEventListener("submit", (e) => {
-  e.preventDefault();
+function sendChat() {
   const input = document.getElementById("chatInput");
   const msg = input.value.trim();
   if (msg) {
-    socket.emit("chatMessage", msg);
+    socket.emit("chatMessage", { text: msg });
     input.value = "";
   }
+}
+
+socket.on("playerInfo", (data) => {
+  playerId = data.id;
 });
 
-// Update UI based on state
-function updateUI(state) {
-  // Example logic for updating cards and turns
+socket.on("lobbyJoined", () => {
+  document.getElementById("joinScreen").style.display = "none";
+  document.getElementById("gameScreen").style.display = "block";
+});
+
+socket.on("updateGame", (state) => {
+  renderGame(state);
+});
+
+socket.on("chatMessage", (msg) => {
+  const chatBox = document.getElementById("chat");
+  const msgDiv = document.createElement("div");
+  msgDiv.innerHTML = `<strong style="color:${msg.color || 'black'}">${msg.from}:</strong> ${msg.text}`;
+  chatBox.appendChild(msgDiv);
+  chatBox.scrollTop = chatBox.scrollHeight;
+});
+
+function renderGame(state) {
   const gameArea = document.getElementById("gameArea");
-  if (!state || !state.players) return;
-
-  const currentPlayer = state.players.find((p) => p.id === playerId);
-  const isMyTurn = state.turnId === playerId;
-
-  document.getElementById("yourTurn").textContent = isMyTurn ? "🎯 Your turn!" : "⏳ Waiting...";
-
-  // Render hand
-  const handContainer = document.getElementById("hand");
-  handContainer.innerHTML = "";
-  currentPlayer.hand.forEach((card) => {
-    const img = document.createElement("img");
-    img.src = `/assets/cards/${card}.png`;
-    img.alt = card;
-    img.className = "card";
-    img.onclick = () => {
-      if (isMyTurn) {
-        socket.emit("playCard", card);
-      }
-    };
-    handContainer.appendChild(img);
-  });
-
-  // Render draw pile
+  const handDiv = document.getElementById("hand");
+  const discard = document.getElementById("discard");
+  const opponents = document.getElementById("opponents");
+  const turnInfo = document.getElementById("turnInfo");
   const drawStack = document.getElementById("drawStack");
-  drawStack.innerHTML = "";
-  for (let i = 0; i < 3; i++) {
-    const img = document.createElement("img");
-    img.src = "/assets/cards/back.png";
-    img.className = "card back";
-    img.style.marginLeft = `-${i * 3}px`;
-    drawStack.appendChild(img);
+
+  gameArea.style.display = "block";
+  discard.innerHTML = "";
+  opponents.innerHTML = "";
+  handDiv.innerHTML = "";
+
+  // Top card logic
+  const topCard = state.topCard;
+  if (topCard) {
+    const card = document.createElement("img");
+    card.src = `/assets/cards/${topCard.image}`;
+    card.className = "card";
+    discard.appendChild(card);
   }
 
-  drawStack.onclick = () => {
-    if (isMyTurn) socket.emit("drawCard");
-  };
+  // Wild color indicator
+  if (state.wildColor) {
+    const dot = document.createElement("div");
+    dot.className = "color-dot";
+    dot.style.backgroundColor = state.wildColor;
+    discard.appendChild(dot);
+  }
+
+  // Turn info
+  const currentPlayer = state.players.find(p => p.id === state.currentTurn);
+  turnInfo.textContent = currentPlayer ? `${currentPlayer.name}'s Turn` : "";
+
+  // Player hand
+  const current = state.players.find(p => p.id === playerId);
+  if (current && current.hand) {
+    current.hand.forEach(card => {
+      const img = document.createElement("img");
+      img.src = `/assets/cards/${card.image}`;
+      img.className = "card";
+      img.onclick = () => {
+        if (card.value.startsWith("wild")) {
+          showColorPicker((color) => {
+            selectedColor = color;
+            socket.emit("playCard", { card, color });
+          });
+        } else {
+          socket.emit("playCard", { card });
+        }
+      };
+      handDiv.appendChild(img);
+    });
+  }
+
+  // Opponents and score list
+  state.players.forEach(p => {
+    if (p.id !== playerId) {
+      const div = document.createElement("div");
+      const turnEmoji = p.id === state.currentTurn ? "👉" : "";
+      div.textContent = `${turnEmoji} ${p.name} 🃏 ${p.hand.length} (${p.score || 0})`;
+      opponents.appendChild(div);
+    }
+  });
+
+  // Draw stack
+  drawStack.innerHTML = "";
+  const drawCard = document.createElement("img");
+  drawCard.src = "/assets/cards/back.png";
+  drawCard.className = "card draw";
+  drawCard.onclick = () => socket.emit("drawCard");
+  drawStack.appendChild(drawCard);
+}
+
+function showColorPicker(callback) {
+  const picker = document.createElement("div");
+  picker.className = "color-picker";
+
+  ["red", "blue", "green", "yellow"].forEach(color => {
+    const btn = document.createElement("button");
+    btn.style.backgroundColor = color;
+    btn.className = "color-btn";
+    btn.onclick = () => {
+      document.body.removeChild(picker);
+      callback(color);
+    };
+    picker.appendChild(btn);
+  });
+
+  document.body.appendChild(picker);
 }
