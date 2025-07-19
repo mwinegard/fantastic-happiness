@@ -1,208 +1,90 @@
 body {
   font-family: Arial, sans-serif;
-  background-color: #f2f2f2;
+  background: #e8f1f8;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.hidden {
-  display: none !important;
-}
-
-#join-screen, #game-screen {
-  width: 100%;
-  max-width: 800px;
-  padding: 20px;
-}
-
-h1 {
   text-align: center;
 }
 
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: center;
+#lobby-form {
+  margin-top: 80px;
 }
 
-input, button, select {
-  font-size: 1rem;
+form input,
+form button {
   padding: 10px;
-  width: 100%;
-  max-width: 300px;
-  box-sizing: border-box;
+  margin: 5px;
+  font-size: 16px;
 }
 
-button {
-  background-color: #333;
-  color: white;
+#game {
+  padding: 20px;
+}
+
+#player-hand,
+#discard-pile,
+#draw-pile {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.card {
+  width: 80px;
+  margin: 5px;
+  transition: transform 0.2s;
+  cursor: pointer;
+}
+
+.card:hover {
+  transform: scale(1.1);
+}
+
+#wild-color-picker {
+  margin-top: 20px;
+}
+
+#wild-color-picker button {
+  font-size: 30px;
+  margin: 5px;
+  padding: 10px 20px;
+  border-radius: 10px;
   border: none;
   cursor: pointer;
 }
 
-button:hover {
-  background-color: #555;
+#uno-button {
+  background-color: red;
+  color: white;
+  font-size: 18px;
+  padding: 10px 20px;
+  border: none;
+  margin-top: 20px;
+  border-radius: 6px;
 }
 
-#header-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #ddd;
-  padding: 10px;
-  border-radius: 5px;
-  margin-bottom: 10px;
-  font-weight: bold;
+#timer-bar {
+  height: 8px;
+  background: linear-gradient(to right, green, orange, red);
+  margin-top: 10px;
+  width: 100%;
+  transition: width 60s linear;
 }
 
-#game-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
+#scoreboard,
 #opponents {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-}
-
-.opponent {
-  background-color: #fff;
-  border: 2px solid #ccc;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 80px;
-}
-
-.opponent .name {
   font-weight: bold;
-  margin-bottom: 5px;
+  margin-top: 10px;
 }
 
-#play-area {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
-  min-height: 100px;
-  padding: 10px;
+#info-panel {
+  margin-bottom: 20px;
 }
 
-.card-hand {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  padding: 10px;
-}
-
-.card-hand img {
-  height: 80px;
-  transition: transform 0.2s ease-in-out;
-  cursor: pointer;
-}
-
-.card-hand img:hover {
-  transform: scale(1.1);
-}
-
-.card {
-  height: 100px;
-}
-
-.draw-pile img {
-  height: 100px;
-  cursor: pointer;
-  transition: transform 0.2s ease-in-out;
-}
-
-.draw-pile img:hover {
-  transform: scale(1.1);
-}
-
-#wild-color-chooser {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  background-color: #fff8dc;
-  border: 2px solid #444;
-  border-radius: 5px;
-  padding: 10px;
-}
-
-#chat-container {
-  background-color: #fff;
-  border: 2px solid #ccc;
-  border-radius: 5px;
-  padding: 10px;
-  max-height: 300px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-#chat-box {
-  flex: 1;
+#messages {
+  margin-top: 20px;
+  max-height: 120px;
   overflow-y: auto;
-  max-height: 200px;
-  padding-right: 5px;
-  border-bottom: 1px solid #ccc;
-}
-
-#chat-box p {
-  margin: 2px 0;
-  font-size: 0.9rem;
-}
-
-#chatForm {
-  display: flex;
-  gap: 5px;
-}
-
-#chat-input {
-  flex: 1;
-  padding: 8px;
-  font-size: 1rem;
-}
-
-#chat-send {
-  font-size: 1.2rem;
-  padding: 8px 12px;
-}
-
-strong {
-  font-weight: bold;
-}
-
-@media (max-width: 600px) {
-  #header-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
-
-  .card-hand img {
-    height: 60px;
-  }
-
-  .card {
-    height: 80px;
-  }
-
-  .draw-pile img {
-    height: 80px;
-  }
+  font-size: 14px;
 }
