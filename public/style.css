@@ -1,134 +1,32 @@
 body {
-  font-family: Arial, sans-serif;
+  font-family: sans-serif;
   margin: 0;
-  background: #f0f0f0;
-  color: #333;
+  padding: 0;
+  background: #f5f5f5;
 }
-
 .hidden {
   display: none;
 }
-
-header {
-  background: #004080;
-  color: white;
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.card {
+  height: 100px;
+  margin: 0 5px;
+  transition: transform 0.2s ease;
 }
-
-#join-screen {
-  text-align: center;
-  padding: 50px;
-}
-
-form input {
-  padding: 10px;
-  margin: 5px;
-  width: 200px;
-}
-
-form button {
-  padding: 10px 20px;
-}
-
-#error {
-  color: red;
-}
-
-#game-screen {
-  padding: 10px;
-}
-
-#status-bar {
-  background: #e0e0e0;
-  padding: 10px;
-  margin-bottom: 10px;
-}
-
-#game-area {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 40px;
-  margin: 20px 0;
-}
-
-#draw-pile img,
-#discard-pile img {
-  width: 80px;
-  height: auto;
-}
-
-#hand {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-}
-
-#hand img {
-  width: 60px;
-  transition: transform 0.2s;
+.card:hover {
+  transform: scale(1.1);
   cursor: pointer;
 }
-
-#hand img:hover {
-  transform: scale(1.1);
+#hand img {
+  margin: 4px;
 }
-
-#opponents {
-  display: flex;
-  overflow-x: auto;
-  gap: 20px;
-  padding: 10px;
-}
-
-.opponent {
+#chat-box {
+  height: 150px;
+  overflow-y: auto;
   background: #fff;
   border: 1px solid #ccc;
   padding: 8px;
-  min-width: 120px;
-  text-align: center;
-  border-radius: 4px;
 }
-
-.opponent .name {
-  font-weight: bold;
-}
-
-.opponent .cards {
-  font-size: 18px;
-}
-
-#chat {
-  margin-top: 20px;
-  padding: 10px;
-  background: #fff;
-  border-top: 1px solid #ccc;
-}
-
-#chat-box {
-  max-height: 200px;
-  overflow-y: auto;
-  background: #f9f9f9;
-  padding: 5px;
-  border: 1px solid #ddd;
-  margin-bottom: 10px;
-}
-
-.chat-input {
+#opponents div {
   display: flex;
-  gap: 10px;
-}
-
-#chat-input {
-  flex: 1;
-  padding: 8px;
-}
-
-#chat-send {
-  padding: 8px;
-  font-size: 16px;
+  justify-content: space-between;
 }
