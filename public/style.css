@@ -1,72 +1,73 @@
-/* public/style.css */
-body {
-  font-family: Arial, sans-serif;
-  background: #f0f8ff;
-  margin: 0;
-  padding: 0;
-  text-align: center;
+/* 🔴 UNO Button */
+#uno-button {
+  background: #ff4d4d;
+  color: white;
+  font-size: 20px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  margin: 10px auto;
+  display: block;
+  animation: pulse 1s infinite;
+  cursor: pointer;
 }
 
-#lobby-form {
-  margin-top: 100px;
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
 
-form input, form button {
-  padding: 10px;
-  margin: 5px;
+/* 🎨 Wild Color Indicator */
+#wild-color-indicator {
+  font-size: 32px;
+  margin-right: 10px;
+}
+
+/* 🎯 Discard + Wild Area */
+#discard-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+/* ⏱️ Turn Timer */
+#turn-timer {
+  width: 100%;
+  height: 6px;
+  background: #ddd;
+  margin: 10px 0;
+}
+#timer-bar {
+  height: 6px;
+  width: 100%;
+  background: #4caf50;
+  transition: width 1s linear;
+}
+
+/* 🃏 Card Play/Draw Animations */
+.card.played {
+  animation: playCard 0.3s ease-in-out;
+}
+.card.drawn {
+  animation: drawCard 0.4s ease-in-out;
+}
+@keyframes playCard {
+  0% { transform: scale(0.5) rotate(-10deg); opacity: 0.2; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes drawCard {
+  0% { transform: translateY(-20px) scale(0.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* 👉 Player Highlight */
+#scoreboard {
+  margin: 10px auto;
   font-size: 16px;
 }
-
-#player-hand, #discard-pile, #draw-pile {
-  display: flex;
-  justify-content: center;
-  margin: 10px;
-  flex-wrap: wrap;
-}
-
-.card {
-  width: 80px;
-  margin: 4px;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.card:hover {
-  transform: scale(1.1);
-}
-
-#your-turn {
+#scoreboard .current {
   font-weight: bold;
-  font-size: 18px;
-  margin-top: 15px;
-}
-
-#wild-selector button {
-  font-size: 20px;
-  margin: 5px;
-}
-
-#chat {
-  position: fixed;
-  right: 10px;
-  bottom: 10px;
-  width: 240px;
-}
-
-#messages {
-  height: 200px;
-  overflow-y: auto;
-  background: #fff;
-  border: 1px solid #ccc;
-  padding: 5px;
-  font-size: 14px;
-  margin-bottom: 5px;
-}
-
-#chat input {
-  width: 150px;
-}
-
-#chat-send {
-  width: 60px;
+  color: #d62828;
 }
