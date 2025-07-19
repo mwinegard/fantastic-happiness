@@ -1,16 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Leaderboard</title></head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Leaderboard – Fantastic Happiness</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
 <body>
-  <h1>🏆 Leaderboard</h1>
-  <ul id="board"></ul>
+  <div class="container">
+    <h1>🏆 Leaderboard</h1>
+    <table id="leaderboardTable">
+      <thead>
+        <tr>
+          <th>Player</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboardBody">
+        <tr><td colspan="2">Loading...</td></tr>
+      </tbody>
+    </table>
+    <p><a href="/">⬅️ Back to Game</a></p>
+  </div>
+
   <script>
-    fetch('/leaderboard')
+    fetch("/api/leaderboard")
       .then(res => res.json())
       .then(data => {
-        const ul = document.getElementById('board');
-        data.forEach((e, i) => {
-          ul.innerHTML += `<li>#${i+1}: ${e.name} — ${e.score} pts</li>`;
+        const body = document.getElementById("leaderboardBody");
+        body.innerHTML = "";
+
+        if (!data.length) {
+          body.innerHTML = "<tr><td colspan='2'>No scores yet.</td></tr>";
+        }
+
+        data.forEach(entry => {
+          const row = document.createElement("tr");
+          row.innerHTML = `<td>${entry.name}</td><td>${entry.score}</td>`;
+          body.appendChild(row);
         });
       });
   </script>
