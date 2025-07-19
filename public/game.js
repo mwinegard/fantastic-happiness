@@ -15,7 +15,7 @@ document.getElementById("join").onclick = () => {
   document.getElementById("game-screen").classList.remove("hidden");
 };
 
-document.getElementById("draw").onclick = () => {
+document.getElementById("draw-pile").onclick = () => {
   socket.emit("drawCard");
 };
 
@@ -40,7 +40,7 @@ function updateTimer() {
 }
 
 function showVictory(msg) {
-  alert(msg); // Or use SweetAlert/modal if preferred
+  alert(msg); // Swap this for modal if needed
 }
 
 socket.on("gameState", state => {
@@ -50,18 +50,19 @@ socket.on("gameState", state => {
   const discard = table[table.length - 1];
   document.getElementById("discard").src = `./${discard}`;
 
-  // Wild color emoji
   const wcDiv = document.getElementById("wild-color");
   wcDiv.innerText = lastWildColor
     ? { red: "🔴", yellow: "🟡", green: "🟢", blue: "🔵" }[lastWildColor] || ""
     : "";
 
-  // My hand
   const handDiv = document.getElementById("hand");
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `./${card}`;
+    img.classList.add("drawn");
+    setTimeout(() => img.classList.remove("drawn"), 600);
+
     img.onclick = () => {
       const colorSelect = document.getElementById("wild-color-picker");
       const cardColor = card.split("_")[0];
@@ -76,10 +77,10 @@ socket.on("gameState", state => {
         socket.emit("playCard", { card });
       }
     };
+
     handDiv.appendChild(img);
   });
 
-  // Opponents
   const oppDiv = document.getElementById("opponents");
   oppDiv.innerHTML = others
     .map(p => {
