@@ -2,6 +2,7 @@ let hand = [];
 let table = [];
 let others = [];
 let isMyTurn = false;
+let lastWildColor = null;
 let socket;
 
 if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName")) {
@@ -30,6 +31,7 @@ if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName"))
     table = state.table;
     others = state.others;
     isMyTurn = state.isMyTurn;
+    lastWildColor = state.lastWildColor || null;
     render(state);
   });
 
@@ -39,9 +41,17 @@ if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName"))
     const tableEl = document.getElementById("table-pile");
     const handEl = document.getElementById("player-hand");
     const othersEl = document.getElementById("opponent-hands");
-    const scoresEl = document.getElementById("scoreboard");
+    const colorIndicator = document.getElementById("wild-color-indicator");
 
-    // Render table card
+    // Update wild color indicator
+    if (lastWildColor) {
+      const colorMap = { red: "#e74c3c", yellow: "#f1c40f", green: "#2ecc71", blue: "#3498db" };
+      colorIndicator.style.backgroundColor = colorMap[lastWildColor] || "transparent";
+    } else {
+      colorIndicator.style.backgroundColor = "transparent";
+    }
+
+    // Table
     tableEl.innerHTML = "";
     if (table.length > 0) {
       const card = table[table.length - 1];
@@ -51,7 +61,7 @@ if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName"))
       tableEl.appendChild(img);
     }
 
-    // Render player's hand
+    // Hand
     handEl.innerHTML = "";
     hand.forEach(card => {
       const img = document.createElement("img");
@@ -60,37 +70,41 @@ if (!sessionStorage.getItem("lobbyId") || !sessionStorage.getItem("playerName"))
       img.style.margin = "4px";
       img.style.cursor = isMyTurn ? "pointer" : "not-allowed";
       img.onclick = () => {
-        if (isMyTurn) {
-          let chosenColor = null;
-          if (card.startsWith("wild")) {
-            chosenColor = prompt("Choose a color: red, yellow, green, blue");
-          }
-          socket.emit("playCard", { card, chosenColor });
+        if (!isMyTurn) return;
+
+        if (card.startsWith("wild")) {
+          const dropdown = document.createElement("select");
+          ["red", "yellow", "green", "blue"].forEach(color => {
+            const opt = document.createElement("option");
+            opt.value = color;
+            opt.text = color.charAt(0).toUpperCase() + color.slice(1);
+            dropdown.appendChild(opt);
+          });
+
+          dropdown.onchange = () => {
+            const chosenColor = dropdown.value;
+            socket.emit("playCard", { card, chosenColor });
+            dropdown.remove();
+          };
+
+          img.after(dropdown);
+        } else {
+          socket.emit("playCard", { card });
         }
       };
       handEl.appendChild(img);
     });
 
-    // Render opponent list with emoji indicators
-    othersEl.innerHTML = "<h3>Opponents</h3>";
+    // Opponents + Scores
+    othersEl.innerHTML = "";
     others.forEach(op => {
       const isTurn = op.name === state.currentPlayer;
       const turnEmoji = isTurn ? "👉 " : "";
-      const cardCount = ` 🃏 ${op.count}`;
-
-      const playerRow = document.createElement("div");
-      playerRow.classList.add("opponent-row");
-      playerRow.innerHTML = `${turnEmoji}<strong>${op.name}</strong>${cardCount}`;
-
-      othersEl.appendChild(playerRow);
+      const row = document.createElement("div");
+      row.classList.add("opponent-row");
+      row.innerText = `${turnEmoji}${op.name} 🃏 ${op.count} (${op.score || 0})`;
+      othersEl.appendChild(row);
     });
-
-    // Scoreboard
-    scoresEl.innerHTML = "<h4>Scores</h4>";
-    for (const [pid, score] of Object.entries(state.scores)) {
-      const player = [state.currentPlayer, ...others.map(p => p.name)].find(n => n === pid) || "You";
-      scoresEl.innerHTML += `<div>${player}: ${score}</div>`;
-    }
   }
 
   window.drawCard = () => {
