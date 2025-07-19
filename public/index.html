@@ -2,36 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>UNO Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fantastic Happiness</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>🎮 Fantastic Happiness</h1>
-  <div id="lobby">
-    <input type="text" id="lobbyId" placeholder="Lobby ID" />
-    <input type="text" id="playerName" placeholder="Your Name" />
-    <button id="joinBtn">Join Lobby</button>
-  </div>
+  <div class="container">
+    <h1>🎴 Fantastic Happiness</h1>
 
-  <div id="game" style="display:none;">
-    <h2>Lobby: <span id="currentLobby"></span></h2>
-    <div id="players"></div>
-
-    <div id="topCardContainer">
-      <h2>Top Card:</h2>
-      <div id="topCard" class="card"></div>
-    </div>
-    <div id="handContainer">
-      <h2>Your Hand:</h2>
-      <div id="hand" class="card-hand"></div>
+    <div id="join-screen">
+      <input type="text" id="playerName" maxlength="20" placeholder="Your Name" />
+      <input type="text" id="lobbyId" maxlength="20" placeholder="Lobby Code" />
+      <button id="joinButton">Join Game</button>
     </div>
 
-    <button id="unoBtn" style="display:none; margin-top:10px;">Call UNO!</button>
+    <div id="game-screen" style="display: none;">
+      <div id="top-bar">
+        <span id="playerInfo"></span>
+        <button id="leaveBtn">Leave Game</button>
+      </div>
 
-    <div id="chat">
-      <div id="messages"></div>
-      <input type="text" id="chatInput" placeholder="Say something..." />
-      <button id="sendChat">Send</button>
+      <div id="opponents"></div>
+
+      <div id="pile-area">
+        <img id="pile-card" src="assets/cards/back.png" alt="Top Card" />
+        <img id="draw-stack" src="assets/cards/back.png" alt="Draw" />
+      </div>
+
+      <div id="hand"></div>
+
+      <div id="chat-area">
+        <div id="chat-log"></div>
+        <input type="text" id="chatInput" placeholder="Type a message…" />
+        <button id="chatSend">📨</button>
+      </div>
     </div>
   </div>
 
