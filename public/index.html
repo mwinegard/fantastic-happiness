@@ -20,12 +20,17 @@
       <div id="scoreboard"></div>
       <div id="opponents"></div>
     </div>
+
     <div id="discard-pile"></div>
+    <div id="wild-indicator"></div>
     <div id="draw-pile"></div>
     <div id="player-hand"></div>
+    <div id="your-turn" style="display:none;">👉 It's your turn!</div>
+
     <div id="controls">
       <button id="uno-button" style="display:none;">UNO!</button>
     </div>
+
     <div id="wild-color-picker" style="display:none;">
       <p>Choose a color:</p>
       <button data-color="red">🔴</button>
@@ -33,9 +38,21 @@
       <button data-color="green">🟢</button>
       <button data-color="yellow">🟡</button>
     </div>
+
     <div id="timer-bar"></div>
     <div id="messages"></div>
   </div>
+
+  <!-- Audio -->
+  <audio id="audio-draw" src="assets/sounds/draw.mp3"></audio>
+  <audio id="audio-skip" src="assets/sounds/skip.mp3"></audio>
+  <audio id="audio-reverse" src="assets/sounds/reverse.mp3"></audio>
+  <audio id="audio-wild" src="assets/sounds/wild.mp3"></audio>
+  <audio id="audio-number" src="assets/sounds/number.mp3"></audio>
+  <audio id="audio-start" src="assets/sounds/start.mp3"></audio>
+  <audio id="audio-joined" src="assets/sounds/joined.mp3"></audio>
+  <audio id="audio-win" src="assets/sounds/win.mp3"></audio>
+  <audio id="audio-lose" src="assets/sounds/lose.mp3"></audio>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
