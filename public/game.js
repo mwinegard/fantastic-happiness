@@ -1,187 +1,150 @@
-// public/game.js
 const socket = io();
-let myId = null;
-let myLobby = null;
-let myHand = [];
-let chosenWild = null;
-let saidUNO = false;
-let timerInterval;
 
-// DOM Elements
+const joinForm = document.getElementById("join-form");
 const nameInput = document.getElementById("name");
 const lobbyInput = document.getElementById("lobby");
-const joinForm = document.getElementById("join-form");
 const gameDiv = document.getElementById("game");
-
 const handDiv = document.getElementById("player-hand");
 const drawPile = document.getElementById("draw-pile");
 const discardPile = document.getElementById("discard-pile");
-
-const turnLabel = document.getElementById("your-turn");
-const scoreboard = document.getElementById("scoreboard");
-
-const unoButton = document.getElementById("uno-button");
-const wildSelector = document.getElementById("wild-selector");
 const wildColorIndicator = document.getElementById("wild-color-indicator");
-
-const msgDiv = document.getElementById("messages");
-const chatInput = document.getElementById("chat-input");
-const chatSend = document.getElementById("chat-send");
+const unoButton = document.getElementById("uno-button");
+const scoreboard = document.getElementById("scoreboard");
 const timerBar = document.getElementById("timer-bar");
+const wildSelector = document.getElementById("wild-selector");
 
-// JOIN
-joinForm.addEventListener("submit", e => {
+let currentPlayerId = null;
+let currentLobby = null;
+let currentHand = [];
+let saidUNO = false;
+let wildChosen = null;
+
+joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = nameInput.value.trim();
   const lobby = lobbyInput.value.trim();
-  if (!name || !lobby) return;
-  myId = socket.id;
-  myLobby = lobby;
-  socket.emit("join", { name, lobby });
-  joinForm.parentElement.style.display = "none";
-  gameDiv.style.display = "block";
-});
-
-// CHAT
-chatSend.onclick = sendMessage;
-chatInput.onkeydown = e => { if (e.key === "Enter") sendMessage(); };
-function sendMessage() {
-  const text = chatInput.value.trim();
-  if (text) {
-    socket.emit("chat", { lobby: myLobby, text });
-    chatInput.value = "";
+  if (name && lobby) {
+    currentLobby = lobby;
+    socket.emit("join", { name, lobby });
   }
-}
-
-// WILD COLOR SELECTOR
-wildSelector.querySelectorAll("button").forEach(btn => {
-  btn.onclick = () => {
-    chosenWild = btn.dataset.color;
-    socket.emit("playCard", {
-      lobby: myLobby,
-      card: wildSelector.dataset.card,
-      chosenColor: chosenWild,
-      saidUNO
-    });
-    wildSelector.style.display = "none";
-    unoButton.style.display = "none";
-    saidUNO = false;
-  };
 });
 
-// UNO BUTTON
-unoButton.onclick = () => {
+unoButton.addEventListener("click", () => {
   saidUNO = true;
-  unoButton.disabled = true;
-  unoButton.innerText = "✔️ UNO!";
-  setTimeout(() => {
-    unoButton.style.display = "none";
-    unoButton.disabled = false;
-    unoButton.innerText = "🚨 UNO!";
-  }, 1500);
-};
+  unoButton.style.display = "none";
+});
 
-// GAME STATE
-socket.on("state", state => {
-  const player = state.players.find(p => p.id === socket.id);
-  if (!player) return;
+socket.on("state", (state) => {
+  document.getElementById("lobby-form").style.display = "none";
+  gameDiv.style.display = "block";
 
-  myHand = state.hands[socket.id] || [];
-  const topCard = state.topCard;
+  currentPlayerId = socket.id;
+  const hand = state.hands[currentPlayerId] || [];
+  currentHand = hand;
 
-  // Current turn highlight
-  turnLabel.textContent = state.currentTurn === socket.id ? "Your Turn!" : "Waiting...";
-
-  // Wild color indicator
-  const color = state.chosenColor;
-  wildColorIndicator.textContent = color ? emojiFromColor(color) : "🎨";
-
-  // UNO button logic
-  if (state.currentTurn === socket.id && myHand.length === 1) {
-    unoButton.style.display = "block";
-  } else {
-    unoButton.style.display = "none";
-    saidUNO = false;
-  }
-
-  // Timer animation
-  resetTimer();
-
-  // Scoreboard
-  scoreboard.innerHTML = state.players.map(p =>
-    `<div class="${state.currentTurn === p.id ? "current" : ""}">
-      ${p.id === socket.id ? "👉 " : ""}${p.name} 🃏 ${p.handSize} (${p.score})
-    </div>`
-  ).join("");
-
-  // Hand
   handDiv.innerHTML = "";
-  myHand.forEach(card => {
+  hand.forEach(card => {
     const img = document.createElement("img");
-    img.src = `assets/cards/${card}.png`;
+    img.src = `/assets/cards/${card}.png`;
     img.className = "card";
-    if (state.currentTurn === socket.id) {
-      img.onclick = () => {
-        if (card.startsWith("wild")) {
-          wildSelector.style.display = "block";
-          wildSelector.dataset.card = card;
-        } else {
-          socket.emit("playCard", { lobby: myLobby, card, saidUNO });
-          unoButton.style.display = "none";
-          saidUNO = false;
-        }
-      };
-    }
-    img.classList.add("drawn");
+    img.addEventListener("click", () => {
+      if (card.startsWith("wild")) {
+        wildSelector.style.display = "block";
+        wildChosen = null;
+        [...wildSelector.querySelectorAll("button")].forEach(btn => {
+          btn.onclick = () => {
+            wildChosen = btn.dataset.color;
+            wildSelector.style.display = "none";
+            playCard(card, wildChosen);
+          };
+        });
+      } else {
+        playCard(card, null);
+      }
+    });
     handDiv.appendChild(img);
   });
 
-  // Discard
   discardPile.innerHTML = "";
-  if (topCard) {
-    const topImg = document.createElement("img");
-    topImg.src = `assets/cards/${topCard}.png`;
-    topImg.className = "card played";
-    discardPile.appendChild(topImg);
-  }
+  const topCard = state.discardPile[state.discardPile.length - 1];
+  const topImg = document.createElement("img");
+  topImg.src = `/assets/cards/${topCard}.png`;
+  topImg.className = "card played";
+  discardPile.appendChild(topImg);
 
-  // Draw
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
-  drawImg.src = "assets/cards/back.png";
+  drawImg.src = "/assets/cards/back.png";
   drawImg.className = "card";
-  if (state.currentTurn === socket.id) {
-    drawImg.onclick = () => {
-      socket.emit("drawCard", { lobby: myLobby });
-      unoButton.style.display = "none";
-      saidUNO = false;
-    };
-  }
+  drawImg.addEventListener("click", () => {
+    socket.emit("drawCard", { lobby: currentLobby });
+  });
   drawPile.appendChild(drawImg);
+
+  wildColorIndicator.textContent = state.chosenColor
+    ? {
+        red: "🔴", green: "🟢", blue: "🔵", yellow: "🟡"
+      }[state.chosenColor] || "🎨"
+    : "🎨";
+
+  updateTurnInfo(state);
+  updateScoreboard(state);
+
+  unoButton.style.display = (hand.length === 2) ? "block" : "none";
 });
 
-// CHAT
-socket.on("message", ({ from, text }) => {
-  const msg = document.createElement("div");
-  msg.innerHTML = `<strong>${from}</strong>: ${text}`;
-  msgDiv.appendChild(msg);
-  msgDiv.scrollTop = msgDiv.scrollHeight;
-});
-
-// HELPERS
-function emojiFromColor(color) {
-  return {
-    red: "🔴", green: "🟢", blue: "🔵", yellow: "🟡"
-  }[color] || "🎨";
+function playCard(card, color) {
+  socket.emit("playCard", {
+    lobby: currentLobby,
+    card: card,
+    chosenColor: color,
+    saidUNO: saidUNO
+  });
+  saidUNO = false;
+  unoButton.style.display = "none";
 }
 
-function resetTimer() {
+function updateTurnInfo(state) {
+  const turnDiv = document.getElementById("your-turn");
+  if (state.currentTurn === currentPlayerId) {
+    turnDiv.textContent = "👉 Your turn!";
+    startTimerBar(60);
+  } else {
+    const player = state.players.find(p => p.id === state.currentTurn);
+    turnDiv.textContent = `Waiting for ${player?.name || "someone"}...`;
+    stopTimerBar();
+  }
+}
+
+function updateScoreboard(state) {
+  scoreboard.innerHTML = "";
+  state.players.forEach(p => {
+    const div = document.createElement("div");
+    div.innerHTML = `${p.id === state.currentTurn ? '👉 ' : ''}${p.name} 🃏 ${p.handSize} (${p.score || 0})`;
+    if (p.id === state.currentTurn) div.classList.add("current");
+    scoreboard.appendChild(div);
+  });
+}
+
+let timerInterval = null;
+
+function startTimerBar(seconds) {
+  let total = seconds;
   clearInterval(timerInterval);
-  timerBar.style.width = "100%";
-  let timeLeft = 60;
+  let width = 100;
+  timerBar.style.width = width + "%";
   timerInterval = setInterval(() => {
-    timeLeft--;
-    timerBar.style.width = `${(timeLeft / 60) * 100}%`;
-    if (timeLeft <= 0) clearInterval(timerInterval);
+    width -= (100 / total);
+    if (width <= 0) {
+      clearInterval(timerInterval);
+      timerBar.style.width = "0%";
+    } else {
+      timerBar.style.width = width + "%";
+    }
   }, 1000);
+}
+
+function stopTimerBar() {
+  clearInterval(timerInterval);
+  timerBar.style.width = "0%";
 }
