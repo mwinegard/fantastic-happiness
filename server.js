@@ -1,28 +1,37 @@
-const express = require("express");
-const http = require("http");
-const { Server } =("socket.io");
-const path = require("path");
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io'); // ✅ Correct import
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server); // ✅ Fixes the deployment error
 
 const PORT = process.env.PORT || 3000;
-app.use(express.static("public"));
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.use(express.static(path.join(__dirname, 'public')));
 
-const gameState = {}; // { lobbyId: { players, table, drawPile, turnOrder, currentTurn, lastWildColor, turnTimer } }
+let lobbies = {}; // { lobbyId: { players: [], deck: [], discardPile: [], ... } }
 
-function getCardColor(card) {
-  if (card.startsWith("red")) return "red";
-  if (card.startsWith("yellow")) return "yellow";
-  if (card.startsWith("green")) return "green";
-  if (card.startsWith("blue")) return "blue";
-  if (card.startsWith("wild")) return "wild";
-  return null;
+function createDeck() {
+  const colors = ['red', 'yellow', 'green', 'blue'];
+  const values = ['0','1','2','3','4','5','6','7','8','9','skip','reverse','draw'];
+  const wilds = ['wild', 'wild_draw4'];
+  let deck = [];
+
+  for (const color of colors) {
+    for (const value of values) {
+      deck.push(`${color}_${value}.png`);
+      if (value !== '0') deck.push(`${color}_${value}.png`); // duplicate non-zero cards
+    }
+  }
+
+  for (const wild of wilds) {
+    deck.push(`${wild}.png`);
+    deck.push(`${wild}.png`);
+  }
+
+  return shuffle(deck);
 }
 
 function shuffle(array) {
@@ -33,253 +42,242 @@ function shuffle(array) {
   return array;
 }
 
-function buildDeck() {
-  const colors = ["red", "yellow", "green", "blue"];
-  const values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "skip", "reverse", "draw"];
-  let deck = [];
+io.on('connection', socket => {
+  let playerName = '';
+  let currentLobby = '';
 
-  for (const color of colors) {
-    for (const value of values) {
-      deck.push(`${color}_${value}.png`);
-      if (value !== "0") deck.push(`${color}_${value}.png`);
+  socket.on('joinLobby', ({ name, lobbyId }) => {
+    playerName = name;
+    currentLobby = lobbyId;
+
+    if (!lobbies[lobbyId]) {
+      lobbies[lobbyId] = {
+        players: [],
+        deck: createDeck(),
+        discardPile: [],
+        turnIndex: 0,
+        direction: 1,
+        wildColor: null,
+        scores: {},
+        missedTurns: {}
+      };
     }
-  }
 
-  deck.push("wild.png", "wild.png", "wild_draw4.png", "wild_draw4.png");
+    const lobby = lobbies[lobbyId];
+    lobby.players.push({ id: socket.id, name, hand: [] });
+    lobby.scores[name] = 0;
+    lobby.missedTurns[socket.id] = 0;
 
-  return shuffle(deck);
-}
-
-function getPlayer(socket) {
-  for (const lobbyId in gameState) {
-    const player = gameState[lobbyId].players.find(p => p.socket === socket);
-    if (player) return player;
-  }
-  return null;
-}
-
-function isPlayersTurn(player) {
-  const state = gameState[player.lobby];
-  return state.turnOrder[state.currentTurn] === player.name;
-}
-
-function scoreHand(hand) {
-  let score = 0;
-  for (const card of hand) {
-    const val = card.split("_")[1];
-    if (!val) continue;
-    if (card.includes("wild")) score += 50;
-    else if (["skip", "reverse", "draw"].includes(val)) score += 20;
-    else score += parseInt(val) || 0;
-  }
-  return score;
-}
-
-function advanceTurn(lobbyId) {
-  const state = gameState[lobbyId];
-  clearTimeout(state.turnTimer);
-
-  state.currentTurn = (state.currentTurn + 1) % state.turnOrder.length;
-
-  const currentPlayerName = state.turnOrder[state.currentTurn];
-  const currentPlayer = state.players.find(p => p.name === currentPlayerName);
-  if (!currentPlayer) return;
-
-  state.turnTimer = setTimeout(() => {
-    currentPlayer.missed = (currentPlayer.missed || 0) + 1;
-
-    // Auto draw
-    const card = state.drawPile.pop();
-    if (card) currentPlayer.hand.push(card);
-
-    // Auto leave after 3 missed turns
-    if (currentPlayer.missed >= 3) {
-      leavePlayer(currentPlayer.socket);
-    } else {
-      advanceTurn(lobbyId);
-      broadcastGameState(lobbyId);
+    for (let i = 0; i < 7; i++) {
+      const card = lobby.deck.pop();
+      lobby.players[lobby.players.length - 1].hand.push(card);
     }
-  }, 60000);
 
-  broadcastGameState(lobbyId);
-}
+    if (lobby.discardPile.length === 0) {
+      let topCard = lobby.deck.pop();
+      while (topCard.includes('wild')) topCard = lobby.deck.pop();
+      lobby.discardPile.push(topCard);
+    }
 
-function broadcastGameState(lobbyId) {
-  const state = gameState[lobbyId];
-  if (!state) return;
-
-  const players = state.players;
-
-  players.forEach(p => {
-    const others = players.filter(o => o.name !== p.name).map(o => ({
-      name: o.name,
-      count: o.hand.length,
-      score: o.score || 0
-    }));
-
-    p.socket.emit("gameState", {
-      hand: p.hand,
-      table: state.table,
-      others,
-      currentPlayer: state.turnOrder[state.currentTurn],
-      isMyTurn: p.name === state.turnOrder[state.currentTurn],
-      scores: Object.fromEntries(players.map(pl => [pl.name, pl.score || 0])),
-      lastWildColor: state.lastWildColor || null
-    });
+    sendGameState(lobbyId);
   });
-}
 
-function leavePlayer(socket) {
-  const player = getPlayer(socket);
-  if (!player) return;
-  const lobbyId = player.lobby;
-  const state = gameState[lobbyId];
+  socket.on('playCard', ({ card, chosenColor }) => {
+    const lobby = lobbies[currentLobby];
+    if (!lobby) return;
 
-  const remaining = state.players.filter(p => p.name !== player.name);
-  if (remaining.length === 0) {
-    delete gameState[lobbyId];
+    const player = lobby.players.find(p => p.id === socket.id);
+    if (!player || player !== getCurrentPlayer(lobby)) return;
+
+    const top = lobby.discardPile[lobby.discardPile.length - 1];
+    const isValid = validatePlay(card, top, lobby.wildColor);
+
+    if (!isValid) return;
+
+    player.hand = player.hand.filter(c => c !== card);
+    lobby.discardPile.push(card);
+    lobby.wildColor = card.includes('wild') ? chosenColor : null;
+
+    handleSpecialCard(card, lobby);
+
+    if (player.hand.length === 0) {
+      const score = calculateScore(lobby);
+      lobby.scores[player.name] += score;
+      io.to(socket.id).emit('gameOver', {
+        message: `Congratulations ${player.name}, you are the Champion!`
+      });
+      delete lobbies[currentLobby];
+      return;
+    }
+
+    advanceTurn(lobby);
+    sendGameState(currentLobby);
+  });
+
+  socket.on('drawCard', () => {
+    const lobby = lobbies[currentLobby];
+    if (!lobby) return;
+
+    const player = lobby.players.find(p => p.id === socket.id);
+    if (!player || player !== getCurrentPlayer(lobby)) return;
+
+    const card = lobby.deck.pop();
+    player.hand.push(card);
+
+    advanceTurn(lobby);
+    sendGameState(currentLobby);
+  });
+
+  socket.on('leaveGame', () => {
+    handleLeave(socket.id, currentLobby);
+  });
+
+  socket.on('disconnect', () => {
+    handleLeave(socket.id, currentLobby);
+  });
+});
+
+function handleLeave(socketId, lobbyId) {
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
+
+  const index = lobby.players.findIndex(p => p.id === socketId);
+  if (index === -1) return;
+
+  const leaving = lobby.players[index];
+  const leavingHand = leaving.hand.slice();
+  lobby.players.splice(index, 1);
+
+  if (lobby.players.length === 0) {
+    delete lobbies[lobbyId];
     return;
   }
 
   // Redistribute cards
-  const totalCards = [...player.hand];
-  const remainder = totalCards.length % remaining.length;
-  const toDraw = remainder ? remaining.length - remainder : 0;
-
-  for (let i = 0; i < toDraw; i++) {
-    const drawn = state.drawPile.pop();
-    if (drawn) totalCards.push(drawn);
-  }
-
-  for (let i = 0; i < totalCards.length; i++) {
-    const target = remaining[i % remaining.length];
-    target.hand.push(totalCards[i]);
-  }
-
-  // Remove player
-  state.players = remaining;
-  state.turnOrder = state.turnOrder.filter(n => n !== player.name);
-
-  if (state.currentTurn >= state.turnOrder.length) state.currentTurn = 0;
-
-  // Check winner
-  if (state.players.length === 1) {
-    const winner = state.players[0];
-    let total = 0;
-    for (const p of state.players) {
-      if (p.name !== winner.name) {
-        total += scoreHand(p.hand);
+  while (leavingHand.length > 0) {
+    lobby.players.forEach(player => {
+      if (leavingHand.length > 0) {
+        player.hand.push(leavingHand.pop());
       }
-    }
-    winner.score = (winner.score || 0) + total;
-    winner.socket.emit("gameOver", { message: "Congratulations, you are the Champion!" });
-    delete gameState[lobbyId];
+    });
+  }
+
+  if (lobby.players.length === 1) {
+    const winner = lobby.players[0];
+    const score = calculateScore(lobby);
+    lobby.scores[winner.name] += score;
+    io.to(winner.id).emit('gameOver', {
+      message: `Congratulations ${winner.name}, you are the Champion!`
+    });
+    delete lobbies[lobbyId];
     return;
   }
 
-  broadcastGameState(lobbyId);
+  sendGameState(lobbyId);
 }
 
-io.on("connection", socket => {
-  socket.on("joinLobby", ({ lobbyId, name }) => {
-    if (!gameState[lobbyId]) {
-      gameState[lobbyId] = {
-        players: [],
-        table: [],
-        drawPile: buildDeck(),
-        turnOrder: [],
-        currentTurn: 0,
-        lastWildColor: null,
-        turnTimer: null
-      };
+function validatePlay(card, topCard, wildColor) {
+  const [cardColor, cardValue] = card.replace('.png', '').split('_');
+  const [topColor, topValue] = topCard.replace('.png', '').split('_');
+
+  return (
+    cardColor === topColor ||
+    cardValue === topValue ||
+    card.includes('wild') ||
+    (wildColor && cardColor === wildColor)
+  );
+}
+
+function handleSpecialCard(card, lobby) {
+  const [color, value] = card.replace('.png', '').split('_');
+  const nextIndex = getNextIndex(lobby);
+
+  switch (value) {
+    case 'skip':
+      lobby.turnIndex = getNextIndex(lobby, 2);
+      break;
+    case 'reverse':
+      lobby.direction *= -1;
+      if (lobby.players.length === 2) {
+        lobby.turnIndex = getNextIndex(lobby);
+      }
+      break;
+    case 'draw':
+      const target = lobby.players[nextIndex];
+      target.hand.push(lobby.deck.pop());
+      target.hand.push(lobby.deck.pop());
+      lobby.turnIndex = getNextIndex(lobby, 2);
+      break;
+    case 'draw4':
+      const target4 = lobby.players[nextIndex];
+      for (let i = 0; i < 4; i++) target4.hand.push(lobby.deck.pop());
+      lobby.turnIndex = getNextIndex(lobby, 2);
+      break;
+    default:
+      // normal card
+      break;
+  }
+}
+
+function advanceTurn(lobby) {
+  lobby.turnIndex = getNextIndex(lobby);
+}
+
+function getNextIndex(lobby, step = 1) {
+  const count = lobby.players.length;
+  return (lobby.turnIndex + step * lobby.direction + count) % count;
+}
+
+function getCurrentPlayer(lobby) {
+  return lobby.players[lobby.turnIndex];
+}
+
+function calculateScore(lobby) {
+  let score = 0;
+  for (const player of lobby.players) {
+    for (const card of player.hand) {
+      if (!card.endsWith('.png')) continue;
+      const base = card.replace('.png', '');
+      if (base.includes('draw4') || base.includes('wild')) {
+        score += 50;
+      } else if (base.includes('draw') || base.includes('skip') || base.includes('reverse')) {
+        score += 20;
+      } else {
+        const val = parseInt(base.split('_')[1]);
+        score += isNaN(val) ? 0 : val;
+      }
     }
+  }
+  return score;
+}
 
-    const player = {
-      name,
-      socket,
-      hand: [],
-      score: 0,
-      lobby: lobbyId,
-      missed: 0
-    };
+function sendGameState(lobbyId) {
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
 
-    const state = gameState[lobbyId];
-    state.players.push(player);
-    state.turnOrder.push(name);
+  const current = getCurrentPlayer(lobby);
 
-    for (let i = 0; i < 7; i++) {
-      player.hand.push(state.drawPile.pop());
-    }
+  for (const player of lobby.players) {
+    const others = lobby.players
+      .filter(p => p.id !== player.id)
+      .map(p => ({
+        name: p.name,
+        count: p.hand.length,
+        score: lobby.scores[p.name] || 0
+      }));
 
-    if (state.table.length === 0) {
-      state.table.push(state.drawPile.pop());
-    }
+    io.to(player.id).emit("gameState", {
+      hand: player.hand,
+      table: lobby.discardPile,
+      others,
+      currentPlayer: current.name,
+      isMyTurn: current.id === player.id,
+      scores: lobby.scores,
+      lastWildColor: lobby.wildColor
+    });
+  }
+}
 
-    broadcastGameState(lobbyId);
-    if (state.players.length === 1) {
-      advanceTurn(lobbyId);
-    }
-  });
-
-  socket.on("playCard", ({ card, chosenColor }) => {
-    const player = getPlayer(socket);
-    if (!player || !isPlayersTurn(player)) return;
-
-    const state = gameState[player.lobby];
-    const cardIndex = player.hand.indexOf(card);
-    if (cardIndex === -1) return;
-
-    const topCard = state.table[state.table.length - 1];
-    const topColor = state.lastWildColor || getCardColor(topCard);
-    const cardColor = getCardColor(card);
-    const val = card.split("_")[1];
-
-    const isValid =
-      cardColor === "wild" ||
-      cardColor === topColor ||
-      val === topCard.split("_")[1];
-
-    if (!isValid) return;
-
-    player.hand.splice(cardIndex, 1);
-    state.table.push(card);
-
-    state.lastWildColor = cardColor === "wild" ? chosenColor : cardColor;
-    player.missed = 0;
-
-    if (player.hand.length === 0) {
-      const score = state.players.reduce((acc, p) => {
-        if (p.name !== player.name) acc += scoreHand(p.hand);
-        return acc;
-      }, 0);
-
-      player.score += score;
-      player.socket.emit("gameOver", { message: "Congratulations, you are the Champion!" });
-      delete gameState[player.lobby];
-      return;
-    }
-
-    advanceTurn(player.lobby);
-  });
-
-  socket.on("drawCard", () => {
-    const player = getPlayer(socket);
-    if (!player || !isPlayersTurn(player)) return;
-
-    const state = gameState[player.lobby];
-    const card = state.drawPile.pop();
-    if (card) player.hand.push(card);
-
-    player.missed = 0;
-    advanceTurn(player.lobby);
-  });
-
-  socket.on("leaveGame", () => {
-    leavePlayer(socket);
-    socket.disconnect();
-  });
-
-  socket.on("disconnect", () => {
-    leavePlayer(socket);
-  });
+server.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
 });
