@@ -1,121 +1,117 @@
 const socket = io();
-let myName = '';
-let lobbyId = '';
-let hand = [];
-let myColor = '';
-let isMyTurn = false;
 
-// DOM elements
-const joinScreen = document.getElementById("joinScreen");
-const gameScreen = document.getElementById("gameScreen");
-const joinForm = document.getElementById("joinForm");
-const playerInput = document.getElementById("playerName");
-const lobbyInput = document.getElementById("lobbyId");
-const gameInfo = document.getElementById("gameInfo");
-const playerList = document.getElementById("playerList");
-const handArea = document.getElementById("handArea");
-const pileTopCard = document.getElementById("pileTopCard");
-const drawDeck = document.getElementById("drawDeck");
-const chatBox = document.getElementById("chatBox");
-const chatForm = document.getElementById("chatForm");
-const chatInput = document.getElementById("chatInput");
+let playerName = "";
+let lobbyId = "";
 
-joinForm.addEventListener("submit", (e) => {
+document.getElementById("join-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  myName = playerInput.value.trim();
-  lobbyId = lobbyInput.value.trim();
-  if (myName && lobbyId) {
-    socket.emit("joinLobby", { name: myName, lobbyId });
-  }
+  const nameInput = document.getElementById("player-name");
+  const lobbyInput = document.getElementById("lobby-id");
+  const name = nameInput.value.trim();
+  const lobby = lobbyInput.value.trim();
+
+  if (!name || !lobby) return;
+
+  playerName = name;
+  lobbyId = lobby;
+
+  socket.emit("joinLobby", { name, lobby });
+
+  document.getElementById("join-screen").classList.add("hidden");
+  document.getElementById("game-screen").classList.remove("hidden");
+  document.getElementById("lobby-name").textContent = lobby;
 });
 
-chatForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const msg = chatInput.value.trim();
-  if (msg) {
-    socket.emit("chatMessage", { lobbyId, name: myName, text: msg });
-    chatInput.value = "";
-  }
+socket.on("lobbyFull", () => {
+  alert("Lobby is full. Please try another lobby.");
+  location.reload();
 });
 
-drawDeck.addEventListener("click", () => {
-  if (isMyTurn) {
-    socket.emit("drawCard", { lobbyId, name: myName });
-  }
+socket.on("chat", ({ sender, message }) => {
+  const box = document.getElementById("chat-box");
+  const p = document.createElement("p");
+  const displayName = sender === "SUE" ? `<strong style="color:navy;">${sender}</strong>` : `<strong>${sender}</strong>`;
+  p.innerHTML = `${displayName}: ${message}`;
+  box.appendChild(p);
+  box.scrollTop = box.scrollHeight;
 });
 
-function renderHand() {
-  handArea.innerHTML = "";
+socket.on("updateState", (state) => {
+  updateTurn(state);
+  updateOpponents(state);
+  updateHand(state);
+  updateTopCard(state);
+});
+
+document.getElementById("leave-btn").addEventListener("click", () => {
+  socket.emit("leaveLobby", { name: playerName, lobby: lobbyId });
+  location.reload();
+});
+
+function updateTurn(state) {
+  const turn = state.currentPlayer || "";
+  document.getElementById("current-turn").textContent = turn;
+}
+
+function updateOpponents(state) {
+  const list = document.getElementById("opponents");
+  list.innerHTML = "";
+
+  state.players.forEach((player) => {
+    if (player.name === playerName) return;
+    const div = document.createElement("div");
+    div.className = "opponent";
+    div.innerHTML = `
+      <div class="name">${player.name}</div>
+      <div class="cards">🃏 ${player.cards.length}</div>
+      <div class="score">(${player.score || 0})</div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function updateHand(state) {
+  const hand = state.players.find((p) => p.name === playerName)?.cards || [];
+  const handContainer = document.getElementById("hand");
+  handContainer.innerHTML = "";
+
   hand.forEach((card, index) => {
     const img = document.createElement("img");
     img.src = `assets/cards/${card}.png`;
-    img.classList.add("card");
-    img.addEventListener("click", () => {
-      if (isMyTurn) {
-        socket.emit("playCard", { lobbyId, name: myName, card });
-      }
-    });
-    handArea.appendChild(img);
+    img.alt = card;
+    img.addEventListener("click", () => playCard(index));
+    handContainer.appendChild(img);
   });
 }
 
-function renderPlayers(players, currentTurn) {
-  playerList.innerHTML = "";
-  players.forEach(p => {
-    const li = document.createElement("li");
-    const turnEmoji = currentTurn === p.name ? "🎯 " : "";
-    const scoreText = p.score !== undefined ? ` (${p.score})` : "";
-    li.innerHTML = `${turnEmoji}<strong style="color:${p.color}">${p.name}</strong> 🃏${p.handCount}${scoreText}`;
-    playerList.appendChild(li);
-  });
+function updateTopCard(state) {
+  const pile = document.getElementById("pile-top");
+  if (state.topCard) {
+    pile.src = `assets/cards/${state.topCard}.png`;
+    pile.classList.remove("hidden");
+  }
 }
 
-function addChatMessage(from, text, system = false) {
-  const div = document.createElement("div");
-  if (system) {
-    div.innerHTML = `<strong style="color:navy">SUE:</strong> ${text}`;
-  } else {
-    div.innerHTML = `<strong style="color:${from === myName ? myColor : '#000'}">${from}:</strong> ${text}`;
-  }
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
+document.getElementById("draw-stack").addEventListener("click", () => {
+  socket.emit("drawCard", { name: playerName, lobby: lobbyId });
+});
+
+function playCard(index) {
+  socket.emit("playCard", { name: playerName, lobby: lobbyId, index });
 }
 
-// SOCKET EVENTS
-
-socket.on("lobbyJoined", (data) => {
-  joinScreen.classList.add("hidden");
-  gameScreen.classList.remove("hidden");
-  myColor = data.color;
-  addChatMessage("SUE", `Welcome ${myName}! Waiting for other players...`, true);
+document.getElementById("chatForm")?.addEventListener("submit", sendChat);
+document.getElementById("chat-send")?.addEventListener("click", sendChat);
+document.getElementById("chat-input")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendChat(e);
 });
 
-socket.on("gameState", (state) => {
-  if (!state.players || !state.deck) return;
-
-  const me = state.players.find(p => p.name === myName);
-  if (!me) return;
-
-  hand = me.hand;
-  isMyTurn = state.currentTurn === myName;
-  gameInfo.textContent = isMyTurn ? "Your turn!" : `Waiting for ${state.currentTurn}...`;
-
-  renderHand();
-  renderPlayers(state.players, state.currentTurn);
-
-  // update pile
-  if (state.pileTopCard) {
-    pileTopCard.src = `assets/cards/${state.pileTopCard}.png`;
-    pileTopCard.classList.remove("hidden");
-  } else {
-    pileTopCard.classList.add("hidden");
+function sendChat(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById("chat-input");
+  const msg = input.value.trim();
+  if (msg) {
+    socket.emit("chat", { sender: playerName, message: msg, lobby: lobbyId });
+    input.value = "";
   }
-});
-
-socket.on("chatMessage", ({ from, text }) => {
-  addChatMessage(from, text, from === "SUE");
-});
-
-socket.on("errorMessage", (msg) => {
-  alert(msg);
-});
+}
