@@ -1,194 +1,167 @@
 body {
-  font-family: Arial, sans-serif;
-  background: #f0f4fa;
   margin: 0;
-  padding: 0;
-  text-align: center;
-}
-
-#joinScreen, #gameScreen {
-  padding: 20px;
-}
-
-form input {
-  padding: 10px;
-  margin: 5px;
-  width: 150px;
-  border-radius: 5px;
-  border: 1px solid #aaa;
-}
-
-form button {
-  padding: 10px 20px;
-  border: none;
-  background-color: #005dab;
-  color: white;
-  font-weight: bold;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-#gameArea {
+  font-family: Arial, sans-serif;
+  background: #f0f0f0;
+  color: #333;
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 100%;
 }
 
-#topSection {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 20px;
-  width: 100%;
-}
-
-#opponents {
-  flex: 1 1 300px;
-  max-width: 350px;
-  background-color: #e6eef5;
-  border: 1px solid #ccc;
+#join-form {
+  margin-top: 40px;
+  padding: 20px;
+  background: white;
   border-radius: 8px;
-  padding: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+#join-form input {
+  display: block;
   margin-bottom: 10px;
-  text-align: left;
+  padding: 10px;
+  width: 200px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
 
-#discardSection {
-  display: flex;
-  gap: 20px;
-  justify-content: center;
-  align-items: center;
-}
-
-.pile {
-  position: relative;
-  width: 100px;
-  height: 150px;
-}
-
-.card {
-  width: 100px;
-  height: 150px;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+#join-form button {
+  padding: 10px 20px;
+  background: #0078d7;
+  color: white;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
+}
+
+#join-form button:hover {
+  background: #005fa3;
+}
+
+#game {
+  max-width: 100%;
+  padding: 10px;
+}
+
+#status-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+#pile-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 10px;
+}
+
+#pile, #draw-pile {
+  height: 120px;
   transition: transform 0.3s ease;
 }
 
-.card:hover {
+#draw-pile:hover {
   transform: scale(1.05);
-}
-
-.draw {
-  position: relative;
-}
-
-.color-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  margin-top: 10px;
-  margin-left: auto;
-  margin-right: auto;
-  border: 2px solid #000;
-}
-
-.color-picker {
-  position: fixed;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 10px;
-  background: white;
-  padding: 10px;
-  border: 2px solid #000;
-  border-radius: 8px;
-  z-index: 999;
-}
-
-.color-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
   cursor: pointer;
 }
 
-.turn-info {
-  margin: 15px;
-  font-size: 1.2em;
-  font-weight: bold;
-}
-
-.hand {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin: 20px 0;
-}
-
-#chatSection {
+#hand-section {
   width: 100%;
-  max-width: 400px;
-  margin: 10px auto;
+  overflow-x: auto;
+  white-space: nowrap;
+  margin-bottom: 20px;
 }
 
-.chat-box {
+#hand {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.card {
+  height: 100px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.card:hover {
+  transform: scale(1.1);
+}
+
+#players {
   background: #fff;
-  border: 1px solid #aaa;
+  padding: 10px;
+  border-radius: 8px;
+  max-width: 320px;
+  width: 100%;
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+#chat-container {
+  max-width: 400px;
+  width: 100%;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+  padding: 10px;
+}
+
+#chat {
   height: 200px;
   overflow-y: auto;
-  padding: 10px;
-  text-align: left;
-  border-radius: 8px;
+  border: 1px solid #ccc;
+  padding: 8px;
+  background: #f9f9f9;
+  font-size: 0.9em;
 }
 
-.chat-box div {
-  margin: 5px 0;
-}
-
-.chat-input {
+#chat-form {
   display: flex;
   margin-top: 10px;
 }
 
-.chat-input input {
+#chat-input {
   flex: 1;
   padding: 8px;
-  border-radius: 8px 0 0 8px;
+  border-radius: 4px 0 0 4px;
   border: 1px solid #ccc;
+  border-right: none;
 }
 
-.chat-input button {
-  padding: 8px 12px;
-  background-color: #005dab;
+#chat-form button {
+  padding: 0 12px;
+  background: #0078d7;
   color: white;
-  font-weight: bold;
   border: none;
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 4px 4px 0;
+  font-size: 18px;
   cursor: pointer;
 }
 
-@media (max-width: 768px) {
-  .card {
-    width: 70px;
-    height: 105px;
+#chat-form button:hover {
+  background: #005fa3;
+}
+
+@media (max-width: 600px) {
+  #hand .card {
+    height: 80px;
   }
 
-  .pile {
-    width: 70px;
-    height: 105px;
+  #pile, #draw-pile {
+    height: 90px;
   }
 
-  .color-btn {
-    width: 30px;
-    height: 30px;
+  #players {
+    font-size: 0.8rem;
   }
 
-  #opponents {
-    font-size: 0.9em;
+  #chat {
+    height: 150px;
   }
 }
