@@ -23,19 +23,23 @@ joinForm.addEventListener("submit", (e) => {
   }
 });
 
-drawStack.addEventListener("click", () => {
-  if (isMyTurn) {
-    socket.emit("drawCard");
-  }
-});
-
 socket.on("gameState", (state) => {
+  if (!state || !state.hand || !state.table || !state.table.length) {
+    console.error("Incomplete game state");
+    return;
+  }
+
   document.getElementById("lobby-screen").style.display = "none";
   document.getElementById("game-container").style.display = "block";
   isMyTurn = state.isMyTurn;
 
   // Discard pile
-  discardPile.innerHTML = `<img src="assets/cards/${state.table[state.table.length - 1]}" class="card" />`;
+  discardPile.innerHTML = "";
+  const topCard = document.createElement("img");
+  topCard.src = `assets/cards/${state.table[state.table.length - 1]}`;
+  topCard.className = "card";
+  topCard.onerror = () => topCard.src = "assets/cards/back.png";
+  discardPile.appendChild(topCard);
 
   // Wild color display
   wildColorIndicator.innerHTML = state.lastWildColor
@@ -48,6 +52,7 @@ socket.on("gameState", (state) => {
     const img = document.createElement("img");
     img.src = `assets/cards/${card}`;
     img.className = "card";
+    img.onerror = () => (img.src = "assets/cards/back.png");
     img.onclick = () => {
       if (!isMyTurn) return;
       if (card.startsWith("wild")) {
@@ -67,14 +72,14 @@ socket.on("gameState", (state) => {
   state.others.forEach((opponent) => {
     const row = document.createElement("div");
     row.className = "opponent";
-    row.innerText = `${state.currentPlayer === opponent.name ? "👉 " : ""}${opponent.name} 🃏 ${opponent.count} (${opponent.score})`;
+    const turnIcon = state.currentPlayer === opponent.name ? "👉 " : "";
+    row.innerText = `${turnIcon}${opponent.name} 🃏 ${opponent.count} (${opponent.score})`;
     opponentsContainer.appendChild(row);
   });
 });
 
-socket.on("gameOver", ({ message }) => {
-  alert(message);
-  location.reload();
+drawStack.addEventListener("click", () => {
+  if (isMyTurn) socket.emit("drawCard");
 });
 
 document.getElementById("leave-button").addEventListener("click", () => {
@@ -98,10 +103,3 @@ socket.on("chat", ({ name, message }) => {
   chatMessages.appendChild(entry);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 });
-
-// Optional: Unregister old service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((reg) => reg.unregister());
-  });
-}
