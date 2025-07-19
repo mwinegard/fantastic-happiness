@@ -1,104 +1,73 @@
 const socket = io();
-let playerName = localStorage.getItem("unoPlayerName") || "";
-let lobbyId = localStorage.getItem("unoLobbyId") || "";
-let playerColor = "";
 
-const COLORS = ["red", "blue", "green", "yellow"];
-
-if (!playerName || !lobbyId) {
-  playerName = prompt("Enter your name (max 20 chars, letters/numbers only):") || "";
-  lobbyId = prompt("Enter lobby ID (no spaces):") || "";
-  playerName = playerName.substring(0, 20).replace(/[^a-zA-Z0-9 ]/g, "");
-  lobbyId = lobbyId.trim();
-  playerColor = COLORS[Math.floor(Math.random() * COLORS.length)];
-
-  localStorage.setItem("unoPlayerName", playerName);
-  localStorage.setItem("unoLobbyId", lobbyId);
-}
-
-socket.emit("joinLobby", { name: playerName, lobbyId, color: playerColor });
-
-const gameArea = document.getElementById("game");
-const playerHand = document.getElementById("player-hand");
-const discardPile = document.getElementById("discard-pile");
-const drawPile = document.getElementById("draw-pile");
-const playerList = document.getElementById("player-list");
+const lobbyForm = document.getElementById("lobby-form");
+const gameContainer = document.getElementById("game");
 const chatBox = document.getElementById("chat-box");
-const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
+const chatForm = document.getElementById("chat-form");
+const playerHand = document.getElementById("player-hand");
+const playerList = document.getElementById("player-list");
+const drawPile = document.getElementById("draw-pile");
+const discardPile = document.getElementById("discard-pile");
+
+let playerId = null;
+
+lobbyForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = document.getElementById("name").value.trim();
+  const lobby = document.getElementById("lobby").value.trim();
+  if (!name || !lobby) return;
+  socket.emit("join", { playerName: name, lobbyId: lobby });
+});
 
 chatForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  const message = chatInput.value.trim();
-  if (message) {
-    socket.emit("chat message", {
-      lobbyId,
-      name: playerName,
-      color: playerColor,
-      text: message
-    });
+  const msg = chatInput.value.trim();
+  if (msg) {
+    socket.emit("chat", msg);
     chatInput.value = "";
   }
 });
 
-drawPile.addEventListener("click", () => {
-  socket.emit("drawCard");
+socket.on("connect", () => {
+  playerId = socket.id;
 });
 
-socket.on("chat message", ({ name, color, text, isSystem }) => {
-  const msg = document.createElement("div");
-  msg.className = "chat-message";
-  msg.innerHTML = `<strong style="color:${isSystem ? 'darkblue' : 'black'}">${name}:</strong> ${text}`;
-  chatBox.appendChild(msg);
+socket.on("state", (state) => {
+  lobbyForm.style.display = "none";
+  gameContainer.style.display = "block";
+
+  renderGame(state);
+});
+
+socket.on("chat", ({ sender, message }) => {
+  const div = document.createElement("div");
+  div.textContent = `${sender}: ${message}`;
+  div.classList.add("chat-message");
+  chatBox.appendChild(div);
   chatBox.scrollTop = chatBox.scrollHeight;
 });
 
-socket.on("lobbyFull", () => {
-  alert("This lobby is full. Please join another.");
-});
-
-socket.on("gameState", (state) => {
-  playerHand.innerHTML = "";
-  discardPile.innerHTML = "";
-  drawPile.innerHTML = "";
-
-  // Draw pile UI
-  const drawStack = document.createElement("img");
-  drawStack.src = "assets/cards/back.png";
-  drawStack.className = "card stack";
-  drawPile.appendChild(drawStack);
-
-  // Discard pile UI
-  const topCard = state.discardPile[state.discardPile.length - 1];
-  if (topCard) {
-    const cardEl = document.createElement("img");
-    cardEl.src = `assets/cards/${topCard.color}_${topCard.value}.png`;
-    cardEl.className = "card";
-    discardPile.appendChild(cardEl);
-  }
-
-  // Player hand
-  const me = state.players.find(p => p.name === playerName);
-  if (me && me.hand) {
-    me.hand.forEach(card => {
-      const cardEl = document.createElement("img");
-      cardEl.src = `assets/cards/${card.color}_${card.value}.png`;
-      cardEl.className = "card";
-      cardEl.addEventListener("click", () => {
-        socket.emit("playCard", { card });
-      });
-      playerHand.appendChild(cardEl);
-    });
-  }
-
-  // Player list
+function renderGame(state) {
   playerList.innerHTML = "";
-  state.players.forEach((p, idx) => {
+  state.players.forEach((p) => {
     const li = document.createElement("li");
-    const isTurn = state.currentPlayer === p.id;
-    li.innerHTML = `${isTurn ? "👉 " : ""}<span style="color:${
-      p.color || "black"
-    }">${p.name}</span> 🃏 ${p.handCount} (${p.score})`;
+    const turnEmoji = p.id === state.currentTurnId ? "👉 " : "";
+    li.textContent = `${turnEmoji}${p.name} 🃏 ${p.hand} (${p.score})`;
     playerList.appendChild(li);
   });
-});
+
+  discardPile.innerHTML = "";
+  if (state.topCard) {
+    const img = document.createElement("img");
+    img.src = `assets/cards/${state.topCard}.png`;
+    img.classList.add("card", "stack");
+    discardPile.appendChild(img);
+  }
+
+  drawPile.innerHTML = "";
+  const backImg = document.createElement("img");
+  backImg.src = "assets/cards/back.png";
+  backImg.classList.add("card", "stack");
+  drawPile.appendChild(backImg);
+}
