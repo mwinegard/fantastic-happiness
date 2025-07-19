@@ -1,95 +1,110 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f9fafb;
+      background: #f4f7fa;
       padding: 20px;
+      color: #333;
     }
     h1 {
       text-align: center;
+      margin-bottom: 30px;
     }
-    .lobby {
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      padding: 10px;
+    table {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto 40px;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
     }
-    .player {
-      display: flex;
-      justify-content: space-between;
-      margin: 4px 0;
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ccc;
+      text-align: left;
+    }
+    th {
+      background: #0077cc;
+      color: white;
+    }
+    tr:hover {
+      background: #f9f9f9;
     }
     button {
-      margin-left: 10px;
+      padding: 6px 10px;
+      margin: 2px;
+      background: #e03;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:hover {
+      background: #c00;
+    }
+    #refresh {
+      margin-bottom: 20px;
+      display: block;
     }
   </style>
 </head>
 <body>
-  <h1>Admin Panel</h1>
-  <div id="admin"></div>
-<div><h2>Leaderboard</h2>
-  <button onclick="clearLeaderboard()">🧹 Clear Leaderboard</button></div>
-  
+  <h1>🎮 Admin Panel</h1>
+  <button id="refresh" onclick="load()">🔄 Refresh</button>
+  <div id="content">Loading...</div>
+  <button onclick="clearLeaderboard()">🧹 Clear Leaderboard</button>
+
   <script>
-    async function loadAdmin() {
-      const res = await fetch("/admin-state");
-      const data = await res.json();
-      const adminDiv = document.getElementById("admin");
-      adminDiv.innerHTML = "";
+    function load() {
+      fetch("/admin-state").then(res => res.json()).then(data => {
+        const out = [];
+        if (!data.length) {
+          document.getElementById("content").innerHTML = "<p>No active lobbies</p>";
+          return;
+        }
 
-      if (!data.length) {
-        adminDiv.innerHTML = "<p>No active lobbies.</p>";
-        return;
-      }
-
-      data.forEach(lobby => {
-        const div = document.createElement("div");
-        div.className = "lobby";
-        div.innerHTML = `<h2>Lobby: ${lobby.id}</h2>`;
-
-        lobby.players.forEach(p => {
-          const row = document.createElement("div");
-          row.className = "player";
-          row.innerHTML = `
-            <span>${p.name} 🃏 ${p.handSize} (${p.score})</span>
-            <button onclick="kick('${lobby.id}', '${p.id}')">Kick</button>
-          `;
-          div.appendChild(row);
+        data.forEach(lobby => {
+          out.push(`<h2>Lobby: ${lobby.id}</h2><table><thead><tr><th>Player</th><th>Score</th><th>Hand</th><th>Action</th></tr></thead><tbody>`);
+          lobby.players.forEach(p => {
+            out.push(`<tr><td>${p.name}</td><td>${p.score}</td><td>${p.handSize}</td><td>
+              <button onclick="kick('${lobby.id}', '${p.id}')">Kick</button>
+            </td></tr>`);
+          });
+          out.push(`</tbody></table><button onclick="closeLobby('${lobby.id}')">Close Lobby</button><br/><br/>`);
         });
 
-        const closeBtn = document.createElement("button");
-        closeBtn.innerText = "Close Lobby";
-        closeBtn.onclick = () => closeLobby(lobby.id);
-        div.appendChild(closeBtn);
-
-        adminDiv.appendChild(div);
+        document.getElementById("content").innerHTML = out.join("");
       });
     }
 
-    async function kick(lobby, id) {
-      await fetch(`/admin/kick/${lobby}/${id}`, { method: "POST" });
-      loadAdmin();
+    function kick(lobby, id) {
+      if (confirm("Kick player?")) {
+        fetch(`/admin/kick/${lobby}/${id}`, { method: "POST" }).then(load);
+      }
     }
 
-    async function closeLobby(lobby) {
-      await fetch(`/admin/close/${lobby}`, { method: "POST" });
-      loadAdmin();
+    function closeLobby(id) {
+      if (confirm("Close lobby and remove all players?")) {
+        fetch(`/admin/close/${id}`, { method: "POST" }).then(load);
+      }
     }
-
-    loadAdmin();
 
     function clearLeaderboard() {
-  if (confirm("Are you sure? This will erase all scores.")) {
-    fetch("/admin/clear-scores", { method: "POST" }).then(res => {
-      if (res.ok) alert("Leaderboard cleared.");
-      else alert("Failed to clear leaderboard.");
-    });
-  }
-}
+      if (confirm("Reset ALL scores and wins?")) {
+        fetch("/admin/clear-scores", { method: "POST" }).then(res => {
+          if (res.ok) alert("Leaderboard cleared.");
+          else alert("Error clearing leaderboard.");
+        });
+      }
+    }
+
+    load();
+    setInterval(load, 10000);
   </script>
 </body>
 </html>
