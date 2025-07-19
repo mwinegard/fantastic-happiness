@@ -1,118 +1,67 @@
 body {
-  font-family: 'Segoe UI', sans-serif;
+  font-family: Arial, sans-serif;
   margin: 0;
   padding: 0;
-  background: #f4f4f4;
+  background: #f0f0f5;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  color: #333;
+  align-items: center;
+}
+
+h1 {
+  color: #2b2e4a;
+}
+
+#lobby-form {
+  margin-top: 60px;
+  text-align: center;
+}
+
+form input, form button {
+  margin: 10px;
+  padding: 10px;
+  font-size: 16px;
 }
 
 #game {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
+  max-width: 900px;
+  margin-top: 20px;
 }
 
-header {
-  background-color: #00587a;
-  color: white;
+#sidebar {
+  width: 100%;
+  background: #ffffff;
   padding: 10px;
-  text-align: center;
-}
-
-#play-area {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-grow: 1;
-  gap: 40px;
-  padding: 10px;
-  background: #d9edf7;
-  border-top: 2px solid #bce8f1;
-}
-
-#draw-pile, #discard-pile {
-  width: 90px;
-  height: 140px;
-  position: relative;
-}
-
-.card {
-  width: 90px;
-  height: 140px;
-  object-fit: contain;
-  transition: transform 0.2s ease;
-  cursor: pointer;
-}
-
-.card:hover {
-  transform: scale(1.08);
-}
-
-.stack {
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-}
-
-#player-hand {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  padding: 10px;
-  gap: 6px;
-  background: #fcf8e3;
-  border-top: 2px solid #fbeed5;
-}
-
-aside {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  background: #f5f5f5;
-  border-top: 2px solid #ddd;
-  padding: 10px;
-}
-
-#player-list-container {
-  flex: 1;
-  max-width: 220px;
-  overflow-y: auto;
+  border: 1px solid #ccc;
 }
 
 #player-list {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 0 0 10px 0;
 }
 
 #player-list li {
-  padding: 4px 0;
-  font-size: 0.95em;
-  word-wrap: break-word;
+  margin: 4px 0;
+  font-size: 16px;
 }
 
-#chat-container {
-  flex: 2;
-  display: flex;
-  flex-direction: column;
-  padding-left: 10px;
+#chat {
+  border-top: 1px solid #ccc;
+  padding-top: 10px;
 }
 
 #chat-box {
-  flex-grow: 1;
-  height: 120px;
+  height: 150px;
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid #ccc;
-  padding: 6px;
-  margin-bottom: 4px;
-  font-size: 0.9em;
-}
-
-.chat-message {
-  margin-bottom: 4px;
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  padding: 5px;
+  margin-bottom: 5px;
+  font-size: 14px;
 }
 
 #chat-form {
@@ -120,44 +69,48 @@ aside {
 }
 
 #chat-input {
-  flex-grow: 1;
-  padding: 6px;
-  font-size: 1em;
-  border: 1px solid #ccc;
-  border-right: none;
-  border-radius: 4px 0 0 4px;
+  flex: 1;
+  padding: 5px;
+  font-size: 14px;
 }
 
 #chat-form button {
-  background: #337ab7;
-  color: white;
-  border: 1px solid #2e6da4;
-  padding: 6px 10px;
-  font-size: 1em;
-  border-radius: 0 4px 4px 0;
+  font-size: 20px;
+  padding: 0 12px;
+}
+
+#play-area {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  margin-top: 20px;
+}
+
+#discard-pile, #draw-pile {
+  margin: 5px;
+}
+
+#discard-pile img, #draw-pile img {
+  width: 80px;
+  height: auto;
+}
+
+#player-hand {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.card {
+  width: 80px;
+  height: auto;
+  margin: 5px;
   cursor: pointer;
+  transition: transform 0.2s ease-in-out;
 }
 
-#chat-form button:hover {
-  background: #286090;
-}
-
-/* Mobile-first adjustments */
-@media (max-width: 768px) {
-  aside {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  #player-list-container {
-    max-width: 100%;
-  }
-
-  #chat-box {
-    height: 150px;
-  }
-
-  #player-hand {
-    gap: 4px;
-  }
+.card:hover {
+  transform: scale(1.05);
 }
