@@ -2,42 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UNO Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>UNO Online</title>
   <link rel="stylesheet" href="style.css" />
-  <link rel="manifest" href="manifest.json" />
 </head>
 <body>
-  <div id="joinScreen">
-    <h1>UNO Game</h1>
-    <form id="joinForm">
-      <input type="text" id="nameInput" maxlength="20" pattern="[A-Za-z0-9]+" placeholder="Your Name" required />
-      <input type="text" id="lobbyInput" maxlength="20" pattern="[A-Za-z0-9]+" placeholder="Lobby Name" required />
+  <div id="join-form">
+    <h2>Join UNO Lobby</h2>
+    <form>
+      <input type="text" id="name" placeholder="Your Name" maxlength="20" required pattern="[a-zA-Z0-9 ]+" />
+      <input type="text" id="lobby" placeholder="Lobby Name" maxlength="20" required pattern="[a-zA-Z0-9 ]+" />
       <button type="submit">Join</button>
     </form>
   </div>
 
-  <div id="gameScreen" style="display: none">
-    <div id="gameArea">
-      <div id="topSection">
-        <div id="opponents"></div>
-        <div id="discardSection">
-          <div id="discard" class="pile"></div>
-          <div id="drawStack" class="pile"></div>
-        </div>
+  <div id="game" style="display:none;">
+    <div id="status-bar">
+      <div id="players"></div>
+      <div id="pile-area">
+        <img id="pile" src="" alt="Top Card" style="display:none;" />
+        <img id="draw-pile" src="assets/cards/back.png" alt="Draw" />
       </div>
+    </div>
 
-      <div id="turnInfo" class="turn-info"></div>
+    <div id="hand-section">
+      <h3>Your Hand</h3>
+      <div id="hand"></div>
+    </div>
 
-      <div id="hand" class="hand"></div>
-
-      <div id="chatSection">
-        <div id="chat" class="chat-box"></div>
-        <div class="chat-input">
-          <input id="chatInput" type="text" maxlength="100" placeholder="Type a message..." />
-          <button id="sendBtn">📨</button>
-        </div>
-      </div>
+    <div id="chat-container">
+      <div id="chat"></div>
+      <form id="chat-form">
+        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="100" />
+        <button type="submit">📨</button>
+      </form>
     </div>
   </div>
 
