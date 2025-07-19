@@ -1,158 +1,194 @@
-* {
-  box-sizing: border-box;
-  font-family: Arial, sans-serif;
-}
-
 body {
+  font-family: Arial, sans-serif;
+  background: #f0f4fa;
   margin: 0;
   padding: 0;
-  background: #fefefe;
-  color: #333;
-}
-
-.container {
-  max-width: 900px;
-  margin: auto;
-  padding: 1em;
-}
-
-.hidden {
-  display: none;
-}
-
-/* Join Section */
-#joinSection {
   text-align: center;
-  margin-top: 50px;
 }
 
-#joinForm input {
+#joinScreen, #gameScreen {
+  padding: 20px;
+}
+
+form input {
   padding: 10px;
   margin: 5px;
-  width: 40%;
-  max-width: 200px;
-  font-size: 1em;
+  width: 150px;
+  border-radius: 5px;
+  border: 1px solid #aaa;
 }
 
-#joinForm button {
-  padding: 10px 16px;
-  font-size: 1em;
-  background-color: #0074cc;
-  color: white;
+form button {
+  padding: 10px 20px;
   border: none;
-  border-radius: 6px;
+  background-color: #005dab;
+  color: white;
+  font-weight: bold;
+  border-radius: 5px;
   cursor: pointer;
 }
 
-/* Game Status */
-.status-bar {
-  margin-top: 20px;
-  text-align: center;
-  font-weight: bold;
-  font-size: 1.2em;
-}
-
-/* Play Area */
-.play-area {
+#gameArea {
   display: flex;
-  justify-content: space-around;
-  margin: 20px 0;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
 }
 
-.discard-pile, .draw-pile {
-  flex: 1;
-  text-align: center;
-  min-width: 120px;
-}
-
-#discardStack img,
-#drawStack img {
-  height: 80px;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-}
-
-/* Hand Area */
-.hand-container {
+#topSection {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 20px;
+  gap: 20px;
+  width: 100%;
 }
 
-.hand-container img {
-  height: 80px;
-  margin: 4px;
-  cursor: pointer;
-  transition: transform 0.2s;
+#opponents {
+  flex: 1 1 300px;
+  max-width: 350px;
+  background-color: #e6eef5;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  text-align: left;
 }
 
-.hand-container img:hover {
-  transform: scale(1.08);
-}
-
-.card.back {
-  filter: brightness(0.9);
-}
-
-/* Chat UI */
-.chat-container {
+#discardSection {
   display: flex;
-  flex-direction: column;
-  margin-top: 20px;
-  max-height: 250px;
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+}
+
+.pile {
+  position: relative;
+  width: 100px;
+  height: 150px;
+}
+
+.card {
+  width: 100px;
+  height: 150px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.card:hover {
+  transform: scale(1.05);
+}
+
+.draw {
+  position: relative;
+}
+
+.color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-top: 10px;
+  margin-left: auto;
+  margin-right: auto;
+  border: 2px solid #000;
+}
+
+.color-picker {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  background: white;
+  padding: 10px;
+  border: 2px solid #000;
+  border-radius: 8px;
+  z-index: 999;
+}
+
+.color-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+.turn-info {
+  margin: 15px;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.hand {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+#chatSection {
+  width: 100%;
+  max-width: 400px;
+  margin: 10px auto;
 }
 
 .chat-box {
+  background: #fff;
+  border: 1px solid #aaa;
+  height: 200px;
   overflow-y: auto;
-  background: #f4f4f4;
   padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  height: 150px;
-  font-size: 0.9em;
+  text-align: left;
+  border-radius: 8px;
 }
 
-#chatForm {
+.chat-box div {
+  margin: 5px 0;
+}
+
+.chat-input {
   display: flex;
-  margin-top: 6px;
+  margin-top: 10px;
 }
 
-#chatInput {
+.chat-input input {
   flex: 1;
   padding: 8px;
-  font-size: 0.95em;
-  border: 1px solid #aaa;
-  border-radius: 4px;
+  border-radius: 8px 0 0 8px;
+  border: 1px solid #ccc;
 }
 
-#chatForm button {
+.chat-input button {
   padding: 8px 12px;
-  font-size: 1.2em;
-  margin-left: 6px;
-  background-color: #003366;
+  background-color: #005dab;
   color: white;
+  font-weight: bold;
   border: none;
-  border-radius: 4px;
+  border-radius: 0 8px 8px 0;
   cursor: pointer;
 }
 
-/* Responsive Layout */
-@media (max-width: 600px) {
-  #joinForm input {
-    width: 80%;
+@media (max-width: 768px) {
+  .card {
+    width: 70px;
+    height: 105px;
   }
 
-  .hand-container img {
-    height: 70px;
+  .pile {
+    width: 70px;
+    height: 105px;
   }
 
-  #chatInput {
-    font-size: 0.85em;
+  .color-btn {
+    width: 30px;
+    height: 30px;
   }
 
-  #chatForm button {
-    font-size: 1em;
+  #opponents {
+    font-size: 0.9em;
   }
 }
