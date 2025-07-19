@@ -7,14 +7,13 @@ const path = require("path");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 const PORT = process.env.PORT || 3000;
+
+app.use(express.static("public"));
+
 const MAX_PLAYERS = 10;
 const lobbies = {};
 const SCORES_FILE = "./scores.json";
-
-// Serve static files
-app.use(express.static("public"));
 
 // Leaderboard API
 app.get("/api/leaderboard", (req, res) => {
@@ -40,136 +39,230 @@ io.on("connection", (socket) => {
         deck: [],
         pile: [],
         started: false,
+        turnIndex: 0,
+        direction: 1,
+        colorOverride: null,
         chat: [],
+        timeout: null,
       };
     }
 
     const lobby = lobbies[lobbyId];
+    if (lobby.players.find(p => p.name === playerName)) return;
 
     if (lobby.players.length >= MAX_PLAYERS) {
-      socket.emit("chatMessage", {
-        sender: "SUE",
-        message: "Lobby is full. Please try another.",
-        system: true,
-      });
+      socket.emit("chatMessage", { sender: "SUE", message: "Lobby full.", system: true });
       return;
     }
 
-    if (lobby.started) {
-      lobby.players.push({ id: socket.id, name: playerName, hand: [] });
-      socket.join(lobbyId);
-      socket.emit("joinedLobby", lobby);
-      broadcastChat(lobbyId, `🃏 ${playerName} joined late and was added to the game.`);
-      return;
-    }
+    const playerObj = {
+      id: socket.id,
+      name: playerName,
+      hand: [],
+      skips: 0,
+      score: 0
+    };
 
-    lobby.players.push({ id: socket.id, name: playerName, hand: [] });
-    socket.join(lobbyId);
+    lobby.players.push(playerObj);
     currentLobby = lobbyId;
     currentPlayer = playerName;
+    socket.join(lobbyId);
 
-    io.to(lobbyId).emit("joinedLobby", lobby);
+    io.to(lobbyId).emit("joinedLobby", {});
 
     broadcastChat(lobbyId, `🃏 ${playerName} joined the lobby.`);
 
     if (lobby.players.length >= 2 && !lobby.started) {
-      broadcastChat(lobbyId, "Waiting for players… Game starts in 30 seconds.");
+      lobby.started = true;
       setTimeout(() => startGame(lobbyId), 30000);
+      for (let i = 30; i > 0; i -= 5) {
+        setTimeout(() => broadcastChat(lobbyId, `Game starts in ${i} seconds...`), (30 - i) * 1000);
+      }
     }
   });
 
   socket.on("chatMessage", ({ lobbyId, sender, message }) => {
-    io.to(lobbyId).emit("chatMessage", {
-      sender,
-      message,
-      system: sender === "SUE",
-    });
+    io.to(lobbyId).emit("chatMessage", { sender, message, system: sender === "SUE" });
   });
 
-  socket.on("leaveLobby", ({ lobbyId, playerName }) => {
-    removePlayer(socket.id, lobbyId, playerName);
-  });
-
-  socket.on("disconnect", () => {
-    removePlayer(socket.id, currentLobby, currentPlayer);
-  });
-
-  function removePlayer(socketId, lobbyId, name) {
+  socket.on("drawCard", ({ lobbyId, playerName }) => {
     const lobby = lobbies[lobbyId];
     if (!lobby) return;
 
-    lobby.players = lobby.players.filter(p => p.id !== socketId);
-    broadcastChat(lobbyId, `${name} has left the game.`);
+    const player = lobby.players[lobby.turnIndex];
+    if (player.name !== playerName) return;
 
-    if (lobby.players.length === 0) {
-      delete lobbies[lobbyId];
-    } else {
-      io.to(lobbyId).emit("gameState", lobby);
-    }
-  }
+    const card = lobby.deck.pop();
+    player.hand.push(card);
+    advanceTurn(lobbyId);
+    emitGameState(lobbyId);
+  });
 
-  function broadcastChat(lobbyId, message) {
-    io.to(lobbyId).emit("chatMessage", {
-      sender: "SUE",
-      message,
-      system: true
-    });
-  }
-
-  function startGame(lobbyId) {
+  socket.on("playCard", ({ lobbyId, playerName, card, selectedColor }) => {
     const lobby = lobbies[lobbyId];
-    if (!lobby || lobby.started) return;
+    if (!lobby) return;
 
-    const deck = buildDeck();
-    shuffle(deck);
-    lobby.deck = deck;
-    lobby.pile = [];
+    const player = lobby.players[lobby.turnIndex];
+    if (player.name !== playerName) return;
 
-    for (let player of lobby.players) {
-      player.hand = deck.splice(0, 7);
+    const topCard = lobby.pile[lobby.pile.length - 1];
+    const playable = isCardPlayable(card, topCard, lobby.colorOverride);
+    if (!playable) return;
+
+    // Play the card
+    player.hand = player.hand.filter(c => c !== card);
+    lobby.pile.push(card);
+    lobby.colorOverride = null;
+
+    // Handle wild
+    if (card.includes("wild")) {
+      lobby.colorOverride = selectedColor || "red";
     }
 
-    const topCard = deck.shift();
-    lobby.pile.push(topCard);
-    lobby.started = true;
+    // Special cards
+    if (card.includes("reverse")) {
+      lobby.direction *= -1;
+    } else if (card.includes("skip")) {
+      advanceTurn(lobbyId, true);
+    } else if (card.includes("draw")) {
+      const nextIndex = (lobby.turnIndex + lobby.direction + lobby.players.length) % lobby.players.length;
+      const drawPlayer = lobby.players[nextIndex];
+      const drawCount = card.includes("4") ? 4 : 2;
+      drawPlayer.hand.push(...lobby.deck.splice(0, drawCount));
+      advanceTurn(lobbyId, true);
+    }
 
-    io.to(lobbyId).emit("chatMessage", {
-      sender: "SUE",
-      message: `Game starting! First card is ${topCard}`,
-      system: true
-    });
+    // Win?
+    if (player.hand.length === 0) {
+      const score = calculateScore(lobby.players, player.name);
+      updateScore(player.name, score);
+      io.to(lobbyId).emit("chatMessage", {
+        sender: "SUE",
+        message: `🎉 ${player.name} wins the round and scores ${score} points!`,
+        system: true
+      });
+      delete lobbies[lobbyId];
+      return;
+    }
 
-    io.to(lobbyId).emit("gameState", {
-      players: lobby.players.map(p => ({ name: p.name, hand: p.hand })),
-      pileTopCard: topCard,
-      drawPileCount: lobby.deck.length,
-    });
-  }
+    advanceTurn(lobbyId);
+    emitGameState(lobbyId);
+  });
+
+  socket.on("disconnect", () => {
+    const lobby = lobbies[currentLobby];
+    if (!lobby) return;
+
+    const playerIndex = lobby.players.findIndex(p => p.id === socket.id);
+    if (playerIndex !== -1) {
+      const name = lobby.players[playerIndex].name;
+      lobby.players.splice(playerIndex, 1);
+      broadcastChat(currentLobby, `${name} has disconnected.`);
+      if (lobby.players.length < 2) delete lobbies[currentLobby];
+      else emitGameState(currentLobby);
+    }
+  });
 });
 
-// Util functions
+// Helpers
+function broadcastChat(lobbyId, message) {
+  io.to(lobbyId).emit("chatMessage", { sender: "SUE", message, system: true });
+}
+
+function emitGameState(lobbyId) {
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
+  io.to(lobbyId).emit("gameState", {
+    players: lobby.players.map(p => ({
+      name: p.name,
+      hand: p.hand,
+      score: p.score
+    })),
+    pileTopCard: lobby.pile[lobby.pile.length - 1],
+    drawPileCount: lobby.deck.length,
+    colorOverride: lobby.colorOverride
+  });
+}
+
+function startGame(lobbyId) {
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
+
+  const deck = buildDeck();
+  shuffle(deck);
+  lobby.deck = deck;
+  lobby.pile = [deck.pop()];
+  lobby.colorOverride = null;
+  for (let p of lobby.players) p.hand = deck.splice(0, 7);
+  emitGameState(lobbyId);
+}
+
+function advanceTurn(lobbyId, skip = false) {
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
+
+  const len = lobby.players.length;
+  lobby.turnIndex = (lobby.turnIndex + (skip ? 2 : 1) * lobby.direction + len) % len;
+}
+
+function isCardPlayable(card, topCard, override) {
+  if (!topCard) return true;
+  if (card.includes("wild")) return true;
+  const [cColor, cValue] = card.split("_");
+  const [tColor, tValue] = topCard.split("_");
+
+  return (
+    cColor === tColor ||
+    cValue === tValue ||
+    (override && cColor === override)
+  );
+}
+
 function buildDeck() {
   const colors = ["red", "green", "blue", "yellow"];
   const deck = [];
-
   for (let color of colors) {
-    for (let n = 0; n <= 9; n++) deck.push(`${color}_${n}.png`);
-    deck.push(`${color}_skip.png`);
-    deck.push(`${color}_reverse.png`);
-    deck.push(`${color}_draw.png`);
+    for (let i = 0; i <= 9; i++) deck.push(`${color}_${i}.png`);
+    ["skip", "reverse", "draw"].forEach(action => {
+      deck.push(`${color}_${action}.png`);
+    });
   }
-
-  deck.push("wild.png", "wild_draw4.png", "wild.png", "wild_draw4.png");
+  deck.push("wild.png", "wild.png", "wild_draw4.png", "wild_draw4.png");
   return deck;
 }
 
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
+function shuffle(deck) {
+  for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+    [deck[i], deck[j]] = [deck[j], deck[i]];
   }
 }
 
+function calculateScore(players, winnerName) {
+  let score = 0;
+  for (let p of players) {
+    if (p.name !== winnerName) {
+      for (let card of p.hand) {
+        if (card.includes("wild_draw4")) score += 50;
+        else if (card.includes("wild")) score += 50;
+        else if (card.includes("draw") || card.includes("reverse") || card.includes("skip")) score += 20;
+        else score += parseInt(card.match(/\d/)) || 0;
+      }
+    }
+  }
+  return score;
+}
+
+function updateScore(name, score) {
+  const path = SCORES_FILE;
+  let data = {};
+  if (fs.existsSync(path)) {
+    data = JSON.parse(fs.readFileSync(path));
+  }
+  data[name] = (data[name] || 0) + score;
+  fs.writeFileSync(path, JSON.stringify(data, null, 2));
+}
+
 server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
