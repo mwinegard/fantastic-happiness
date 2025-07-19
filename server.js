@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
@@ -7,6 +6,7 @@ const path = require("path");
 const app = express();
 const server = createServer(app);
 const io = new Server(server);
+
 app.use(express.static(path.join(__dirname, "public")));
 
 const lobbies = {};
@@ -134,7 +134,7 @@ io.on("connection", socket => {
     emitState(l);
   });
 
-  socket.on("playCard", ({ lobby, card, chosenColor }) => {
+  socket.on("playCard", ({ lobby, card, chosenColor, saidUNO }) => {
     const l = lobbies[lobby];
     const pid = socket.id;
     if (!l || l.currentTurn !== pid) return;
@@ -148,7 +148,14 @@ io.on("connection", socket => {
     l.discardPile.push(card);
     l.chosenColor = card.startsWith("wild") ? chosenColor : null;
 
-    // handle special effects
+    if (hand.length === 1 && !saidUNO) {
+      hand.push(...l.deck.splice(0, 2));
+      io.to(lobby).emit("message", {
+        from: "SUE",
+        text: `${l.players[pid].name} forgot to say UNO! Draw 2 penalty.`
+      });
+    }
+
     const next = () => advanceTurn(l);
     if (card.endsWith("skip")) {
       next(); next();
@@ -169,7 +176,6 @@ io.on("connection", socket => {
       next();
     }
 
-    // win check
     if (hand.length === 0) {
       const score = Object.values(l.hands).flat().reduce((sum, c) => {
         if (c.startsWith("wild")) return sum + 50;
@@ -222,6 +228,37 @@ io.on("connection", socket => {
         break;
       }
     }
+  });
+
+  // 🔐 Admin APIs
+  socket.on("admin:get_lobbies", () => {
+    const result = {};
+    for (const id in lobbies) {
+      const l = lobbies[id];
+      result[id] = {
+        players: Object.values(l.players).map(p => ({
+          id: p.id,
+          name: p.name,
+          handSize: l.hands[p.id]?.length || 0,
+          score: l.scores[p.id] || 0
+        }))
+      };
+    }
+    socket.emit("admin_data", result);
+  });
+
+  socket.on("admin:kick_player", ({ lobby, id }) => {
+    const l = lobbies[lobby];
+    if (!l) return;
+    delete l.players[id];
+    delete l.hands[id];
+    io.to(lobby).emit("message", { from: "SUE", text: `${id} was kicked by admin.` });
+    emitState(l);
+  });
+
+  socket.on("admin:close_lobby", (lobby) => {
+    delete lobbies[lobby];
+    io.to(lobby).emit("message", { from: "SUE", text: "This lobby has been closed by admin." });
   });
 });
 
