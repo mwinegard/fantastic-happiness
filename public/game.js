@@ -1,47 +1,81 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Multiplayer</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="manifest" href="manifest.json">
-</head>
-<body>
-  <div id="lobby-screen">
-    <h1>UNO</h1>
-    <form id="join-form">
-      <input type="text" id="player-name" placeholder="Enter your name" maxlength="20" required />
-      <input type="text" id="lobby-id" placeholder="Lobby ID" required />
-      <button type="submit">Join Game</button>
-    </form>
-  </div>
+const socket = io();
 
-  <div id="game-container" style="display:none;">
-    <div id="opponents-container"></div>
+const joinForm = document.getElementById("join-form");
+const playerNameInput = document.getElementById("player-name");
+const lobbyIdInput = document.getElementById("lobby-id");
+const handContainer = document.getElementById("hand-container");
+const discardPile = document.getElementById("discard-pile");
+const drawStack = document.getElementById("draw-stack");
+const opponentsContainer = document.getElementById("opponents-container");
+const wildColorIndicator = document.getElementById("wild-color-indicator");
 
-    <div id="table">
-      <div id="discard-pile"></div>
-      <div id="draw-pile" class="card-stack">
-        <img id="draw-stack" src="assets/cards/back.png" alt="Draw" />
-      </div>
-      <div id="wild-color-indicator"></div>
-    </div>
+let isMyTurn = false;
 
-    <div id="hand-container"></div>
+joinForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = playerNameInput.value.trim();
+  const lobbyId = lobbyIdInput.value.trim();
+  if (name && lobbyId) {
+    socket.emit("joinLobby", { name, lobbyId });
+  }
+});
 
-    <div id="chat-container">
-      <div id="chat-messages"></div>
-      <form id="chat-form">
-        <input type="text" id="chat-input" placeholder="Say something..." maxlength="100" />
-        <button type="submit">Send</button>
-      </form>
-    </div>
+drawStack.addEventListener("click", () => {
+  if (isMyTurn) {
+    socket.emit("drawCard");
+  }
+});
 
-    <button id="leave-button">Leave Game</button>
-  </div>
+socket.on("gameState", (state) => {
+  document.getElementById("lobby-screen").style.display = "none";
+  document.getElementById("game-container").style.display = "block";
+  isMyTurn = state.isMyTurn;
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="game.js"></script>
-</body>
-</html>
+  // Render discard
+  discardPile.innerHTML = `<img src="assets/cards/${state.table[state.table.length - 1]}" class="card" />`;
+
+  // Show current wild color
+  wildColorIndicator.innerHTML = state.lastWildColor
+    ? `🎨 ${state.lastWildColor.toUpperCase()}`
+    : "";
+
+  // Render hand
+  handContainer.innerHTML = "";
+  state.hand.forEach((card) => {
+    const img = document.createElement("img");
+    img.src = `assets/cards/${card}`;
+    img.className = "card";
+    img.onclick = () => {
+      if (!isMyTurn) return;
+      if (card.startsWith("wild")) {
+        const chosenColor = prompt("Choose a color: red, green, blue, yellow");
+        if (["red", "green", "blue", "yellow"].includes(chosenColor)) {
+          socket.emit("playCard", { card, chosenColor });
+        }
+      } else {
+        socket.emit("playCard", { card });
+      }
+    };
+    handContainer.appendChild(img);
+  });
+
+  // Render opponents
+  opponentsContainer.innerHTML = "";
+  state.others.forEach((opponent) => {
+    const row = document.createElement("div");
+    row.className = "opponent";
+
+    row.innerText = `${state.currentPlayer === opponent.name ? "👉 " : ""}${opponent.name} 🃏 ${opponent.count} (${opponent.score})`;
+    opponentsContainer.appendChild(row);
+  });
+});
+
+socket.on("gameOver", ({ message }) => {
+  alert(message);
+  location.reload();
+});
+
+document.getElementById("leave-button").addEventListener("click", () => {
+  socket.emit("leaveGame");
+  location.reload();
+});
