@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UNO Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="landing">
+    <h1>Welcome to UNO</h1>
+    <img src="assets/cards/back.png" alt="UNO Card Back" style="height: 140px;">
+    <p>Join a game below:</p>
+    <input id="lobbyIdInput" placeholder="Lobby Code" />
+    <input id="nameInput" placeholder="Your Name" maxlength="20" />
+    <button onclick="startGame()">Enter Game</button>
+    <p id="error" class="error"></p>
+  </div>
+
+  <div id="game" style="display: none;">
+    <h2 id="turn-info">Current Turn: </h2>
+    <div id="opponent-hands"></div>
+    <div id="table-pile"></div>
+    <h3>Your Hand</h3>
+    <div id="player-hand"></div>
+    <button onclick="drawCard()">Draw</button>
+    <div id="chat">
+      <input id="chatInput" placeholder="Type a message" />
+      <button onclick="sendChat()">Send</button>
+    </div>
+    <div id="chatLog"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    function startGame() {
+      const name = document.getElementById('nameInput').value.trim();
+      const lobbyId = document.getElementById('lobbyIdInput').value.trim();
+      if (!/^[a-zA-Z0-9 _]{1,20}$/.test(name)) {
+        document.getElementById('error').textContent = "Invalid name (1–20 chars, no symbols)";
+        return;
+      }
+      sessionStorage.setItem('playerName', name);
+      sessionStorage.setItem('lobbyId', lobbyId);
+      document.getElementById('landing').style.display = 'none';
+      document.getElementById('game').style.display = 'block';
+      const script = document.createElement('script');
+      script.src = 'game.js';
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
+</html>
