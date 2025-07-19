@@ -1,172 +1,158 @@
-/* Base styles */
+* {
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
 body {
-  font-family: "Segoe UI", sans-serif;
   margin: 0;
-  background: #f4f6fb;
+  padding: 0;
+  background: #fefefe;
   color: #333;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
 }
 
-#landing,
-#game {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.container {
+  max-width: 900px;
+  margin: auto;
+  padding: 1em;
 }
 
-#game {
+.hidden {
   display: none;
 }
 
-h2 {
-  color: #003366;
+/* Join Section */
+#joinSection {
+  text-align: center;
+  margin-top: 50px;
 }
 
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 90%;
-  max-width: 300px;
+#joinForm input {
+  padding: 10px;
+  margin: 5px;
+  width: 40%;
+  max-width: 200px;
+  font-size: 1em;
 }
 
-input[type="text"] {
-  padding: 8px;
-  font-size: 16px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-button {
-  background: #003366;
+#joinForm button {
+  padding: 10px 16px;
+  font-size: 1em;
+  background-color: #0074cc;
   color: white;
   border: none;
-  padding: 10px;
-  font-size: 16px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-button:hover {
-  background: #005599;
-}
-
-/* Game layout */
-#game {
-  padding: 10px;
-}
-
-#turnBar {
-  background: #ffdd57;
-  font-weight: bold;
-  padding: 8px;
+/* Game Status */
+.status-bar {
+  margin-top: 20px;
   text-align: center;
-  width: 100%;
-  margin-bottom: 10px;
+  font-weight: bold;
+  font-size: 1.2em;
 }
 
-#opponents {
-  background: #e8eff9;
-  padding: 8px;
-  border-radius: 8px;
-  font-size: 14px;
-  margin-bottom: 10px;
-  width: 100%;
-  max-width: 300px;
-}
-
-.playerRow {
+/* Play Area */
+.play-area {
   display: flex;
-  justify-content: space-between;
-  margin: 2px 0;
+  justify-content: space-around;
+  margin: 20px 0;
+  flex-wrap: wrap;
 }
 
-/* Card area */
-#discard,
-#draw {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 10px;
+.discard-pile, .draw-pile {
+  flex: 1;
+  text-align: center;
+  min-width: 120px;
 }
 
-.top-card {
-  width: 100px;
-  height: auto;
+#discardStack img,
+#drawStack img {
+  height: 80px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
-#drawCard {
-  width: 80px;
-  cursor: pointer;
-  margin-left: 20px;
-}
-
-#wild-indicator {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  margin-left: 10px;
-  border: 2px solid #444;
-}
-
-/* Hand */
-#hand {
+/* Hand Area */
+.hand-container {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 5px;
-  margin-top: 10px;
+  margin-top: 20px;
 }
 
-.hand-card {
-  width: 70px;
+.hand-container img {
+  height: 80px;
+  margin: 4px;
   cursor: pointer;
   transition: transform 0.2s;
 }
 
-.hand-card:hover {
-  transform: scale(1.05);
+.hand-container img:hover {
+  transform: scale(1.08);
 }
 
-/* Chat */
-#chat {
-  margin-top: 10px;
-  width: 100%;
-  max-width: 320px;
+.card.back {
+  filter: brightness(0.9);
 }
 
-#chatLog {
-  background: white;
-  height: 120px;
-  overflow-y: scroll;
+/* Chat UI */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  max-height: 250px;
+}
+
+.chat-box {
+  overflow-y: auto;
+  background: #f4f4f4;
+  padding: 10px;
   border: 1px solid #ccc;
-  padding: 5px;
-  font-size: 13px;
-  margin-bottom: 5px;
+  border-radius: 6px;
+  height: 150px;
+  font-size: 0.9em;
+}
+
+#chatForm {
+  display: flex;
+  margin-top: 6px;
 }
 
 #chatInput {
-  width: 100%;
-  padding: 5px;
-  border-radius: 4px;
+  flex: 1;
+  padding: 8px;
+  font-size: 0.95em;
   border: 1px solid #aaa;
+  border-radius: 4px;
 }
 
-/* Responsive tweaks */
+#chatForm button {
+  padding: 8px 12px;
+  font-size: 1.2em;
+  margin-left: 6px;
+  background-color: #003366;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Responsive Layout */
 @media (max-width: 600px) {
-  .top-card {
-    width: 80px;
+  #joinForm input {
+    width: 80%;
   }
 
-  #drawCard {
-    width: 60px;
+  .hand-container img {
+    height: 70px;
   }
 
-  .hand-card {
-    width: 60px;
+  #chatInput {
+    font-size: 0.85em;
+  }
+
+  #chatForm button {
+    font-size: 1em;
   }
 }
