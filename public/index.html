@@ -3,35 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Multiplayer</title>
+  <title>UNO Web Game</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="game">
-    <header>
-      <h1>UNO Multiplayer</h1>
-    </header>
+  <div id="lobby-form">
+    <h1>Join UNO Game</h1>
+    <form id="join-form">
+      <input type="text" id="name" maxlength="20" placeholder="Enter Name" required />
+      <input type="text" id="lobby" maxlength="20" placeholder="Enter Lobby" required />
+      <button type="submit">Join</button>
+    </form>
+  </div>
 
-    <section id="play-area">
-      <div id="draw-pile" title="Click to draw a card"></div>
-      <div id="discard-pile"></div>
-    </section>
-
-    <section id="player-hand" class="hand"></section>
-
-    <aside>
-      <div id="player-list-container">
-        <h3>Players</h3>
-        <ul id="player-list"></ul>
-      </div>
-      <div id="chat-container">
-        <div id="chat-box" class="chat-box"></div>
+  <div id="game" style="display: none;">
+    <div id="sidebar">
+      <ul id="player-list"></ul>
+      <div id="chat">
+        <div id="chat-box"></div>
         <form id="chat-form">
-          <input type="text" id="chat-input" maxlength="200" placeholder="Type your message..." required />
-          <button type="submit" title="Send message">📨</button>
+          <input type="text" id="chat-input" maxlength="200" placeholder="Type your message" />
+          <button type="submit">📨</button>
         </form>
       </div>
-    </aside>
+    </div>
+    <div id="play-area">
+      <div id="discard-pile"></div>
+      <div id="draw-pile"></div>
+      <div id="player-hand"></div>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
