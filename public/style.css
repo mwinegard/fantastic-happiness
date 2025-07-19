@@ -1,104 +1,201 @@
+/* Reset + Base */
 body {
-  font-family: "Segoe UI", sans-serif;
-  background: #f2f4f7;
+  font-family: 'Segoe UI', sans-serif;
+  background: #f4f4f4;
   margin: 0;
   padding: 0;
+  color: #222;
 }
 
-.container {
-  max-width: 900px;
-  margin: auto;
-  padding: 1rem;
-}
-
-h1 {
+h1, h3 {
+  margin: 0.5em 0;
   text-align: center;
-  color: #003f5c;
 }
 
-#join-screen input,
-#join-screen button {
-  display: block;
-  width: 100%;
-  margin: 0.5rem 0;
-  padding: 0.7rem;
-  font-size: 1rem;
+.hidden {
+  display: none !important;
 }
 
-#game-screen {
-  margin-top: 2rem;
-}
-
-#top-bar {
+/* Join Screen */
+#joinScreen {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  font-weight: bold;
-  color: #003f5c;
-}
-
-#opponents {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-#pile-area {
-  display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  gap: 2rem;
-  margin-bottom: 1rem;
+  padding: 2em;
 }
 
-#pile-area img {
-  width: 100px;
-  height: auto;
-  border-radius: 8px;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s ease;
-}
-
-#hand {
+#joinForm {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: center;
-  margin-bottom: 1rem;
+  flex-direction: column;
+  gap: 1em;
+  width: 100%;
+  max-width: 300px;
 }
 
-#hand img {
-  width: 80px;
-  transition: transform 0.2s ease;
+#joinForm input {
+  padding: 0.5em;
+  font-size: 1em;
+  border: 1px solid #999;
+  border-radius: 5px;
+}
+
+#joinForm button {
+  padding: 0.75em;
+  background: #3498db;
+  color: white;
+  border: none;
+  font-weight: bold;
+  border-radius: 5px;
   cursor: pointer;
 }
 
-#hand img:hover {
-  transform: translateY(-10px);
+/* Game Screen */
+#gameScreen {
+  padding: 1em;
 }
 
-#chat-area {
-  border-top: 1px solid #ccc;
-  padding-top: 0.5rem;
+.topBar {
+  background: #222;
+  color: white;
+  padding: 0.5em;
+  text-align: center;
 }
 
-#chat-log {
-  height: 120px;
-  overflow-y: auto;
+.mainArea {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+
+.sidebar {
   background: #fff;
-  border: 1px solid #ddd;
-  padding: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  padding: 1em;
+  border: 1px solid #ccc;
+}
+
+#playerList {
+  list-style: none;
+  padding: 0;
+}
+
+#playerList li {
+  margin: 0.3em 0;
+}
+
+.gameBoard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1em;
+}
+
+/* Pile Area */
+.pileArea {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2em;
+  margin: 1em 0;
+}
+
+.card {
+  height: 100px;
+  transition: transform 0.2s ease;
+}
+
+.card:hover {
+  transform: scale(1.05);
+  cursor: pointer;
+}
+
+.drawPile {
+  position: relative;
+  width: 72px;
+  height: 100px;
+}
+
+.drawPile img {
+  width: 100%;
+}
+
+.drawStack::before,
+.drawStack::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: url('assets/cards/back.png') no-repeat center / contain;
+  top: -3px;
+  left: 3px;
+  z-index: -1;
+}
+
+/* Hand */
+.hand {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+/* Chat Panel */
+.chatPanel {
+  margin-top: 1em;
+  border-top: 1px solid #ccc;
+  padding-top: 1em;
+  background: #fff;
+  padding: 1em;
+}
+
+#chatBox {
+  height: 150px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding: 0.5em;
+  margin-bottom: 0.5em;
+  background: #fdfdfd;
+}
+
+#chatBox div {
+  margin-bottom: 0.3em;
+}
+
+#chatForm {
+  display: flex;
+  gap: 0.5em;
 }
 
 #chatInput {
-  width: 80%;
-  padding: 0.5rem;
+  flex-grow: 1;
+  padding: 0.5em;
+  border: 1px solid #ccc;
+  font-size: 1em;
 }
 
-#chatSend {
-  width: 18%;
-  padding: 0.5rem;
-  margin-left: 2%;
+#chatForm button {
+  padding: 0.5em 0.75em;
+  background: #3498db;
+  color: white;
+  border: none;
+  font-weight: bold;
+  font-size: 1em;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Responsive Layout */
+@media (min-width: 768px) {
+  .mainArea {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .sidebar, .chatPanel {
+    flex: 1;
+    max-width: 250px;
+  }
+
+  .gameBoard {
+    flex: 2;
+  }
 }
