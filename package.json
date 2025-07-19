@@ -1,7 +1,6 @@
 {
   "name": "fantastic-happiness",
   "version": "1.0.0",
-  "description": "Multiplayer UNO game with Socket.io",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
