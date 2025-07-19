@@ -1,29 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UNO Admin Panel</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
       background: #f4f4f4;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
     }
     .lobby {
       border: 1px solid #ccc;
       background: #fff;
-      padding: 10px;
-      margin-bottom: 15px;
-    }
-    .lobby h2 {
-      margin: 0 0 10px 0;
+      padding: 15px;
+      margin-bottom: 20px;
     }
     .player {
       margin-left: 15px;
+      margin-top: 5px;
     }
     button {
-      margin-top: 5px;
+      margin-top: 10px;
       margin-right: 10px;
     }
   </style>
@@ -77,7 +78,6 @@
       });
     });
 
-    // Refresh every 10 seconds
     setInterval(fetchLobbies, 10000);
     fetchLobbies();
   </script>
