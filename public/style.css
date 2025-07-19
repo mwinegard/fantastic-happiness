@@ -16,44 +16,52 @@ form input, form button {
   font-size: 16px;
 }
 
-#game {
+#layout {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 300px;
+  margin-top: 20px;
 }
 
-.sidebar {
-  position: absolute;
-  left: 0;
-  top: 0;
+#player-column {
   width: 20%;
-  background: #f0f0f0;
-  height: 100%;
+  text-align: left;
   padding: 10px;
-  overflow-y: auto;
 }
 
-.center-area {
-  margin-left: 20%;
+#player-list {
+  list-style: none;
+  padding: 0;
+}
+
+#game-board {
   width: 80%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-#pile-area {
-  display: flex;
   justify-content: center;
   align-items: center;
-  margin: 20px 0;
+  position: relative;
 }
 
 #discard-pile, #draw-pile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 10px;
+  margin: 0 30px;
+  position: relative;
+}
+
+.card {
+  width: 80px;
+  border-radius: 10px;
+  margin: 5px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+}
+
+.card:hover {
+  transform: scale(1.1);
+}
+
+.stack {
+  pointer-events: none;
 }
 
 #player-hand {
@@ -63,62 +71,44 @@ form input, form button {
   margin-top: 20px;
 }
 
-.card {
-  width: 80px;
-  margin: 5px;
-  border-radius: 8px;
-  transition: transform 0.2s;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.card:hover {
-  transform: scale(1.1);
-}
-
-.stack {
-  position: relative;
-  z-index: 1;
-}
-
 #uno-btn {
-  font-size: 18px;
+  position: absolute;
+  bottom: -40px;
+  right: 50%;
+  transform: translateX(50%);
   padding: 10px 20px;
-  background: #f00;
-  color: #fff;
-  border: none;
-  margin-bottom: 10px;
+  font-weight: bold;
+  font-size: 18px;
+  background-color: yellow;
+  border: 2px solid black;
+  border-radius: 10px;
   cursor: pointer;
-  border-radius: 8px;
 }
 
-.chat-area {
-  width: 100%;
+#chat-section {
+  margin-top: 20px;
   padding: 10px;
   background: #fff;
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-  border-top: 1px solid #ccc;
+  border-top: 2px solid #ccc;
 }
 
 #chat-log {
-  flex: 1;
-  max-height: 150px;
-  overflow-y: auto;
+  height: 150px;
+  overflow-y: scroll;
   text-align: left;
-  padding: 0 10px;
+  padding: 10px;
+  border: 1px solid #aaa;
+  margin-bottom: 10px;
+  background: #f7f7f7;
 }
 
 #chat-box {
   width: 60%;
-  padding: 8px;
+  padding: 10px;
   font-size: 14px;
 }
 
 #chat-send {
-  padding: 8px;
+  padding: 10px 15px;
   font-size: 14px;
-  margin-left: 5px;
 }
