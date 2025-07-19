@@ -10,12 +10,7 @@ const io = new Server(server);
 
 const scoresFile = path.join(__dirname, "scores.json");
 const lobbies = {};
-
-// Load or initialize scores
-let scores = {};
-if (fs.existsSync(scoresFile)) {
-  scores = JSON.parse(fs.readFileSync(scoresFile, "utf8"));
-}
+let scores = fs.existsSync(scoresFile) ? JSON.parse(fs.readFileSync(scoresFile, "utf8")) : {};
 
 function saveScores() {
   fs.writeFileSync(scoresFile, JSON.stringify(scores, null, 2));
@@ -29,8 +24,7 @@ function createDeck() {
 
   for (let color of colors) {
     for (let val of values) {
-      deck.push(`${color}_${val}`);
-      deck.push(`${color}_${val}`);
+      deck.push(`${color}_${val}`, `${color}_${val}`);
     }
   }
 
@@ -43,6 +37,10 @@ function createDeck() {
 
 function shuffle(array) {
   return array.sort(() => Math.random() - 0.5);
+}
+
+function sendSystemMessage(lobbyId, text) {
+  io.to(lobbyId).emit("chat", { from: "SUE", message: text });
 }
 
 function emitState(lobby) {
@@ -63,8 +61,6 @@ function emitState(lobby) {
 }
 
 function validPlay(card, topCard, wildColor) {
-  if (!card || !topCard) return false;
-
   const [cardColor, cardVal] = card.includes("wild") ? [null, card] : card.split("_");
   const [topColor, topVal] = topCard.includes("wild") ? [null, topCard] : topCard.split("_");
 
@@ -77,9 +73,8 @@ function calculateCardPoints(card) {
   if (!card) return 0;
   const parts = card.split("_");
   if (parts[0] === "wild") return 50;
-  if (parts[1] === "skip" || parts[1] === "reverse" || parts[1] === "draw") return 20;
-  if (!isNaN(parts[1])) return parseInt(parts[1], 10);
-  return 0;
+  if (["skip", "reverse", "draw"].includes(parts[1])) return 20;
+  return parseInt(parts[1], 10) || 0;
 }
 
 io.on("connection", (socket) => {
@@ -120,10 +115,11 @@ io.on("connection", (socket) => {
       lobbyObj.currentTurn = playerId;
     }
 
+    sendSystemMessage(lobby, `${name} has joined the game.`);
     emitState(lobbyObj);
   });
 
-  socket.on("playCard", ({ lobby, card, chosenColor, saidUNO }) => {
+  socket.on("playCard", ({ lobby, card, chosenColor }) => {
     const lobbyObj = lobbies[lobby];
     if (!lobbyObj) return;
 
@@ -141,31 +137,35 @@ io.on("connection", (socket) => {
     lobbyObj.discardPile.push(card);
     lobbyObj.wildColor = card.includes("wild") ? chosenColor : null;
 
-    // Handle action cards
     const ids = Object.keys(lobbyObj.players);
     const idx = ids.indexOf(playerId);
     let nextIdx = (idx + lobbyObj.direction + ids.length) % ids.length;
 
-    if (card.includes("reverse") && ids.length > 2) {
+    if (card.includes("reverse")) {
       lobbyObj.direction *= -1;
-      nextIdx = (idx + lobbyObj.direction + ids.length) % ids.length;
-    } else if (card.includes("skip")) {
-      nextIdx = (nextIdx + lobbyObj.direction + ids.length) % ids.length;
-    } else if (card.includes("draw")) {
-      const nextId = ids[nextIdx];
-      const drawn = lobbyObj.deck.splice(0, 2);
-      if (drawn.length < 2) {
-        // reshuffle
-        const keepTop = lobbyObj.discardPile.pop();
-        lobbyObj.deck = shuffle([...lobbyObj.discardPile]);
-        lobbyObj.discardPile = [keepTop];
-        drawn.push(...lobbyObj.deck.splice(0, 2 - drawn.length));
-      }
-      lobbyObj.hands[nextId].push(...drawn);
+      sendSystemMessage(lobby, `Play direction has reversed!`);
+      nextIdx = ids.length === 2 ? idx : (idx + lobbyObj.direction + ids.length) % ids.length;
+    }
+
+    if (card.includes("skip")) {
+      const skipped = ids[nextIdx];
+      sendSystemMessage(lobby, `${lobbyObj.players[skipped].name} was skipped.`);
       nextIdx = (nextIdx + lobbyObj.direction + ids.length) % ids.length;
     }
 
-    // Check win
+    if (card.includes("draw")) {
+      const drawCount = card.includes("4") ? 4 : 2;
+      const nextId = ids[nextIdx];
+      const drawn = lobbyObj.deck.splice(0, drawCount);
+      lobbyObj.hands[nextId].push(...drawn);
+      sendSystemMessage(lobby, `${lobbyObj.players[nextId].name} was forced to draw ${drawCount} card(s).`);
+      nextIdx = (nextIdx + lobbyObj.direction + ids.length) % ids.length;
+    }
+
+    if (card.includes("wild")) {
+      sendSystemMessage(lobby, `${lobbyObj.players[playerId].name} played a Wild and chose ${chosenColor}.`);
+    }
+
     if (hand.length === 0) {
       let total = 0;
       for (let [pid, h] of Object.entries(lobbyObj.hands)) {
@@ -179,10 +179,10 @@ io.on("connection", (socket) => {
       scores[lobbyObj.players[playerId].name].wins += 1;
       saveScores();
 
-      // Reset hands & game state
       for (let pid of Object.keys(lobbyObj.hands)) {
         lobbyObj.hands[pid] = lobbyObj.deck.splice(0, 7);
       }
+
       lobbyObj.deck = shuffle(createDeck());
       let top;
       do {
@@ -215,8 +215,10 @@ io.on("connection", (socket) => {
     for (let lobbyId in lobbies) {
       const lobby = lobbies[lobbyId];
       if (lobby.players[socket.id]) {
+        const leftName = lobby.players[socket.id].name;
         delete lobby.players[socket.id];
         delete lobby.hands[socket.id];
+        sendSystemMessage(lobbyId, `${leftName} has left the game.`);
         if (Object.keys(lobby.players).length === 0) {
           delete lobbies[lobbyId];
         } else {
@@ -230,10 +232,7 @@ io.on("connection", (socket) => {
 
 app.use(express.static(path.join(__dirname, "public")));
 
-app.get("/scores.json", (req, res) => {
-  res.json(scores);
-});
-
+app.get("/scores.json", (req, res) => res.json(scores));
 app.get("/admin-state", (req, res) => {
   const data = Object.values(lobbies).map(lobby => ({
     id: lobby.id,
@@ -246,7 +245,6 @@ app.get("/admin-state", (req, res) => {
   }));
   res.json(data);
 });
-
 app.post("/admin/kick/:lobby/:id", (req, res) => {
   const { lobby, id } = req.params;
   if (lobbies[lobby]) {
@@ -257,12 +255,10 @@ app.post("/admin/kick/:lobby/:id", (req, res) => {
     res.sendStatus(404);
   }
 });
-
 app.post("/admin/close/:lobby", (req, res) => {
   delete lobbies[req.params.lobby];
   res.sendStatus(200);
 });
-
 app.post("/admin/clear-scores", (req, res) => {
   scores = {};
   saveScores();
