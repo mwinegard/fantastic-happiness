@@ -1,43 +1,130 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>UNO Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="style.css" />
-  <script src="/socket.io/socket.io.js"></script>
-  <script defer src="game.js"></script>
-</head>
-<body>
-  <div class="uno-container">
-    <header>
-      <h1>UNO - Fantastic Happiness</h1>
-      <div id="turn-info">Waiting for game to start...</div>
-    </header>
+/* Reset and Base */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f6f9fc;
+  color: #2c3e50;
+}
 
-    <main>
-      <section id="table">
-        <h3>Table</h3>
-        <div id="table-pile"></div>
-      </section>
+h1, h3, h4 {
+  margin: 0.5em 0;
+  text-align: center;
+}
 
-      <section id="opponent-hands">
-        <h3>Opponents</h3>
-      </section>
+.uno-container {
+  max-width: 1000px;
+  margin: auto;
+  padding: 1em;
+}
 
-      <section id="player-hand">
-        <h3>Your Hand</h3>
-      </section>
+/* Layout */
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
 
-      <div class="controls">
-        <button onclick="drawCard()">Draw Card</button>
-        <button onclick="leaveGame()">Leave Game</button>
-      </div>
+/* Table Area */
+#table {
+  background: #ffffff;
+  border: 1px solid #ccc;
+  padding: 1em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
-      <aside id="scoreboard">
-        <h4>Scores</h4>
-      </aside>
-    </main>
-  </div>
-</body>
-</html>
+/* Hands */
+#player-hand,
+#opponent-hands {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4em;
+  padding: 0.5em;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+#opponent-hands > div {
+  text-align: center;
+  margin: 0.5em;
+}
+
+/* Card Styling */
+img {
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s ease;
+}
+
+img:hover {
+  transform: scale(1.05);
+}
+
+/* Buttons */
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 1em;
+  margin: 1em 0;
+}
+
+button {
+  padding: 0.6em 1.2em;
+  border: none;
+  border-radius: 8px;
+  background-color: #0078D7;
+  color: white;
+  font-size: 1em;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+button:hover {
+  background-color: #005ea2;
+  transform: translateY(-2px);
+}
+
+/* Turn Info */
+#turn-info {
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.1em;
+  padding: 0.5em;
+  color: #0078D7;
+}
+
+/* Scoreboard */
+#scoreboard {
+  background: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 1em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  margin-top: 1em;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .controls {
+    flex-direction: column;
+  }
+
+  #player-hand,
+  #opponent-hands {
+    justify-content: center;
+  }
+
+  img {
+    height: 70px !important;
+  }
+
+  #table img {
+    height: 100px !important;
+  }
+}
