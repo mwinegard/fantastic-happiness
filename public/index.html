@@ -9,7 +9,7 @@
 <body>
   <div id="join-screen">
     <h1>🎴 Join a Game</h1>
-    <form id="join-form">
+    <form id="join-form" autocomplete="off">
       <input type="text" id="player-name" maxlength="20" placeholder="Your Name" required />
       <input type="text" id="lobby-id" maxlength="20" placeholder="Lobby Name" required />
       <button type="submit">Join</button>
@@ -47,7 +47,7 @@
 
       <div id="chat-container">
         <div id="chat-box"></div>
-        <form id="chatForm">
+        <form id="chatForm" autocomplete="off">
           <input type="text" id="chat-input" maxlength="200" placeholder="Say something..." />
           <button type="submit" id="chat-send">✉️</button>
         </form>
