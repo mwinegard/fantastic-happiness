@@ -1,4 +1,3 @@
-/* Base Reset */
 body {
   margin: 0;
   padding: 0;
@@ -7,7 +6,7 @@ body {
   color: #2c3e50;
 }
 
-h1, h2, h3, h4 {
+h1, h2, h3 {
   text-align: center;
   margin: 0.5em 0;
 }
@@ -18,15 +17,13 @@ h1, h2, h3, h4 {
   padding: 1em;
 }
 
-/* Layout */
 main {
   display: flex;
   flex-direction: column;
   gap: 1em;
 }
 
-/* Game Sections */
-#table, #player-hand, #opponent-hands, #scoreboard {
+#table, #player-hand, #opponent-section {
   background: #ffffff;
   border: 1px solid #ccc;
   border-radius: 8px;
@@ -53,16 +50,14 @@ main {
   justify-content: center;
 }
 
-/* Turn Info */
-#turn-info {
-  text-align: center;
-  font-weight: bold;
-  font-size: 1.1em;
-  padding: 0.5em;
-  color: #0078D7;
+#wild-color-indicator {
+  margin-top: 0.5em;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  border: 2px solid #333;
 }
 
-/* Buttons */
 .controls {
   display: flex;
   justify-content: center;
@@ -87,12 +82,6 @@ button:hover {
   transform: translateY(-2px);
 }
 
-/* Scoreboard */
-#scoreboard {
-  margin-top: 1em;
-}
-
-/* Card Images */
 img {
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
@@ -103,7 +92,6 @@ img:hover {
   transform: scale(1.05);
 }
 
-/* Modal */
 .modal {
   position: fixed;
   top: 0; left: 0;
@@ -138,37 +126,17 @@ img:hover {
 /* Opponent List */
 #opponent-hands {
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
+  padding: 0 0.5em;
 }
 
 .opponent-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  width: 100%;
   background-color: #f0f2f5;
-  margin-bottom: 0.3em;
+  margin: 0.2em 0;
   padding: 0.5em 1em;
   border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .controls {
-    flex-direction: column;
-  }
-
-  #player-hand,
-  #opponent-hands {
-    justify-content: center;
-  }
-
-  img {
-    height: 70px !important;
-  }
-
-  #table img {
-    height: 100px !important;
-  }
+  font-size: 0.95em;
 }
