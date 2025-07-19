@@ -1,3 +1,4 @@
+<!-- public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,11 +15,27 @@
       <button type="submit">Join</button>
     </form>
   </div>
+
   <div id="game" style="display:none;">
+    <div id="your-turn">Waiting...</div>
+    <div id="scoreboard"></div>
     <div id="discard-pile"></div>
     <div id="draw-pile"></div>
+    <div id="wild-selector" style="display:none;">
+      Choose Color:
+      <button data-color="red">🔴</button>
+      <button data-color="green">🟢</button>
+      <button data-color="blue">🔵</button>
+      <button data-color="yellow">🟡</button>
+    </div>
     <div id="player-hand"></div>
+    <div id="chat">
+      <div id="messages"></div>
+      <input id="chat-input" placeholder="Type a message..." />
+      <button id="chat-send">📨</button>
+    </div>
   </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
