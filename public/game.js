@@ -1,132 +1,95 @@
 const socket = io();
-let playerName = localStorage.getItem("playerName");
-let lobbyId = localStorage.getItem("lobbyId");
-let yourId = null;
-let turnTimer = null;
-let wildColorChoice = null;
+let playerId = null;
+let lobbyId = null;
 
+// Join lobby and name setup
 document.getElementById("joinForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  playerName = document.getElementById("nameInput").value.trim().substring(0, 20);
-  lobbyId = document.getElementById("lobbyInput").value.trim().substring(0, 20);
+  const nameInput = document.getElementById("playerName");
+  const lobbyInput = document.getElementById("lobbyId");
 
-  if (!playerName || !lobbyId || /[^a-zA-Z0-9_]/.test(playerName + lobbyId)) {
-    alert("Only letters, numbers, and underscores allowed.");
-    return;
+  const name = nameInput.value.trim().slice(0, 20);
+  const lobby = lobbyInput.value.trim().slice(0, 20);
+
+  if (name && lobby && /^[a-zA-Z0-9]+$/.test(name + lobby)) {
+    socket.emit("joinLobby", { name, lobbyId: lobby });
+    lobbyId = lobby;
   }
-
-  localStorage.setItem("playerName", playerName);
-  localStorage.setItem("lobbyId", lobbyId);
-
-  document.getElementById("landing").style.display = "none";
-  document.getElementById("game").style.display = "flex";
-
-  socket.emit("joinLobby", { playerName, lobbyId });
 });
 
-socket.on("gameState", (data) => {
-  yourId = socket.id;
-  const isYourTurn = data.currentTurn === yourId;
-
-  document.getElementById("turnBar").textContent = isYourTurn ? "Your Turn" : "";
-  renderPlayers(data.players, data.currentTurn);
-  renderTopCard(data.topCard, data.lastWildColor);
-  renderHand(data.yourHand);
-
-  if (isYourTurn) startTurnTimer();
-  else clearInterval(turnTimer);
+// Receive player ID
+socket.on("init", (id) => {
+  playerId = id;
 });
 
-function renderPlayers(players, currentTurn) {
-  const el = document.getElementById("opponents");
-  el.innerHTML = "";
-  players.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "playerRow";
-    if (p.id === currentTurn) div.innerHTML += "👉 ";
-    div.innerHTML += `<span>${p.name}</span> 🃏${p.handCount} (${p.score})`;
-    el.appendChild(div);
-  });
-}
-
-function renderTopCard(card, wildColor) {
-  const el = document.getElementById("discard");
-  el.innerHTML = `<img src="assets/cards/${card}" class="top-card">`;
-  if (wildColor) {
-    const dot = document.createElement("div");
-    dot.className = "wild-indicator";
-    dot.style.background = wildColor;
-    el.appendChild(dot);
-  }
-}
-
-function renderHand(hand) {
-  const el = document.getElementById("hand");
-  el.innerHTML = "";
-  hand.forEach(card => {
-    const img = document.createElement("img");
-    img.src = `assets/cards/${card}`;
-    img.className = "hand-card";
-    img.onclick = () => {
-      if (card.startsWith("wild")) showWildColorPrompt(card);
-      else playCard(card);
-    };
-    el.appendChild(img);
-  });
-}
-
-function showWildColorPrompt(card) {
-  const color = prompt("Pick a color: red, blue, green, yellow").toLowerCase();
-  if (["red", "blue", "green", "yellow"].includes(color)) {
-    wildColorChoice = color;
-    playCard(card);
-  } else {
-    alert("Invalid color.");
-  }
-}
-
-function playCard(card) {
-  socket.emit("playCard", { card, wildColor: wildColorChoice });
-  wildColorChoice = null;
-}
-
-document.getElementById("drawCard").addEventListener("click", () => {
-  socket.emit("drawCard");
+// Update game state
+socket.on("gameState", (state) => {
+  updateUI(state);
 });
 
-document.getElementById("leave").addEventListener("click", () => {
-  socket.emit("leaveGame");
-  location.reload();
+// Handle chat messages
+socket.on("chatMessage", (msg) => {
+  const chatBox = document.getElementById("chat");
+  const newMsg = document.createElement("div");
+
+  const sender = msg.from || "System";
+  const color = msg.color || "black";
+
+  newMsg.innerHTML = `<strong style="color:${color}">${sender}:</strong> ${msg.text}`;
+  chatBox.appendChild(newMsg);
+  chatBox.scrollTop = chatBox.scrollHeight;
 });
 
-document.getElementById("chatForm").addEventListener("submit", e => {
+// Send chat messages
+document.getElementById("chatForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = document.getElementById("chatInput");
   const msg = input.value.trim();
-  if (msg) socket.emit("chatMessage", msg);
-  input.value = "";
+  if (msg) {
+    socket.emit("chatMessage", msg);
+    input.value = "";
+  }
 });
 
-socket.on("chatMessage", ({ from, text, color }) => {
-  const el = document.getElementById("chatLog");
-  const msg = document.createElement("div");
-  msg.innerHTML = `<strong style="color:${from === 'SUE' ? 'navy' : 'black'}">${from}</strong>: ${text}`;
-  msg.style.color = "black";
-  el.appendChild(msg);
-  el.scrollTop = el.scrollHeight;
-});
+// Update UI based on state
+function updateUI(state) {
+  // Example logic for updating cards and turns
+  const gameArea = document.getElementById("gameArea");
+  if (!state || !state.players) return;
 
-function startTurnTimer() {
-  let seconds = 60;
-  clearInterval(turnTimer);
-  document.getElementById("turnBar").textContent = `Your Turn - 60s`;
+  const currentPlayer = state.players.find((p) => p.id === playerId);
+  const isMyTurn = state.turnId === playerId;
 
-  turnTimer = setInterval(() => {
-    seconds--;
-    document.getElementById("turnBar").textContent = `Your Turn - ${seconds}s`;
-    if (seconds <= 0) {
-      clearInterval(turnTimer);
-      socket.emit("turnTimeout");
-    }
-  }, 1000);
+  document.getElementById("yourTurn").textContent = isMyTurn ? "🎯 Your turn!" : "⏳ Waiting...";
+
+  // Render hand
+  const handContainer = document.getElementById("hand");
+  handContainer.innerHTML = "";
+  currentPlayer.hand.forEach((card) => {
+    const img = document.createElement("img");
+    img.src = `/assets/cards/${card}.png`;
+    img.alt = card;
+    img.className = "card";
+    img.onclick = () => {
+      if (isMyTurn) {
+        socket.emit("playCard", card);
+      }
+    };
+    handContainer.appendChild(img);
+  });
+
+  // Render draw pile
+  const drawStack = document.getElementById("drawStack");
+  drawStack.innerHTML = "";
+  for (let i = 0; i < 3; i++) {
+    const img = document.createElement("img");
+    img.src = "/assets/cards/back.png";
+    img.className = "card back";
+    img.style.marginLeft = `-${i * 3}px`;
+    drawStack.appendChild(img);
+  }
+
+  drawStack.onclick = () => {
+    if (isMyTurn) socket.emit("drawCard");
+  };
 }
