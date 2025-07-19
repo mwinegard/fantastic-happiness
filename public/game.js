@@ -7,6 +7,7 @@ const gameDiv = document.getElementById("game");
 const handDiv = document.getElementById("player-hand");
 const drawPile = document.getElementById("draw-pile");
 const discardPile = document.getElementById("discard-pile");
+const playerList = document.getElementById("player-list");
 
 const chatBox = document.getElementById("chat-box");
 const chatSend = document.getElementById("chat-send");
@@ -49,7 +50,9 @@ socket.on("state", (state) => {
     img.addEventListener("click", () => {
       if (card.startsWith("wild")) {
         const color = prompt("Choose a color: red, blue, green, yellow");
-        socket.emit("playCard", { lobby: state.players[0].id, card, chosenColor: color });
+        if (color && ["red", "blue", "green", "yellow"].includes(color)) {
+          socket.emit("playCard", { lobby: state.players[0].id, card, chosenColor: color });
+        }
       } else {
         socket.emit("playCard", { lobby: state.players[0].id, card });
       }
@@ -59,10 +62,12 @@ socket.on("state", (state) => {
 
   discardPile.innerHTML = "";
   const topCard = state.discardPile[state.discardPile.length - 1];
-  const topImg = document.createElement("img");
-  topImg.src = `/assets/cards/${topCard}.png`;
-  topImg.className = "card";
-  discardPile.appendChild(topImg);
+  if (topCard) {
+    const topImg = document.createElement("img");
+    topImg.src = `/assets/cards/${topCard}.png`;
+    topImg.className = "card";
+    discardPile.appendChild(topImg);
+  }
 
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
@@ -73,13 +78,12 @@ socket.on("state", (state) => {
   });
   drawPile.appendChild(drawImg);
 
-  // 🧍 Players list
-  const playerList = document.getElementById("player-list");
+  // 👤 Player List with score and hand size
   playerList.innerHTML = "";
   state.players.forEach(p => {
     const li = document.createElement("li");
     const mark = p.id === socket.id ? "👉 " : "";
-    li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
+    li.textContent = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
   });
 });
@@ -87,6 +91,8 @@ socket.on("state", (state) => {
 socket.on("chat", ({ from, message }) => {
   const div = document.createElement("div");
   div.textContent = `${from}: ${message}`;
+  div.style.fontWeight = from === "SUE" ? "bold" : "normal";
+  div.style.color = from === "SUE" ? "#001f3f" : "black";
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
 });
