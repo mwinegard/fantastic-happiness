@@ -13,12 +13,6 @@ body {
   display: none;
 }
 
-#lobby-screen, #game-screen {
-  width: 100%;
-  max-width: 900px;
-  margin-top: 20px;
-}
-
 input, button {
   padding: 10px;
   font-size: 1em;
@@ -31,18 +25,13 @@ input, button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 10px;
 }
 
 #pile-container {
   display: flex;
   align-items: center;
   gap: 15px;
-  margin-top: 10px;
-}
-
-#discard {
-  width: 80px;
+  margin: 10px;
 }
 
 #draw-stack {
@@ -54,9 +43,9 @@ input, button {
 
 .stack-card {
   position: absolute;
+  width: 100%;
   top: 0;
   left: 0;
-  width: 100%;
   transition: top 0.2s, left 0.2s;
 }
 
@@ -101,7 +90,9 @@ input, button {
 
 #opponents {
   margin-top: 20px;
-  font-size: 1em;
+  width: 100%;
+  max-width: 400px;
+  text-align: left;
 }
 
 .opponent {
