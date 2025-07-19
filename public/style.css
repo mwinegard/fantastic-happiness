@@ -10,8 +10,7 @@ body {
   margin-top: 80px;
 }
 
-form input,
-form button {
+form input, form button {
   padding: 10px;
   margin: 5px;
   font-size: 16px;
@@ -19,6 +18,7 @@ form button {
 
 #game {
   padding: 20px;
+  position: relative;
 }
 
 #player-hand {
@@ -44,11 +44,18 @@ form button {
 #discard-pile,
 #draw-pile {
   display: inline-block;
-  margin: 10px;
+  vertical-align: top;
+  position: relative;
+  min-height: 100px;
+  min-width: 80px;
 }
 
-#wild-color-picker {
-  margin-top: 20px;
+#discard-pile {
+  margin-right: 40px;
+}
+
+#draw-pile {
+  margin-left: 40px;
 }
 
 #wild-color-picker button {
