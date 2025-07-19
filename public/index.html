@@ -3,40 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Online</title>
+  <title>UNO Multiplayer</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="join-form">
-    <h2>Join UNO Lobby</h2>
-    <form>
-      <input type="text" id="name" placeholder="Your Name" maxlength="20" required pattern="[a-zA-Z0-9 ]+" />
-      <input type="text" id="lobby" placeholder="Lobby Name" maxlength="20" required pattern="[a-zA-Z0-9 ]+" />
-      <button type="submit">Join</button>
-    </form>
-  </div>
+  <div id="game">
+    <header>
+      <h1>UNO Multiplayer</h1>
+    </header>
 
-  <div id="game" style="display:none;">
-    <div id="status-bar">
-      <div id="players"></div>
-      <div id="pile-area">
-        <img id="pile" src="" alt="Top Card" style="display:none;" />
-        <img id="draw-pile" src="assets/cards/back.png" alt="Draw" />
+    <section id="play-area">
+      <div id="draw-pile" title="Click to draw a card"></div>
+      <div id="discard-pile"></div>
+    </section>
+
+    <section id="player-hand" class="hand"></section>
+
+    <aside>
+      <div id="player-list-container">
+        <h3>Players</h3>
+        <ul id="player-list"></ul>
       </div>
-    </div>
-
-    <div id="hand-section">
-      <h3>Your Hand</h3>
-      <div id="hand"></div>
-    </div>
-
-    <div id="chat-container">
-      <div id="chat"></div>
-      <form id="chat-form">
-        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="100" />
-        <button type="submit">📨</button>
-      </form>
-    </div>
+      <div id="chat-container">
+        <div id="chat-box" class="chat-box"></div>
+        <form id="chat-form">
+          <input type="text" id="chat-input" maxlength="200" placeholder="Type your message..." required />
+          <button type="submit" title="Send message">📨</button>
+        </form>
+      </div>
+    </aside>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
