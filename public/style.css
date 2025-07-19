@@ -1,13 +1,14 @@
+/* public/style.css */
 body {
   font-family: Arial, sans-serif;
-  background: #e8f1f8;
+  background: #f0f8ff;
   margin: 0;
   padding: 0;
   text-align: center;
 }
 
 #lobby-form {
-  margin-top: 80px;
+  margin-top: 100px;
 }
 
 form input, form button {
@@ -19,17 +20,53 @@ form input, form button {
 #player-hand, #discard-pile, #draw-pile {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  margin: 10px;
   flex-wrap: wrap;
 }
 
 .card {
   width: 80px;
-  margin: 5px;
-  transition: transform 0.2s;
+  margin: 4px;
   cursor: pointer;
+  transition: transform 0.2s;
 }
 
 .card:hover {
   transform: scale(1.1);
+}
+
+#your-turn {
+  font-weight: bold;
+  font-size: 18px;
+  margin-top: 15px;
+}
+
+#wild-selector button {
+  font-size: 20px;
+  margin: 5px;
+}
+
+#chat {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  width: 240px;
+}
+
+#messages {
+  height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 5px;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+#chat input {
+  width: 150px;
+}
+
+#chat-send {
+  width: 60px;
 }
