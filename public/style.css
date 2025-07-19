@@ -1,13 +1,43 @@
-body { font-family: 'Segoe UI', Arial, sans-serif; margin:0; background: #f0f4f8; text-align:center; }
-#game { max-width:600px; margin:0 auto; }
-#player-hand, #opponent-hands { display: flex; flex-wrap: wrap; justify-content:center; }
-#player-hand img, #opponent-hands img { margin: 2px; border-radius: 6px; }
-#table-pile { margin: 12px auto; }
-button { margin: 10px; padding: 10px 16px; border-radius: 4px; border:none; background: #0078D4; color: white; font-size: 16px; }
-#chat { margin:16px 0 4px 0; }
-#chatInput { width: 50%; padding: 7px; border-radius: 3px; border: 1px solid #ccc; }
-#chatLog { max-height:90px; overflow:auto; background: #e9eef3; border-radius:3px; text-align:left; margin:0 auto 8px auto; padding: 6px; }
-@media (max-width:600px) {
-  #game { width:100vw; }
-  #player-hand img { height:56px !important; }
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>UNO Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css" />
+  <script src="/socket.io/socket.io.js"></script>
+  <script defer src="game.js"></script>
+</head>
+<body>
+  <div class="uno-container">
+    <header>
+      <h1>UNO - Fantastic Happiness</h1>
+      <div id="turn-info">Waiting for game to start...</div>
+    </header>
+
+    <main>
+      <section id="table">
+        <h3>Table</h3>
+        <div id="table-pile"></div>
+      </section>
+
+      <section id="opponent-hands">
+        <h3>Opponents</h3>
+      </section>
+
+      <section id="player-hand">
+        <h3>Your Hand</h3>
+      </section>
+
+      <div class="controls">
+        <button onclick="drawCard()">Draw Card</button>
+        <button onclick="leaveGame()">Leave Game</button>
+      </div>
+
+      <aside id="scoreboard">
+        <h4>Scores</h4>
+      </aside>
+    </main>
+  </div>
+</body>
+</html>
