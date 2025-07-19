@@ -1,20 +1,16 @@
 const socket = io();
-let playerId = null;
-let currentPlayerId = null;
-let lobbyId = '';
+let playerId, currentPlayerId, lobbyId = '';
 let playerHand = [];
 
 const joinBtn = document.getElementById('joinBtn');
+const unoBtn = document.getElementById('unoBtn');
 const chatInput = document.getElementById('chatInput');
 const sendChat = document.getElementById('sendChat');
-const unoBtn = document.getElementById('unoBtn');
 
 joinBtn.onclick = () => {
-  lobbyId = document.getElementById('lobbyId').value;
-  const playerName = document.getElementById('playerName').value;
-  if (lobbyId && playerName) {
-    socket.emit('joinLobby', { lobbyId, playerName });
-  }
+  lobbyId = document.getElementById('lobbyId').value.trim();
+  const name = document.getElementById('playerName').value.trim();
+  if (lobbyId && name) socket.emit('joinLobby', { lobbyId, playerName: name });
 };
 
 socket.on('joinedLobby', ({ playerId: id }) => {
@@ -22,30 +18,23 @@ socket.on('joinedLobby', ({ playerId: id }) => {
   document.getElementById('lobby').style.display = 'none';
   document.getElementById('game').style.display = 'block';
   document.getElementById('currentLobby').textContent = lobbyId;
+  console.log('✅ Joined as', id);
 });
 
-socket.on('updateLobby', data => {
-  const container = document.getElementById('players');
-  container.innerHTML = '<h3>Players:</h3>';
+socket.on('gameState', data => {
+  console.log('🏷️ gameState:', data);
+  currentPlayerId = data.currentPlayer;
+  const me = data.players.find(p => p.id === playerId);
+  if (me) playerHand = me.hand;
+
+  const playersEl = document.getElementById('players');
+  playersEl.innerHTML = '<h3>Players:</h3>';
   data.players.forEach(p => {
-    container.innerHTML += `<div>${p.name} (${p.hand.length} cards, ${p.score} pts)</div>`;
-  });
-});
-
-socket.on('gameState', ({ pile, players, currentPlayer }) => {
-  currentPlayerId = currentPlayer;
-  playerHand = players.find(p => p.id === playerId)?.hand || [];
-
-  const playerList = document.getElementById('players');
-  playerList.innerHTML = '<h3>Players:</h3>';
-  players.forEach(p => {
-    const mark = p.id === currentPlayer ? '🟢' : '';
-    playerList.innerHTML += `<div>${p.name} (${p.handSize} cards, ${p.score} pts) ${mark}</div>`;
+    playersEl.innerHTML += `<div>${p.name} (${p.handSize} cards, ${p.score} pts) ${p.id === currentPlayerId ? '🟢' : ''}</div>`;
   });
 
-  // Timer UI
   clearInterval(window.timerInterval);
-  if (playerId === currentPlayer) {
+  if (playerId === currentPlayerId) {
     let sec = 60;
     window.timerInterval = setInterval(() => {
       document.getElementById('topCard').textContent = `Your Turn - ${sec--}s`;
@@ -53,34 +42,30 @@ socket.on('gameState', ({ pile, players, currentPlayer }) => {
     }, 1000);
   }
 
-  // Render top card
-  const top = pile[pile.length - 1];
+  const top = data.pile[data.pile.length - 1];
   const topEl = document.getElementById('topCard');
   topEl.textContent = top.value;
   topEl.className = `card ${top.color}`;
 
-  // Render hand
   const handEl = document.getElementById('hand');
   handEl.innerHTML = '';
   playerHand.forEach(card => {
-    const d = document.createElement('div');
-    d.className = `card ${card.color}`;
-    d.textContent = card.value;
-    d.onclick = () => {
+    const el = document.createElement('div');
+    el.className = `card ${card.color}`;
+    el.textContent = card.value;
+    el.onclick = () => {
+      const payload = { lobbyId, playerId, card };
       if (card.color === 'black') {
-        const c = prompt('Choose color: red, green, blue, yellow');
-        if (['red','green','blue','yellow'].includes(c)) {
-          socket.emit('playCard', { lobbyId, playerId, card, chosenColor: c });
-        }
-      } else {
-        socket.emit('playCard', { lobbyId, playerId, card });
+        const chosen = prompt('Choose color: red, green, blue, yellow').trim();
+        if (['red','green','blue','yellow'].includes(chosen)) payload.chosenColor = chosen;
+        else return;
       }
+      socket.emit('playCard', payload);
     };
-    handEl.appendChild(d);
+    handEl.appendChild(el);
   });
 
-  // UNO button
-  unoBtn.style.display = (playerHand.length === 2 && playerId === currentPlayer) ? 'block' : 'none';
+  unoBtn.style.display = (playerHand.length === 2 && playerId === currentPlayerId) ? 'block' : 'none';
 });
 
 unoBtn.onclick = () => {
@@ -89,13 +74,13 @@ unoBtn.onclick = () => {
 };
 
 socket.on('chatMessage', ({ sender, message }) => {
-  const msgEl = document.createElement('div');
-  msgEl.textContent = `${sender}: ${message}`;
-  document.getElementById('messages').appendChild(msgEl);
+  const el = document.createElement('div');
+  el.textContent = `${sender}: ${message}`;
+  document.getElementById('messages').appendChild(el);
 });
 
 sendChat.onclick = () => {
-  const m = chatInput.value;
+  const m = chatInput.value.trim();
   if (m) {
     socket.emit('sendChat', { lobbyId, message: m });
     chatInput.value = '';
@@ -103,6 +88,5 @@ sendChat.onclick = () => {
 };
 
 socket.on('gameOver', ({ winner, roundPoints, totalScore }) => {
-  alert(`🏆 ${winner} wins! +${roundPoints} pts. Total: ${totalScore} pts`);
-  playerHand = [];
+  alert(`🏆 ${winner} wins! +${roundPoints} pts (Total: ${totalScore})`);
 });
