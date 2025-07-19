@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UNO Admin Panel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+    .lobby {
+      border: 1px solid #ccc;
+      background: #fff;
+      padding: 10px;
+      margin-bottom: 15px;
+    }
+    .lobby h2 {
+      margin: 0 0 10px 0;
+    }
+    .player {
+      margin-left: 15px;
+    }
+    button {
+      margin-top: 5px;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>UNO Admin Panel</h1>
+  <div id="lobbies"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    function fetchLobbies() {
+      socket.emit("adminRequestLobbies");
+    }
+
+    socket.on("adminLobbies", (data) => {
+      const container = document.getElementById("lobbies");
+      container.innerHTML = "";
+
+      Object.entries(data).forEach(([lobbyId, lobby]) => {
+        const lobbyDiv = document.createElement("div");
+        lobbyDiv.className = "lobby";
+        const heading = document.createElement("h2");
+        heading.textContent = `Lobby: ${lobbyId}`;
+        lobbyDiv.appendChild(heading);
+
+        lobby.players.forEach((player) => {
+          const playerDiv = document.createElement("div");
+          playerDiv.className = "player";
+          playerDiv.textContent = `👤 ${player.name} — Score: ${player.score}`;
+
+          const kickBtn = document.createElement("button");
+          kickBtn.textContent = "Kick Player";
+          kickBtn.onclick = () => {
+            socket.emit("adminKickPlayer", { lobbyId, playerId: player.id });
+          };
+
+          playerDiv.appendChild(kickBtn);
+          lobbyDiv.appendChild(playerDiv);
+        });
+
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "🗑️ Close Lobby";
+        closeBtn.onclick = () => {
+          socket.emit("adminCloseLobby", lobbyId);
+        };
+
+        lobbyDiv.appendChild(closeBtn);
+        container.appendChild(lobbyDiv);
+      });
+    });
+
+    // Refresh every 10 seconds
+    setInterval(fetchLobbies, 10000);
+    fetchLobbies();
+  </script>
+</body>
+</html>
