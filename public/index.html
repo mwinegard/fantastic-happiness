@@ -2,57 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Fantastic Happiness Uno</title>
+  <title>UNO Game</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="join-screen">
-    <h1>🎴 Join a Game</h1>
-    <form id="join-form">
-      <input type="text" id="player-name" maxlength="20" placeholder="Your Name" required />
-      <input type="text" id="lobby-id" maxlength="20" placeholder="Lobby Name" required />
-      <button type="submit">Join</button>
-    </form>
-    <p id="join-error" class="error"></p>
+<div id="join-screen">
+  <form id="join-form">
+    <input id="player-name" maxlength="20" placeholder="Name" required />
+    <input id="lobby-id" maxlength="10" placeholder="Lobby ID" required />
+    <button type="submit">Join</button>
+  </form>
+</div>
+<div id="game-screen" class="hidden">
+  <div id="lobby-name"></div>
+  <div id="current-turn"></div>
+  <div id="opponents"></div>
+  <div>
+    <img id="pile-top" class="card hidden">
+    <img id="draw-stack" src="assets/cards/back.png" class="card">
   </div>
-
-  <div id="game-screen" class="hidden">
-    <header>
-      <h2>Lobby: <span id="lobby-name"></span></h2>
-      <button id="leave-btn">🚪 Leave</button>
-    </header>
-
-    <section id="status-bar">
-      <p><strong>Turn:</strong> <span id="current-turn"></span></p>
-    </section>
-
-    <section id="opponents"></section>
-
-    <section id="game-area">
-      <div id="draw-pile">
-        <img id="draw-stack" src="assets/cards/back.png" alt="Draw Pile" />
-      </div>
-      <div id="discard-pile">
-        <img id="pile-top" src="" alt="Top Card" />
-      </div>
-    </section>
-
-    <section id="your-hand">
-      <h3>Your Hand</h3>
-      <div id="hand"></div>
-    </section>
-
-    <section id="chat">
-      <div id="chat-box"></div>
-      <div class="chat-input">
-        <input type="text" id="chat-input" maxlength="120" placeholder="Type a message…" />
-        <button id="chat-send">📨</button>
-      </div>
-    </section>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="game.js"></script>
+  <div id="hand"></div>
+  <form id="chatForm">
+    <input id="chat-input" maxlength="100">
+    <button id="chat-send" type="submit">✉️</button>
+  </form>
+  <div id="chat-box"></div>
+  <button id="leave-btn">Leave</button>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
