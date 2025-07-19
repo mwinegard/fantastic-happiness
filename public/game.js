@@ -1,11 +1,15 @@
 const socket = io();
-
 let playerId = null;
 let currentPlayerId = null;
 let lobbyId = '';
 let playerHand = [];
 
-document.getElementById('joinBtn').onclick = () => {
+const joinBtn = document.getElementById('joinBtn');
+const chatInput = document.getElementById('chatInput');
+const sendChat = document.getElementById('sendChat');
+const unoBtn = document.getElementById('unoBtn');
+
+joinBtn.onclick = () => {
   lobbyId = document.getElementById('lobbyId').value;
   const playerName = document.getElementById('playerName').value;
   if (lobbyId && playerName) {
@@ -13,56 +17,76 @@ document.getElementById('joinBtn').onclick = () => {
   }
 };
 
-socket.on('joinedLobby', (data) => {
-  playerId = data.playerId;
+socket.on('joinedLobby', ({ playerId: id }) => {
+  playerId = id;
   document.getElementById('lobby').style.display = 'none';
   document.getElementById('game').style.display = 'block';
   document.getElementById('currentLobby').textContent = lobbyId;
 });
 
-socket.on('updateLobby', ({ players }) => {
+socket.on('updateLobby', data => {
   const container = document.getElementById('players');
   container.innerHTML = '<h3>Players:</h3>';
-  players.forEach(p => {
-    container.innerHTML += `<div>${p.name}</div>`;
+  data.players.forEach(p => {
+    container.innerHTML += `<div>${p.name} (${p.hand.length} cards, ${p.score} pts)</div>`;
   });
 });
 
 socket.on('gameState', ({ pile, players, currentPlayer }) => {
   currentPlayerId = currentPlayer;
+  playerHand = players.find(p => p.id === playerId)?.hand || [];
 
-  // Render players
   const playerList = document.getElementById('players');
-  playerList.innerHTML = `<h3>Players:</h3>`;
+  playerList.innerHTML = '<h3>Players:</h3>';
   players.forEach(p => {
-    const isTurn = p.id === currentPlayer ? '🟢' : '';
-    playerList.innerHTML += `<div>${p.name} (${p.handSize} cards) ${isTurn}</div>`;
+    const mark = p.id === currentPlayer ? '🟢' : '';
+    playerList.innerHTML += `<div>${p.name} (${p.handSize} cards, ${p.score} pts) ${mark}</div>`;
   });
+
+  // Timer UI
+  clearInterval(window.timerInterval);
+  if (playerId === currentPlayer) {
+    let sec = 60;
+    window.timerInterval = setInterval(() => {
+      document.getElementById('topCard').textContent = `Your Turn - ${sec--}s`;
+      if (sec < 0) clearInterval(window.timerInterval);
+    }, 1000);
+  }
 
   // Render top card
   const top = pile[pile.length - 1];
   const topEl = document.getElementById('topCard');
-  topEl.textContent = `${top.color.toUpperCase()} ${top.value}`;
-  topEl.style.color = top.color === 'black' ? 'purple' : top.color;
+  topEl.textContent = top.value;
+  topEl.className = `card ${top.color}`;
 
   // Render hand
   const handEl = document.getElementById('hand');
   handEl.innerHTML = '';
-  playerHand.forEach((card, index) => {
-    const cardBtn = document.createElement('button');
-    cardBtn.textContent = `${card.color.toUpperCase()} ${card.value}`;
-    cardBtn.style.margin = '5px';
-    cardBtn.style.backgroundColor = card.color === 'black' ? '#444' : card.color;
-    cardBtn.onclick = () => {
-      socket.emit('playCard', { lobbyId, playerId, card });
+  playerHand.forEach(card => {
+    const d = document.createElement('div');
+    d.className = `card ${card.color}`;
+    d.textContent = card.value;
+    d.onclick = () => {
+      if (card.color === 'black') {
+        const c = prompt('Choose color: red, green, blue, yellow');
+        if (['red','green','blue','yellow'].includes(c)) {
+          socket.emit('playCard', { lobbyId, playerId, card, chosenColor: c });
+        }
+      } else {
+        socket.emit('playCard', { lobbyId, playerId, card });
+      }
     };
-    handEl.appendChild(cardBtn);
+    handEl.appendChild(d);
   });
+
+  // UNO button
+  unoBtn.style.display = (playerHand.length === 2 && playerId === currentPlayer) ? 'block' : 'none';
 });
 
-socket.on('gameOver', ({ winner }) => {
-  alert(`🎉 ${winner} has won the game!`);
-});
+unoBtn.onclick = () => {
+  socket.emit('callUno', { lobbyId, playerId });
+  unoBtn.style.display = 'none';
+};
 
 socket.on('chatMessage', ({ sender, message }) => {
   const msgEl = document.createElement('div');
@@ -70,10 +94,15 @@ socket.on('chatMessage', ({ sender, message }) => {
   document.getElementById('messages').appendChild(msgEl);
 });
 
-document.getElementById('sendChat').onclick = () => {
-  const message = document.getElementById('chatInput').value;
-  if (message) {
-    socket.emit('sendChat', { lobbyId, message });
-    document.getElementById('chatInput').value = '';
+sendChat.onclick = () => {
+  const m = chatInput.value;
+  if (m) {
+    socket.emit('sendChat', { lobbyId, message: m });
+    chatInput.value = '';
   }
 };
+
+socket.on('gameOver', ({ winner, roundPoints, totalScore }) => {
+  alert(`🏆 ${winner} wins! +${roundPoints} pts. Total: ${totalScore} pts`);
+  playerHand = [];
+});
