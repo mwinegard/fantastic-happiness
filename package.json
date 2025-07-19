@@ -1,17 +1,17 @@
 {
   "name": "fantastic-happiness",
   "version": "1.0.0",
-  "description": "Multiplayer UNO-style card game with custom deck",
+  "description": "Multiplayer UNO-style web game",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "engines": {
-    "node": ">=20 <21"
-  },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "express-basic-auth": "^1.2.0"
+    "express-basic-auth": "^1.2.0",
+    "socket.io": "^4.7.2"
+  },
+  "engines": {
+    "node": ">=16 <21"
   }
 }
