@@ -1,45 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>UNO Game</title>
-  <link rel="stylesheet" href="style.css" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="lobby-form">
-    <form id="join-form">
-      <input id="name" placeholder="Your Name" maxlength="20" required />
-      <input id="lobby" placeholder="Lobby Name" maxlength="20" required />
-      <button type="submit">Join</button>
-    </form>
+  <h1>🎮 Fantastic Happiness</h1>
+  <div id="lobby">
+    <input type="text" id="lobbyId" placeholder="Lobby ID">
+    <input type="text" id="playerName" placeholder="Your Name">
+    <button id="joinBtn">Join Lobby</button>
   </div>
 
   <div id="game" style="display:none;">
-    <div id="scoreboard"></div>
-    <div id="your-turn">Waiting...</div>
-    <div id="turn-timer"><div id="timer-bar"></div></div>
-
-    <div id="discard-section">
-      <div id="wild-color-indicator">🎨</div>
-      <div id="discard-pile"></div>
-    </div>
-    <div id="draw-pile"></div>
-
-    <button id="uno-button" style="display:none;">🚨 UNO!</button>
-    <div id="wild-selector" style="display:none;">
-      Choose Color:
-      <button data-color="red">🔴</button>
-      <button data-color="green">🟢</button>
-      <button data-color="blue">🔵</button>
-      <button data-color="yellow">🟡</button>
-    </div>
-    <div id="player-hand"></div>
-
+    <h2>Lobby: <span id="currentLobby"></span></h2>
+    <div id="players"></div>
     <div id="chat">
       <div id="messages"></div>
-      <input id="chat-input" placeholder="Type a message..." />
-      <button id="chat-send">📨</button>
+      <input type="text" id="chatInput" placeholder="Say something...">
+      <button id="sendChat">Send</button>
     </div>
   </div>
 
