@@ -1,13 +1,13 @@
 {
-  "name": "uno-web-game",
+  "name": "fantastic-happiness",
   "version": "1.0.0",
-  "description": "Multiplayer UNO on Node + Socket.io",
-  "main": "server.js",          // <-- This MUST match the filename that starts your server
+  "description": "Multiplayer UNO game with Socket.io",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js"   // <-- Render runs this. Locally you’ll run `npm start`
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",       // Web-server framework
-    "socket.io": "^4.7.2"       // Real-time engine
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
   }
 }
