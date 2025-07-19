@@ -2,54 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>UNO Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="style.css" />
-  <script src="/socket.io/socket.io.js"></script>
-  <script defer src="game.js"></script>
 </head>
 <body>
-  <div class="uno-container">
-    <header>
-      <h1>UNO - Fantastic Happiness</h1>
-      <div id="turn-info">Waiting for game to start...</div>
-    </header>
-
-    <main>
-      <section id="table">
-        <h3>Table</h3>
-        <div id="table-pile"></div>
-        <div id="wild-color-indicator"></div>
-      </section>
-
-      <section id="opponent-section">
-        <h3>Players</h3>
-        <div id="opponent-hands"></div>
-      </section>
-
-      <section id="player-hand">
-        <h3>Your Hand</h3>
-      </section>
-
-      <div class="controls">
-        <button onclick="drawCard()">Draw Card</button>
-        <button onclick="leaveGame()">Leave Game</button>
-      </div>
-    </main>
+  <div id="login-screen">
+    <h2>Join a Lobby</h2>
+    <input id="lobby" placeholder="Lobby Name" maxlength="20" />
+    <input id="username" placeholder="Your Name" maxlength="20" />
+    <button id="join">Join Game</button>
   </div>
 
-  <!-- Join Lobby Modal -->
-  <div id="join-modal" class="modal">
-    <div class="modal-content">
-      <h2>Join Game</h2>
-      <form id="join-form">
-        <label>Lobby ID:</label>
-        <input type="text" id="lobby-input" maxlength="12" required />
-        <label>Player Name:</label>
-        <input type="text" id="name-input" maxlength="20" pattern="[a-zA-Z0-9 ]+" required />
-        <button type="submit">Join</button>
-      </form>
+  <div id="game-screen" class="hidden">
+    <div id="top-bar">
+      <div id="opponents"></div>
+      <div id="timer">⏱ 60s</div>
+    </div>
+
+    <div id="table">
+      <h3>Discard Pile</h3>
+      <img id="discard" src="back.png" />
+      <div id="wild-color"></div>
+    </div>
+
+    <div id="hand"></div>
+
+    <div id="controls">
+      <select id="wild-color-picker" class="hidden">
+        <option value="red">🔴 Red</option>
+        <option value="yellow">🟡 Yellow</option>
+        <option value="green">🟢 Green</option>
+        <option value="blue">🔵 Blue</option>
+      </select>
+      <button id="draw">Draw Card</button>
+      <button id="leave">Leave Game</button>
     </div>
   </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>
