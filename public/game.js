@@ -1,5 +1,4 @@
 const socket = io();
-
 let myName = '';
 let lobbyId = '';
 
@@ -35,16 +34,13 @@ socket.on('gameState', state => {
   const opponentsDiv = document.getElementById('opponents');
   const wildColorDiv = document.getElementById('wild-color');
 
-  // Update discard
   const discardTop = state.table[state.table.length - 1];
   discardImg.src = `cards/${discardTop}`;
 
-  // Show wild color
   wildColorDiv.innerHTML = state.lastWildColor
     ? `Color chosen: <span class="wild-dot ${state.lastWildColor}"></span>`
     : '';
 
-  // Show hand
   handDiv.innerHTML = '';
   state.hand.forEach(card => {
     const img = document.createElement('img');
@@ -60,7 +56,6 @@ socket.on('gameState', state => {
     handDiv.appendChild(img);
   });
 
-  // Show opponents
   opponentsDiv.innerHTML = '';
   state.others.forEach(op => {
     const isTurn = op.name === state.currentPlayer;
@@ -94,7 +89,6 @@ function showWildColorChoice(card) {
   socket.emit('playCard', { card, chosenColor: choice });
 }
 
-// Turn timer
 let turnTimeout;
 function startTurnTimer() {
   clearTimeout(turnTimeout);
@@ -107,7 +101,6 @@ function stopTurnTimer() {
   clearTimeout(turnTimeout);
 }
 
-// Auto-fill name and lobby from localStorage
 window.addEventListener('load', () => {
   const savedName = localStorage.getItem('unoName');
   const savedLobby = localStorage.getItem('unoLobby');
