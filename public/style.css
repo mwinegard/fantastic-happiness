@@ -21,13 +21,12 @@ form button {
   padding: 20px;
 }
 
-#player-hand,
-#discard-pile,
-#draw-pile {
+#player-hand {
   display: flex;
-  justify-content: center;
+  overflow-x: auto;
   margin-top: 20px;
-  flex-wrap: wrap;
+  padding-bottom: 10px;
+  scroll-snap-type: x mandatory;
 }
 
 .card {
@@ -35,10 +34,17 @@ form button {
   margin: 5px;
   transition: transform 0.2s;
   cursor: pointer;
+  scroll-snap-align: center;
 }
 
 .card:hover {
   transform: scale(1.1);
+}
+
+#discard-pile,
+#draw-pile {
+  display: inline-block;
+  margin: 10px;
 }
 
 #wild-color-picker {
@@ -87,4 +93,27 @@ form button {
   max-height: 120px;
   overflow-y: auto;
   font-size: 14px;
+  text-align: left;
+  padding: 0 20px;
+}
+
+.message {
+  margin: 4px 0;
+}
+
+.message strong {
+  color: #222;
+}
+
+#your-turn {
+  font-size: 18px;
+  font-weight: bold;
+  color: green;
+  margin-top: 10px;
+}
+
+#wild-indicator {
+  font-weight: bold;
+  margin-top: 5px;
+  font-size: 18px;
 }
