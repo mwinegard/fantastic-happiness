@@ -1,161 +1,132 @@
 const socket = io();
-let playerId = null;
-let selectedColor = null;
+let playerName = localStorage.getItem("playerName");
+let lobbyId = localStorage.getItem("lobbyId");
+let yourId = null;
 let turnTimer = null;
+let wildColorChoice = null;
 
-// Restore name/lobby from storage
-window.onload = () => {
-  const savedName = localStorage.getItem("playerName");
-  const savedLobby = localStorage.getItem("lobbyId");
-
-  if (savedName && savedLobby) {
-    joinGame(savedName, savedLobby);
-  }
-};
-
-// Handle join form submission
-document.getElementById("join-form").addEventListener("submit", (e) => {
+document.getElementById("joinForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  const name = document.getElementById("name-input").value.trim();
-  const lobby = document.getElementById("lobby-input").value.trim();
+  playerName = document.getElementById("nameInput").value.trim().substring(0, 20);
+  lobbyId = document.getElementById("lobbyInput").value.trim().substring(0, 20);
 
-  if (!/^[a-zA-Z0-9 ]{1,20}$/.test(name)) {
-    alert("Invalid name.");
+  if (!playerName || !lobbyId || /[^a-zA-Z0-9_]/.test(playerName + lobbyId)) {
+    alert("Only letters, numbers, and underscores allowed.");
     return;
   }
 
-  if (!/^[a-zA-Z0-9]{1,20}$/.test(lobby)) {
-    alert("Invalid lobby ID.");
-    return;
-  }
+  localStorage.setItem("playerName", playerName);
+  localStorage.setItem("lobbyId", lobbyId);
 
-  localStorage.setItem("playerName", name);
-  localStorage.setItem("lobbyId", lobby);
+  document.getElementById("landing").style.display = "none";
+  document.getElementById("game").style.display = "flex";
 
-  joinGame(name, lobby);
+  socket.emit("joinLobby", { playerName, lobbyId });
 });
 
-function joinGame(name, lobby) {
-  socket.emit("joinLobby", { playerName: name, lobbyId: lobby });
-  document.getElementById("join-screen").style.display = "none";
-  document.getElementById("game-container").style.display = "block";
-}
+socket.on("gameState", (data) => {
+  yourId = socket.id;
+  const isYourTurn = data.currentTurn === yourId;
 
-// Game state received
-socket.on("gameState", (state) => {
-  playerId = socket.id;
-  renderGame(state);
+  document.getElementById("turnBar").textContent = isYourTurn ? "Your Turn" : "";
+  renderPlayers(data.players, data.currentTurn);
+  renderTopCard(data.topCard, data.lastWildColor);
+  renderHand(data.yourHand);
+
+  if (isYourTurn) startTurnTimer();
+  else clearInterval(turnTimer);
 });
 
-function renderGame(state) {
-  const handContainer = document.getElementById("hand");
-  const opponentsContainer = document.getElementById("opponents");
-  const topCardImg = document.getElementById("top-card");
-  const wildColorDisplay = document.getElementById("wild-color");
-
-  handContainer.innerHTML = "";
-  opponentsContainer.innerHTML = "";
-
-  const currentPlayer = state.players.find(p => p.id === playerId);
-  const isPlayerTurn = state.currentTurn === playerId;
-
-  // Render hand
-  if (currentPlayer && currentPlayer.hand) {
-    currentPlayer.hand.forEach(card => {
-      const img = document.createElement("img");
-      img.src = `assets/cards/${card}`;
-      img.className = "card";
-      img.addEventListener("click", () => playCard(card));
-      handContainer.appendChild(img);
-    });
-  }
-
-  // Render top discard
-  topCardImg.src = `assets/cards/${state.topCard}`;
-  if (state.lastWildColor) {
-    wildColorDisplay.style.display = "block";
-    wildColorDisplay.textContent = `⬛ ${state.lastWildColor.toUpperCase()}`;
-  } else {
-    wildColorDisplay.style.display = "none";
-  }
-
-  // Render opponents with card count and score
-  state.players.forEach(p => {
-    if (p.id === playerId) return;
+function renderPlayers(players, currentTurn) {
+  const el = document.getElementById("opponents");
+  el.innerHTML = "";
+  players.forEach(p => {
     const div = document.createElement("div");
-    const isTurn = p.id === state.currentTurn ? "👉 " : "";
-    div.textContent = `${isTurn}${p.name} 🃏 ${p.handCount} (${p.score})`;
-    opponentsContainer.appendChild(div);
+    div.className = "playerRow";
+    if (p.id === currentTurn) div.innerHTML += "👉 ";
+    div.innerHTML += `<span>${p.name}</span> 🃏${p.handCount} (${p.score})`;
+    el.appendChild(div);
   });
-
-  // Turn timer
-  updateTimer(isPlayerTurn);
 }
 
-// Turn timer countdown
-function updateTimer(active) {
-  clearInterval(turnTimer);
-  const timerText = document.getElementById("turn-countdown");
-  let time = 60;
-  timerText.textContent = time;
-
-  if (active) {
-    turnTimer = setInterval(() => {
-      time--;
-      timerText.textContent = time;
-      if (time <= 0) {
-        clearInterval(turnTimer);
-        socket.emit("turnTimeout");
-      }
-    }, 1000);
+function renderTopCard(card, wildColor) {
+  const el = document.getElementById("discard");
+  el.innerHTML = `<img src="assets/cards/${card}" class="top-card">`;
+  if (wildColor) {
+    const dot = document.createElement("div");
+    dot.className = "wild-indicator";
+    dot.style.background = wildColor;
+    el.appendChild(dot);
   }
 }
 
-// Play card
-function playCard(card) {
-  if (card.includes("wild")) {
-    showColorPicker(card);
+function renderHand(hand) {
+  const el = document.getElementById("hand");
+  el.innerHTML = "";
+  hand.forEach(card => {
+    const img = document.createElement("img");
+    img.src = `assets/cards/${card}`;
+    img.className = "hand-card";
+    img.onclick = () => {
+      if (card.startsWith("wild")) showWildColorPrompt(card);
+      else playCard(card);
+    };
+    el.appendChild(img);
+  });
+}
+
+function showWildColorPrompt(card) {
+  const color = prompt("Pick a color: red, blue, green, yellow").toLowerCase();
+  if (["red", "blue", "green", "yellow"].includes(color)) {
+    wildColorChoice = color;
+    playCard(card);
   } else {
-    socket.emit("playCard", { card });
+    alert("Invalid color.");
   }
 }
 
-// Draw card
-document.getElementById("draw-button").addEventListener("click", () => {
+function playCard(card) {
+  socket.emit("playCard", { card, wildColor: wildColorChoice });
+  wildColorChoice = null;
+}
+
+document.getElementById("drawCard").addEventListener("click", () => {
   socket.emit("drawCard");
 });
 
-// Leave game
-document.getElementById("leave-game").addEventListener("click", () => {
+document.getElementById("leave").addEventListener("click", () => {
   socket.emit("leaveGame");
-  localStorage.clear();
   location.reload();
 });
 
-// Wild card color picker
-function showColorPicker(card) {
-  const picker = document.getElementById("wild-color-picker");
-  picker.style.display = "block";
-  document.getElementById("confirm-color").onclick = () => {
-    const selected = document.getElementById("color-select").value;
-    selectedColor = selected;
-    picker.style.display = "none";
-    socket.emit("playCard", { card, wildColor: selectedColor });
-  };
+document.getElementById("chatForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("chatInput");
+  const msg = input.value.trim();
+  if (msg) socket.emit("chatMessage", msg);
+  input.value = "";
+});
+
+socket.on("chatMessage", ({ from, text, color }) => {
+  const el = document.getElementById("chatLog");
+  const msg = document.createElement("div");
+  msg.innerHTML = `<strong style="color:${from === 'SUE' ? 'navy' : 'black'}">${from}</strong>: ${text}`;
+  msg.style.color = "black";
+  el.appendChild(msg);
+  el.scrollTop = el.scrollHeight;
+});
+
+function startTurnTimer() {
+  let seconds = 60;
+  clearInterval(turnTimer);
+  document.getElementById("turnBar").textContent = `Your Turn - 60s`;
+
+  turnTimer = setInterval(() => {
+    seconds--;
+    document.getElementById("turnBar").textContent = `Your Turn - ${seconds}s`;
+    if (seconds <= 0) {
+      clearInterval(turnTimer);
+      socket.emit("turnTimeout");
+    }
+  }, 1000);
 }
-
-// Chat
-document.getElementById("chat-input").addEventListener("keypress", (e) => {
-  if (e.key === "Enter") {
-    socket.emit("chatMessage", e.target.value);
-    e.target.value = "";
-  }
-});
-
-socket.on("chatMessage", (msg) => {
-  const log = document.getElementById("chat-log");
-  const entry = document.createElement("div");
-  entry.textContent = msg;
-  log.appendChild(entry);
-  log.scrollTop = log.scrollHeight;
-});
