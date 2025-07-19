@@ -8,50 +8,31 @@
 </head>
 <body>
   <div id="join-screen">
-    <h1>🎴 Join a Game</h1>
-    <form id="join-form" autocomplete="off">
-      <input type="text" id="player-name" maxlength="20" placeholder="Your Name" required />
-      <input type="text" id="lobby-id" maxlength="20" placeholder="Lobby Name" required />
-      <button type="submit">Join</button>
-    </form>
+    <h1>🎴 Fantastic UNO</h1>
+    <p>Joining default lobby...</p>
   </div>
 
   <div id="game-screen" class="hidden">
     <div id="header-bar">
-      <div>Lobby: <span id="lobby-name"></span></div>
+      <div>Player: <span id="player-name-display"></span></div>
       <div>Current Turn: <span id="current-turn"></span></div>
-      <button id="leave-btn">Leave Game</button>
     </div>
 
-    <div id="game-container">
-      <div id="opponents"></div>
-
-      <div id="play-area">
-        <img id="pile-top" class="card hidden" alt="Top Card" />
-        <div id="draw-stack" class="draw-pile" title="Draw a card">
-          <img src="assets/cards/back.png" alt="Draw" />
-        </div>
-        <div id="wild-color-chooser" class="hidden">
-          <label>Choose Color:</label>
-          <select id="wild-color">
-            <option value="red">🟥 Red</option>
-            <option value="green">🟩 Green</option>
-            <option value="blue">🟦 Blue</option>
-            <option value="yellow">🟨 Yellow</option>
-          </select>
-          <button id="wild-confirm">Play</button>
-        </div>
+    <div id="play-area">
+      <img id="pile-top" class="card hidden" alt="Top Card" />
+      <div id="draw-stack" class="draw-pile" title="Draw a card">
+        <img src="assets/cards/back.png" alt="Draw" />
       </div>
+    </div>
 
-      <div id="hand" class="card-hand"></div>
+    <div id="hand" class="card-hand"></div>
 
-      <div id="chat-container">
-        <div id="chat-box"></div>
-        <form id="chatForm" autocomplete="off">
-          <input type="text" id="chat-input" maxlength="200" placeholder="Say something..." />
-          <button type="submit" id="chat-send">✉️</button>
-        </form>
-      </div>
+    <div id="chat-container">
+      <div id="chat-box"></div>
+      <form id="chatForm">
+        <input type="text" id="chat-input" maxlength="200" placeholder="Say something..." />
+        <button type="submit" id="chat-send">✉️</button>
+      </form>
     </div>
   </div>
 
