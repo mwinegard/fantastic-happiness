@@ -3,38 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Fantastic Happiness</title>
+  <title>UNO Game Lobby</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <h1>🎴 Fantastic Happiness</h1>
+  <div id="joinScreen">
+    <h1>Join Game Lobby</h1>
+    <form id="joinForm">
+      <input type="text" id="playerName" maxlength="20" placeholder="Your name" required pattern="[A-Za-z0-9 ]+"/>
+      <input type="text" id="lobbyId" maxlength="20" placeholder="Lobby ID" required pattern="[A-Za-z0-9]+"/>
+      <button type="submit">Join</button>
+    </form>
+  </div>
 
-    <div id="join-screen">
-      <input type="text" id="playerName" maxlength="20" placeholder="Your Name" />
-      <input type="text" id="lobbyId" maxlength="20" placeholder="Lobby Code" />
-      <button id="joinButton">Join Game</button>
+  <div id="gameScreen" class="hidden">
+    <div class="topBar">
+      <div id="gameInfo"></div>
     </div>
 
-    <div id="game-screen" style="display: none;">
-      <div id="top-bar">
-        <span id="playerInfo"></span>
-        <button id="leaveBtn">Leave Game</button>
+    <div class="mainArea">
+      <div class="sidebar">
+        <h3>Players</h3>
+        <ul id="playerList"></ul>
       </div>
 
-      <div id="opponents"></div>
+      <div class="gameBoard">
+        <div class="pileArea">
+          <img id="pileTopCard" src="" alt="Top card" class="card hidden"/>
+          <div id="drawDeck" class="drawPile">
+            <img src="assets/cards/back.png" alt="Draw pile" />
+            <div class="drawStack"></div>
+          </div>
+        </div>
 
-      <div id="pile-area">
-        <img id="pile-card" src="assets/cards/back.png" alt="Top Card" />
-        <img id="draw-stack" src="assets/cards/back.png" alt="Draw" />
+        <div id="handArea" class="hand"></div>
       </div>
 
-      <div id="hand"></div>
-
-      <div id="chat-area">
-        <div id="chat-log"></div>
-        <input type="text" id="chatInput" placeholder="Type a message…" />
-        <button id="chatSend">📨</button>
+      <div class="chatPanel">
+        <div id="chatBox"></div>
+        <form id="chatForm">
+          <input type="text" id="chatInput" placeholder="Type a message" maxlength="100" required />
+          <button type="submit">📨</button>
+        </form>
       </div>
     </div>
   </div>
