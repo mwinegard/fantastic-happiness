@@ -1,10 +1,13 @@
-
 const socket = io();
 let hand = [];
+let lobbyId = sessionStorage.getItem('lobbyId');
+let playerName = sessionStorage.getItem('playerName');
 
 function joinLobby(lobbyId, name) {
   socket.emit('joinLobby', { lobbyId, name });
 }
+
+joinLobby(lobbyId, playerName);
 
 socket.on('yourHand', cards => {
   hand = cards;
@@ -12,15 +15,10 @@ socket.on('yourHand', cards => {
 });
 
 socket.on('updateGame', state => {
-  document.getElementById('game-root').innerHTML = `
-    <h2>Current Turn: ${state.players.find(p => p.id === state.currentPlayer)?.name}</h2>
-    <div id="table-pile">${renderTableCard(state.tablePile)}</div>
-    <h3>Your Hand</h3>
-    <div id="hand">${renderHand()}</div>
-    <button onclick="drawCard()">Draw</button>
-    <div id="chat"><input id="chatInput" /><button onclick="sendChat()">Send</button></div>
-    <div id="chatLog"></div>
-  `;
+  const current = state.players.find(p => p.id === state.currentPlayer);
+  document.getElementById('turn-info').innerText = `Current Turn: ${current?.name || "Waiting..."}`;
+  renderTablePile(state.tablePile);
+  renderOpponents(state.players, state.currentPlayer);
 });
 
 socket.on('chatUpdate', ({ id, msg }) => {
@@ -34,15 +32,48 @@ socket.on('chatUpdate', ({ id, msg }) => {
 });
 
 function renderHand() {
-  return hand.map(card => `
-    <img src="assets/cards/${card}" style="height: 100px; cursor: pointer;" onclick="playCard('${card}')" />
-  `).join('');
+  const container = document.getElementById('player-hand');
+  container.innerHTML = '';
+  hand.forEach(card => {
+    const img = document.createElement('img');
+    img.src = `assets/cards/${card}`;
+    img.style.height = '100px';
+    img.style.margin = '4px';
+    img.style.cursor = 'pointer';
+    img.onclick = () => playCard(card);
+    container.appendChild(img);
+  });
 }
 
-function renderTableCard(pile) {
-  if (!pile || !pile.length) return '';
-  const card = pile[pile.length - 1];
-  return `<img src="assets/cards/${card}" style="height: 120px;" />`;
+function renderTablePile(pile) {
+  const container = document.getElementById('table-pile');
+  container.innerHTML = '';
+  if (pile.length) {
+    const card = pile[pile.length - 1];
+    const img = document.createElement('img');
+    img.src = `assets/cards/${card}`;
+    img.style.height = '120px';
+    container.appendChild(img);
+  }
+}
+
+function renderOpponents(players, currentPlayerId) {
+  const container = document.getElementById('opponent-hands');
+  container.innerHTML = '';
+  players.forEach(p => {
+    if (p.id === socket.id) return; // skip self
+    const div = document.createElement('div');
+    div.style.margin = '10px';
+    div.innerHTML = `<strong>${p.name}</strong><br/>`;
+    for (let i = 0; i < p.handCount; i++) {
+      const img = document.createElement('img');
+      img.src = `assets/cards/back.png`;
+      img.style.height = '60px';
+      img.style.margin = '2px';
+      div.appendChild(img);
+    }
+    container.appendChild(div);
+  });
 }
 
 function playCard(card) {
@@ -64,10 +95,3 @@ function sendChat() {
     input.value = '';
   }
 }
-
-// Auto-join for demo
-document.addEventListener('DOMContentLoaded', () => {
-  const lobbyId = prompt("Enter lobby name/code:");
-  const name = prompt("Enter your name (1–20 characters):");
-  if (lobbyId && name) joinLobby(lobbyId, name);
-});
