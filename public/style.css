@@ -1,87 +1,124 @@
-#layout {
-  display: flex;
-  width: 100%;
-  height: 100%;
-}
-
-#sidebar {
-  width: 20%;
-  background: #fff;
-  border-right: 1px solid #ccc;
-  padding: 10px;
-  text-align: left;
-}
-
-#player-list {
-  list-style: none;
-  padding: 0;
+body {
+  font-family: Arial, sans-serif;
+  background: #e8f1f8;
   margin: 0;
+  padding: 0;
+  text-align: center;
 }
 
-#player-list li {
-  padding: 8px 0;
-  font-weight: bold;
+#lobby-form {
+  margin-top: 80px;
 }
 
-#game-area {
-  width: 80%;
+form input, form button {
   padding: 10px;
+  margin: 5px;
+  font-size: 16px;
 }
 
-#center-piles {
+#game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20%;
+  background: #f0f0f0;
+  height: 100%;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.center-area {
+  margin-left: 20%;
+  width: 80%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#pile-area {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 40px;
+  margin: 20px 0;
+}
+
+#discard-pile, #draw-pile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 10px;
+}
+
+#player-hand {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   margin-top: 20px;
 }
 
 .card {
   width: 80px;
   margin: 5px;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s, box-shadow 0.2s;
+  border-radius: 8px;
+  transition: transform 0.2s;
   cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .card:hover {
   transform: scale(1.1);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
 }
 
-#chat {
+.stack {
   position: relative;
-  margin-top: 20px;
+  z-index: 1;
+}
+
+#uno-btn {
+  font-size: 18px;
+  padding: 10px 20px;
+  background: #f00;
+  color: #fff;
+  border: none;
+  margin-bottom: 10px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.chat-area {
+  width: 100%;
   padding: 10px;
-  background: #eef1f5;
-  border-top: 2px solid #ccc;
+  background: #fff;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  border-top: 1px solid #ccc;
 }
 
 #chat-log {
+  flex: 1;
   max-height: 150px;
   overflow-y: auto;
-  background: #fff;
-  padding: 10px;
-  border: 1px solid #aaa;
-  margin-bottom: 5px;
-}
-
-#chat-input {
-  display: flex;
-  justify-content: space-between;
+  text-align: left;
+  padding: 0 10px;
 }
 
 #chat-box {
-  flex: 1;
-  padding: 10px;
+  width: 60%;
+  padding: 8px;
   font-size: 14px;
 }
 
 #chat-send {
-  padding: 10px 20px;
-  background: #0077cc;
-  color: white;
-  border: none;
-  cursor: pointer;
+  padding: 8px;
+  font-size: 14px;
+  margin-left: 5px;
 }
