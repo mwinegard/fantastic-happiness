@@ -16,20 +16,20 @@
   </div>
 
   <div id="game" style="display:none;">
-    <div class="sidebar">
-      <ul id="player-list"></ul>
-    </div>
-    <div class="center-area">
-      <div id="pile-area">
+    <div id="layout">
+      <div id="player-column">
+        <ul id="player-list"></ul>
+      </div>
+      <div id="game-board">
         <div id="discard-pile"></div>
         <div id="draw-pile"></div>
+        <button id="uno-btn" style="display:none;">UNO!</button>
       </div>
-      <button id="uno-btn" style="display:none;">UNO!</button>
-      <div id="player-hand"></div>
     </div>
-    <div class="chat-area">
+    <div id="player-hand"></div>
+    <div id="chat-section">
       <div id="chat-log"></div>
-      <input id="chat-box" placeholder="Type a message..." />
+      <input id="chat-box" placeholder="Type message..." />
       <button id="chat-send">📨</button>
     </div>
   </div>
