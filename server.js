@@ -10,10 +10,12 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const SCORES_FILE = './scores.json';
+const turnTimers = {};
+const unoCalls = {};
+const lobbies = {};
+
 function loadScores() {
-  if (fs.existsSync(SCORES_FILE)) {
-    return JSON.parse(fs.readFileSync(SCORES_FILE));
-  }
+  if (fs.existsSync(SCORES_FILE)) return JSON.parse(fs.readFileSync(SCORES_FILE));
   return {};
 }
 function saveScores(scores) {
@@ -23,11 +25,11 @@ function saveScores(scores) {
 function createDeck() {
   const colors = ['red','green','blue','yellow'];
   const values = ['0','1','2','3','4','5','6','7','8','9','skip','reverse','draw2'];
-  const deck = [];
-  colors.forEach(color => {
-    values.forEach(value => {
-      deck.push({ color, value });
-      if (value !== '0') deck.push({ color, value });
+  let deck = [];
+  colors.forEach(c => {
+    values.forEach(v => {
+      deck.push({ color: c, value: v });
+      if (v !== '0') deck.push({ color: c, value: v });
     });
   });
   for (let i = 0; i < 4; i++) {
@@ -47,9 +49,9 @@ function isValidMove(card, top) {
 }
 
 function getLobbySummaries() {
-  return Object.entries(lobbies).map(([id, lobby]) => ({
+  return Object.entries(lobbies).map(([id, l]) => ({
     id,
-    players: lobby.players.map(p => ({
+    players: l.players.map(p => ({
       id: p.id,
       name: p.name,
       score: p.score,
@@ -58,32 +60,22 @@ function getLobbySummaries() {
   }));
 }
 
-const lobbies = {};
-const turnTimers = {};
-const unoCalls = {};
-
 io.on('connection', socket => {
   console.log(`🔌 ${socket.id} connected`);
-  
+
   socket.on('joinLobby', ({ lobbyId, playerName }) => {
     socket.join(lobbyId);
     if (!lobbies[lobbyId]) {
-      lobbies[lobbyId] = {
-        players: [], deck: [], pile: [],
-        currentPlayer: 0, started: false
-      };
+      lobbies[lobbyId] = { players: [], deck: [], pile: [], currentPlayer: 0, started: false };
     }
-    const player = {
-      id: socket.id,
-      name: playerName,
-      hand: [],
-      missedTurns: 0,
-      score: 0
-    };
-    lobbies[lobbyId].players.push(player);
-    io.to(lobbyId).emit('updateLobby', lobbies[lobbyId]);
+    const lobby = lobbies[lobbyId];
+    const player = { id: socket.id, name: playerName, hand: [], missedTurns: 0, score: 0 };
+    lobby.players.push(player);
+    io.to(lobbyId).emit('updateLobby', lobby);
+    console.log(`👥 ${playerName} joined lobby ${lobbyId} (total: ${lobby.players.length})`);
 
-    if (!lobbies[lobbyId].started && lobbies[lobbyId].players.length >= 2) {
+    if (!lobby.started && lobby.players.length >= 2) {
+      console.log(`🎮 Starting game in lobby ${lobbyId}`);
       startGame(lobbyId);
     }
     socket.emit('joinedLobby', { playerId: socket.id });
@@ -97,26 +89,22 @@ io.on('connection', socket => {
     const lobby = lobbies[lobbyId];
     const player = lobby.players.find(p => p.id === playerId);
     const top = lobby.pile[lobby.pile.length - 1];
-    const isTurn = playerId === lobby.players[lobby.currentPlayer].id;
-    if (!isTurn || !isValidMove(card, top)) return;
+    const isTurn = playerId === lobby.players[lobby.currentPlayer]?.id;
+
+    if (!lobby || !player || !isTurn || !isValidMove(card, top)) return;
 
     player.hand = player.hand.filter(c => !(c.color === card.color && c.value === card.value));
     if (card.color === 'black') card.chosenColor = chosenColor;
     lobby.pile.push(card);
-    applyCardEffect(card, lobby);
 
-    if (player.hand.length === 1) {
-      const called = unoCalls[lobbyId]?.has(playerId);
-      if (!called) {
-        player.hand.push(...lobby.deck.splice(0, 2));
-        io.to(lobbyId).emit('chatMessage', {
-          sender: 'SUE',
-          message: `${player.name} forgot to call UNO! +2 penalty 🃏`
-        });
-      }
-      unoCalls[lobbyId]?.delete(playerId);
+    if (!unoCalls[lobbyId]) unoCalls[lobbyId] = new Set();
+    if (player.hand.length === 1 && !unoCalls[lobbyId].has(playerId)) {
+      player.hand.push(...lobby.deck.splice(0, 2));
+      io.to(lobbyId).emit('chatMessage', { sender: 'SUE', message: `${player.name} forgot to call UNO! +2 penalty` });
     }
 
+    unoCalls[lobbyId]?.delete(playerId);
+    applyCardEffect(card, lobby);
     checkWin(lobbyId, player);
     updateGameState(lobbyId);
   });
@@ -124,10 +112,7 @@ io.on('connection', socket => {
   socket.on('callUno', ({ lobbyId, playerId }) => {
     if (!unoCalls[lobbyId]) unoCalls[lobbyId] = new Set();
     unoCalls[lobbyId].add(playerId);
-    io.to(lobbyId).emit('chatMessage', {
-      sender: 'SUE',
-      message: `🚨 ${playerId} called UNO!`
-    });
+    io.to(lobbyId).emit('chatMessage', { sender: 'SUE', message: `🚨 ${playerId} called UNO!` });
   });
 
   socket.on('getLobbies', () => {
@@ -138,28 +123,23 @@ io.on('connection', socket => {
     const lobby = lobbies[lobbyId];
     if (!lobby) return;
     lobby.players = lobby.players.filter(p => p.id !== playerId);
-    io.to(lobbyId).emit('chatMessage', {
-      sender: 'SUE',
-      message: `Player ${playerId} was kicked by admin 🚫`
-    });
+    io.to(lobbyId).emit('chatMessage', { sender: 'SUE', message: `Player ${playerId} kicked by admin` });
     updateGameState(lobbyId);
   });
 
   socket.on('closeLobby', lobbyId => {
     delete lobbies[lobbyId];
-    io.to(lobbyId).emit('chatMessage', {
-      sender: 'SUE',
-      message: `This lobby was closed by admin ❌`
-    });
+    io.to(lobbyId).emit('chatMessage', { sender: 'SUE', message: `Lobby closed by admin` });
     io.to(lobbyId).emit('forceLeave');
   });
 
   socket.on('disconnect', () => {
-    for (const lid in lobbies) {
-      const lobby = lobbies[lid];
+    console.log(`❌ ${socket.id} disconnected`);
+    for (const id in lobbies) {
+      const lobby = lobbies[id];
       lobby.players = lobby.players.filter(p => p.id !== socket.id);
-      clearTimeout(turnTimers[lid]);
-      io.to(lid).emit('updateLobby', lobby);
+      clearTimeout(turnTimers[id]);
+      io.to(id).emit('updateLobby', lobby);
     }
   });
 });
@@ -170,17 +150,19 @@ function applyCardEffect(card, lobby) {
   let next = (cp + 1) % n;
 
   switch (card.value) {
-    case 'skip': lobby.currentPlayer = (cp + 2) % n; break;
+    case 'skip':
+      lobby.currentPlayer = (cp + 2) % n;
+      break;
     case 'reverse':
       lobby.players.reverse();
       lobby.currentPlayer = 1 % n;
       break;
     case 'draw2':
-      lobby.players[next].hand.push(...lobby.deck.splice(0,2));
+      lobby.players[next].hand.push(...lobby.deck.splice(0, 2));
       lobby.currentPlayer = (next + 1) % n;
       break;
     case 'draw4':
-      lobby.players[next].hand.push(...lobby.deck.splice(0,4));
+      lobby.players[next].hand.push(...lobby.deck.splice(0, 4));
       lobby.currentPlayer = (next + 1) % n;
       break;
     default:
@@ -192,11 +174,8 @@ function startGame(lobbyId) {
   const lobby = lobbies[lobbyId];
   lobby.deck = createDeck();
   lobby.started = true;
-  lobby.players.forEach(p => {
-    p.hand = lobby.deck.splice(0,7);
-    p.missedTurns = 0;
-  });
-  
+  lobby.players.forEach(p => p.hand = lobby.deck.splice(0,7), p.missedTurns = 0);
+
   let first = lobby.deck.pop();
   while (first.color === 'black') {
     lobby.deck.unshift(first);
@@ -208,22 +187,17 @@ function startGame(lobbyId) {
 
 function updateGameState(lobbyId) {
   const lobby = lobbies[lobbyId];
-  const currentId = lobby.players[lobby.currentPlayer]?.id;
+  const cpId = lobby.players[lobby.currentPlayer]?.id;
+
   clearTimeout(turnTimers[lobbyId]);
-  turnTimers[lobbyId] = setTimeout(() => {
-    autoDraw(lobbyId, currentId);
-  }, 60000);
+  turnTimers[lobbyId] = setTimeout(() => autoDraw(lobbyId, cpId), 60000);
 
   io.to(lobbyId).emit('gameState', {
     pile: lobby.pile,
-    players: lobby.players.map(p => ({
-      id: p.id,
-      name: p.name,
-      handSize: p.hand.length,
-      score: p.score
-    })),
-    currentPlayer: currentId
+    players: lobby.players.map(p => ({ id: p.id, name: p.name, hand: p.hand, handSize: p.hand.length, score: p.score })),
+    currentPlayer: cpId
   });
+
   if (unoCalls[lobbyId]) unoCalls[lobbyId].clear();
 }
 
@@ -231,51 +205,38 @@ function autoDraw(lobbyId, playerId) {
   const lobby = lobbies[lobbyId];
   const player = lobby.players.find(p => p.id === playerId);
   if (!player) return;
+
   player.hand.push(lobby.deck.pop());
   player.missedTurns++;
+  io.to(lobbyId).emit('chatMessage', { sender: 'SUE', message: `${player.name} auto-drew after timeout` });
   if (player.missedTurns >= 3) {
     lobby.players = lobby.players.filter(p => p.id !== playerId);
-    io.to(lobbyId).emit('chatMessage', {
-      sender: 'SUE',
-      message: `${player.name} was kicked after 3 missed turns 💨`
-    });
-  } else {
-    io.to(lobbyId).emit('chatMessage', {
-      sender: 'SUE',
-      message: `${player.name} auto-drew a card 🕒`
-    });
+    io.to(lobbyId).emit('chatMessage', { sender: 'SUE', message: `${player.name} kicked for inactivity` });
   }
-  lobby.currentPlayer = lobby.currentPlayer % lobby.players.length;
+  lobby.currentPlayer %= lobby.players.length;
   updateGameState(lobbyId);
 }
 
-function checkWin(lobbyId, winnerPlayer) {
-  if (winnerPlayer.hand.length > 0) return;
-
+function checkWin(lobbyId, winner) {
+  if (winner.hand.length > 0) return;
   const lobby = lobbies[lobbyId];
-  let roundPoints = 0;
-
+  let points = 0;
   lobby.players.forEach(p => {
-    if (p.id !== winnerPlayer.id) {
+    if (p.id !== winner.id) {
       p.hand.forEach(c => {
-        if (!isNaN(c.value)) roundPoints += parseInt(c.value);
-        else if (['skip','reverse','draw2'].includes(c.value)) roundPoints += 20;
-        else roundPoints += 50;
+        if (!isNaN(c.value)) points += +c.value;
+        else if (['skip','reverse','draw2'].includes(c.value)) points += 20;
+        else points += 50;
       });
     }
   });
+  winner.score += points;
 
-  winnerPlayer.score += roundPoints;
   const allScores = loadScores();
-  allScores[winnerPlayer.name] = (allScores[winnerPlayer.name] || 0) + roundPoints;
+  allScores[winner.name] = (allScores[winner.name]||0) + points;
   saveScores(allScores);
 
-  io.to(lobbyId).emit('gameOver', {
-    winner: winnerPlayer.name,
-    roundPoints,
-    totalScore: winnerPlayer.score
-  });
-
+  io.to(lobbyId).emit('gameOver', { winner: winner.name, roundPoints: points, totalScore: winner.score });
   setTimeout(() => startGame(lobbyId), 5000);
 }
 
@@ -288,4 +249,4 @@ app.get('/leaderboard', (req, res) => {
   res.json(sorted);
 });
 
-server.listen(3000, () => console.log('✅ Server on http://localhost:3000'));
+server.listen(3000, () => console.log('✅ Server running on http://localhost:3000'));
