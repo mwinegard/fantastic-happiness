@@ -1,5 +1,5 @@
 {
-  "name": "Amadeus UNO",
+  "name": "Fantastic UNO",
   "short_name": "UNO",
   "start_url": ".",
   "display": "standalone",
@@ -7,12 +7,12 @@
   "theme_color": "#004080",
   "icons": [
     {
-      "src": "cards/back.png",
+      "src": "assets/cards/back.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "cards/back.png",
+      "src": "assets/cards/back.png",
       "type": "image/png",
       "sizes": "512x512"
     }
