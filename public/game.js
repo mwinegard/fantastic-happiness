@@ -1,92 +1,121 @@
 const socket = io();
+let myName = '';
+let lobbyId = '';
+let hand = [];
+let myColor = '';
+let isMyTurn = false;
 
-let playerName = localStorage.getItem("playerName") || "";
-let lobbyId = localStorage.getItem("lobbyId") || "";
-let selectedColor = null;
-
-if (!playerName || !lobbyId) {
-  playerName = prompt("Enter your name (max 20 chars):").slice(0, 20).replace(/[^a-zA-Z0-9 ]/g, "");
-  lobbyId = prompt("Enter lobby name:").slice(0, 20).replace(/[^a-zA-Z0-9 ]/g, "");
-  localStorage.setItem("playerName", playerName);
-  localStorage.setItem("lobbyId", lobbyId);
-}
-
-socket.emit("joinLobby", { playerName, lobbyId });
-
-// DOM refs
+// DOM elements
+const joinScreen = document.getElementById("joinScreen");
+const gameScreen = document.getElementById("gameScreen");
+const joinForm = document.getElementById("joinForm");
+const playerInput = document.getElementById("playerName");
+const lobbyInput = document.getElementById("lobbyId");
+const gameInfo = document.getElementById("gameInfo");
+const playerList = document.getElementById("playerList");
+const handArea = document.getElementById("handArea");
+const pileTopCard = document.getElementById("pileTopCard");
+const drawDeck = document.getElementById("drawDeck");
 const chatBox = document.getElementById("chatBox");
+const chatForm = document.getElementById("chatForm");
 const chatInput = document.getElementById("chatInput");
-const sendBtn = document.getElementById("sendBtn");
-const gameArea = document.getElementById("gameArea");
-const handArea = document.getElementById("hand");
-const pileCard = document.getElementById("pileCard");
-const drawStack = document.getElementById("drawStack");
-const opponentsList = document.getElementById("opponents");
 
-sendBtn.addEventListener("click", sendMessage);
-chatInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendMessage();
+joinForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  myName = playerInput.value.trim();
+  lobbyId = lobbyInput.value.trim();
+  if (myName && lobbyId) {
+    socket.emit("joinLobby", { name: myName, lobbyId });
+  }
 });
 
-function sendMessage() {
+chatForm.addEventListener("submit", (e) => {
+  e.preventDefault();
   const msg = chatInput.value.trim();
   if (msg) {
-    socket.emit("chatMessage", { lobbyId, sender: playerName, message: msg });
+    socket.emit("chatMessage", { lobbyId, name: myName, text: msg });
     chatInput.value = "";
   }
-}
-
-socket.on("chatMessage", ({ sender, message, system }) => {
-  const entry = document.createElement("div");
-  entry.innerHTML = `<strong style="color:${system ? 'navy' : 'black'}">${sender}:</strong> ${message}`;
-  chatBox.appendChild(entry);
-  chatBox.scrollTop = chatBox.scrollHeight;
 });
 
-socket.on("joinedLobby", () => {
-  document.getElementById("lobby").style.display = "none";
-  gameArea.style.display = "block";
+drawDeck.addEventListener("click", () => {
+  if (isMyTurn) {
+    socket.emit("drawCard", { lobbyId, name: myName });
+  }
 });
 
-socket.on("gameState", ({ players, pileTopCard, drawPileCount }) => {
-  const player = players.find(p => p.name === playerName);
-  if (!player) return;
-
+function renderHand() {
   handArea.innerHTML = "";
-  player.hand.forEach(card => {
+  hand.forEach((card, index) => {
     const img = document.createElement("img");
-    img.src = `assets/cards/${card}`;
-    img.className = "card";
-    img.onclick = () => socket.emit("playCard", { lobbyId, playerName, card, selectedColor });
+    img.src = `assets/cards/${card}.png`;
+    img.classList.add("card");
+    img.addEventListener("click", () => {
+      if (isMyTurn) {
+        socket.emit("playCard", { lobbyId, name: myName, card });
+      }
+    });
     handArea.appendChild(img);
   });
+}
 
-  // Update opponents
-  opponentsList.innerHTML = players
-    .filter(p => p.name !== playerName)
-    .map(p => `<div>${p.name} 🃏 ${p.hand.length}</div>`)
-    .join("");
+function renderPlayers(players, currentTurn) {
+  playerList.innerHTML = "";
+  players.forEach(p => {
+    const li = document.createElement("li");
+    const turnEmoji = currentTurn === p.name ? "🎯 " : "";
+    const scoreText = p.score !== undefined ? ` (${p.score})` : "";
+    li.innerHTML = `${turnEmoji}<strong style="color:${p.color}">${p.name}</strong> 🃏${p.handCount}${scoreText}`;
+    playerList.appendChild(li);
+  });
+}
 
-  // Update pile
-  if (pileTopCard) {
-    pileCard.src = `assets/cards/${pileTopCard}`;
-    pileCard.style.display = "block";
+function addChatMessage(from, text, system = false) {
+  const div = document.createElement("div");
+  if (system) {
+    div.innerHTML = `<strong style="color:navy">SUE:</strong> ${text}`;
   } else {
-    pileCard.style.display = "none";
+    div.innerHTML = `<strong style="color:${from === myName ? myColor : '#000'}">${from}:</strong> ${text}`;
   }
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
 
-  // Update draw stack count
-  drawStack.onclick = () => {
-    socket.emit("drawCard", { lobbyId, playerName });
-  };
+// SOCKET EVENTS
+
+socket.on("lobbyJoined", (data) => {
+  joinScreen.classList.add("hidden");
+  gameScreen.classList.remove("hidden");
+  myColor = data.color;
+  addChatMessage("SUE", `Welcome ${myName}! Waiting for other players...`, true);
 });
 
-// Wild color selector UI logic
-socket.on("selectColor", () => {
-  const color = prompt("Choose a color (red, green, blue, yellow):").toLowerCase();
-  if (["red", "green", "blue", "yellow"].includes(color)) {
-    selectedColor = color;
+socket.on("gameState", (state) => {
+  if (!state.players || !state.deck) return;
+
+  const me = state.players.find(p => p.name === myName);
+  if (!me) return;
+
+  hand = me.hand;
+  isMyTurn = state.currentTurn === myName;
+  gameInfo.textContent = isMyTurn ? "Your turn!" : `Waiting for ${state.currentTurn}...`;
+
+  renderHand();
+  renderPlayers(state.players, state.currentTurn);
+
+  // update pile
+  if (state.pileTopCard) {
+    pileTopCard.src = `assets/cards/${state.pileTopCard}.png`;
+    pileTopCard.classList.remove("hidden");
   } else {
-    selectedColor = "red";
+    pileTopCard.classList.add("hidden");
   }
+});
+
+socket.on("chatMessage", ({ from, text }) => {
+  addChatMessage(from, text, from === "SUE");
+});
+
+socket.on("errorMessage", (msg) => {
+  alert(msg);
 });
