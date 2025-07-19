@@ -1,57 +1,161 @@
 const socket = io();
+let playerId = null;
+let selectedColor = null;
+let turnTimer = null;
 
-document.getElementById("join-btn").addEventListener("click", () => {
-  const nameInput = document.getElementById("name-input").value.trim();
-  const lobbyInput = document.getElementById("lobby-input").value.trim();
+// Restore name/lobby from storage
+window.onload = () => {
+  const savedName = localStorage.getItem("playerName");
+  const savedLobby = localStorage.getItem("lobbyId");
 
-  if (!nameInput || !lobbyInput) {
-    alert("Please enter both a name and lobby ID.");
+  if (savedName && savedLobby) {
+    joinGame(savedName, savedLobby);
+  }
+};
+
+// Handle join form submission
+document.getElementById("join-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = document.getElementById("name-input").value.trim();
+  const lobby = document.getElementById("lobby-input").value.trim();
+
+  if (!/^[a-zA-Z0-9 ]{1,20}$/.test(name)) {
+    alert("Invalid name.");
     return;
   }
 
-  localStorage.setItem("playerName", nameInput);
-  localStorage.setItem("lobbyId", lobbyInput);
+  if (!/^[a-zA-Z0-9]{1,20}$/.test(lobby)) {
+    alert("Invalid lobby ID.");
+    return;
+  }
 
-  socket.emit("joinLobby", {
-    playerName: nameInput,
-    lobbyId: lobbyInput
-  });
+  localStorage.setItem("playerName", name);
+  localStorage.setItem("lobbyId", lobby);
+
+  joinGame(name, lobby);
 });
 
-// Receive game state and display game screen
-socket.on("gameState", (state) => {
-  if (!state || !state.players) return;
-
-  document.getElementById("lobby-screen").style.display = "none";
+function joinGame(name, lobby) {
+  socket.emit("joinLobby", { playerName: name, lobbyId: lobby });
+  document.getElementById("join-screen").style.display = "none";
   document.getElementById("game-container").style.display = "block";
+}
 
-  renderGameState(state);
+// Game state received
+socket.on("gameState", (state) => {
+  playerId = socket.id;
+  renderGame(state);
 });
 
-function renderGameState(state) {
-  const opponentList = document.getElementById("opponents");
-  opponentList.innerHTML = "";
-
-  const currentPlayerId = socket.id;
-
-  state.players.forEach((player) => {
-    if (player.id === currentPlayerId) return;
-
-    const playerDiv = document.createElement("div");
-    playerDiv.className = "opponent";
-    const isTurn = state.currentTurn === player.id ? "👉 " : "";
-    playerDiv.textContent = `${isTurn}${player.name} 🃏 ${player.handCount} (${player.score})`;
-    opponentList.appendChild(playerDiv);
-  });
-
+function renderGame(state) {
   const handContainer = document.getElementById("hand");
+  const opponentsContainer = document.getElementById("opponents");
+  const topCardImg = document.getElementById("top-card");
+  const wildColorDisplay = document.getElementById("wild-color");
+
   handContainer.innerHTML = "";
-  if (state.hand) {
-    state.hand.forEach((card) => {
-      const cardImg = document.createElement("img");
-      cardImg.src = `assets/cards/${card}`;
-      cardImg.className = "card";
-      handContainer.appendChild(cardImg);
+  opponentsContainer.innerHTML = "";
+
+  const currentPlayer = state.players.find(p => p.id === playerId);
+  const isPlayerTurn = state.currentTurn === playerId;
+
+  // Render hand
+  if (currentPlayer && currentPlayer.hand) {
+    currentPlayer.hand.forEach(card => {
+      const img = document.createElement("img");
+      img.src = `assets/cards/${card}`;
+      img.className = "card";
+      img.addEventListener("click", () => playCard(card));
+      handContainer.appendChild(img);
     });
   }
+
+  // Render top discard
+  topCardImg.src = `assets/cards/${state.topCard}`;
+  if (state.lastWildColor) {
+    wildColorDisplay.style.display = "block";
+    wildColorDisplay.textContent = `⬛ ${state.lastWildColor.toUpperCase()}`;
+  } else {
+    wildColorDisplay.style.display = "none";
+  }
+
+  // Render opponents with card count and score
+  state.players.forEach(p => {
+    if (p.id === playerId) return;
+    const div = document.createElement("div");
+    const isTurn = p.id === state.currentTurn ? "👉 " : "";
+    div.textContent = `${isTurn}${p.name} 🃏 ${p.handCount} (${p.score})`;
+    opponentsContainer.appendChild(div);
+  });
+
+  // Turn timer
+  updateTimer(isPlayerTurn);
 }
+
+// Turn timer countdown
+function updateTimer(active) {
+  clearInterval(turnTimer);
+  const timerText = document.getElementById("turn-countdown");
+  let time = 60;
+  timerText.textContent = time;
+
+  if (active) {
+    turnTimer = setInterval(() => {
+      time--;
+      timerText.textContent = time;
+      if (time <= 0) {
+        clearInterval(turnTimer);
+        socket.emit("turnTimeout");
+      }
+    }, 1000);
+  }
+}
+
+// Play card
+function playCard(card) {
+  if (card.includes("wild")) {
+    showColorPicker(card);
+  } else {
+    socket.emit("playCard", { card });
+  }
+}
+
+// Draw card
+document.getElementById("draw-button").addEventListener("click", () => {
+  socket.emit("drawCard");
+});
+
+// Leave game
+document.getElementById("leave-game").addEventListener("click", () => {
+  socket.emit("leaveGame");
+  localStorage.clear();
+  location.reload();
+});
+
+// Wild card color picker
+function showColorPicker(card) {
+  const picker = document.getElementById("wild-color-picker");
+  picker.style.display = "block";
+  document.getElementById("confirm-color").onclick = () => {
+    const selected = document.getElementById("color-select").value;
+    selectedColor = selected;
+    picker.style.display = "none";
+    socket.emit("playCard", { card, wildColor: selectedColor });
+  };
+}
+
+// Chat
+document.getElementById("chat-input").addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    socket.emit("chatMessage", e.target.value);
+    e.target.value = "";
+  }
+});
+
+socket.on("chatMessage", (msg) => {
+  const log = document.getElementById("chat-log");
+  const entry = document.createElement("div");
+  entry.textContent = msg;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+});
