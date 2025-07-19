@@ -2,34 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>UNO Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fantastic UNO</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div id="join-screen">
-  <form id="join-form">
-    <input id="player-name" maxlength="20" placeholder="Name" required />
-    <input id="lobby-id" maxlength="10" placeholder="Lobby ID" required />
-    <button type="submit">Join</button>
-  </form>
-</div>
-<div id="game-screen" class="hidden">
-  <div id="lobby-name"></div>
-  <div id="current-turn"></div>
-  <div id="opponents"></div>
-  <div>
-    <img id="pile-top" class="card hidden">
-    <img id="draw-stack" src="assets/cards/back.png" class="card">
+  <div id="join-screen">
+    <h1>🎴 Join a Game</h1>
+    <form id="join-form">
+      <input type="text" id="player-name" maxlength="20" placeholder="Your Name" required />
+      <input type="text" id="lobby-id" maxlength="20" placeholder="Lobby Name" required />
+      <button type="submit">Join</button>
+    </form>
   </div>
-  <div id="hand"></div>
-  <form id="chatForm">
-    <input id="chat-input" maxlength="100">
-    <button id="chat-send" type="submit">✉️</button>
-  </form>
-  <div id="chat-box"></div>
-  <button id="leave-btn">Leave</button>
-</div>
-<script src="/socket.io/socket.io.js"></script>
-<script src="game.js"></script>
+
+  <div id="game-screen" class="hidden">
+    <div id="header-bar">
+      <div>Lobby: <span id="lobby-name"></span></div>
+      <div>Current Turn: <span id="current-turn"></span></div>
+      <button id="leave-btn">Leave Game</button>
+    </div>
+
+    <div id="game-container">
+      <div id="opponents"></div>
+
+      <div id="play-area">
+        <img id="pile-top" class="card hidden" alt="Top Card" />
+        <div id="draw-stack" class="draw-pile" title="Draw a card">
+          <img src="assets/cards/back.png" alt="Draw" />
+        </div>
+        <div id="wild-color-chooser" class="hidden">
+          <label>Choose Color:</label>
+          <select id="wild-color">
+            <option value="red">🟥 Red</option>
+            <option value="green">🟩 Green</option>
+            <option value="blue">🟦 Blue</option>
+            <option value="yellow">🟨 Yellow</option>
+          </select>
+          <button id="wild-confirm">Play</button>
+        </div>
+      </div>
+
+      <div id="hand" class="card-hand"></div>
+
+      <div id="chat-container">
+        <div id="chat-box"></div>
+        <form id="chatForm">
+          <input type="text" id="chat-input" maxlength="200" placeholder="Say something..." />
+          <button type="submit" id="chat-send">✉️</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>
