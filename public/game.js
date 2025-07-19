@@ -3,114 +3,113 @@ const socket = io();
 let playerName = "";
 let lobbyId = "";
 
-// JOIN FORM
-document.getElementById("join-form").addEventListener("submit", e => {
+document.getElementById("join-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const name = document.getElementById("player-name").value.trim();
-  const lobby = document.getElementById("lobby-id").value.trim();
-  if (!name||!lobby) return alert("Name & lobby required");
+  const nameInput = document.getElementById("player-name");
+  const lobbyInput = document.getElementById("lobby-id");
+  const name = nameInput.value.trim();
+  const lobby = lobbyInput.value.trim();
+
+  if (!name || !lobby) return;
+
   playerName = name;
   lobbyId = lobby;
+
   socket.emit("joinLobby", { name, lobby });
 });
 
-// CHAT RECEIVER
+socket.on("lobbyFull", () => {
+  alert("Lobby is full. Please try another lobby.");
+  location.reload();
+});
+
+socket.on("updateState", (state) => {
+  console.log("[CLIENT] updateState received", state);
+
+  document.getElementById("join-screen").classList.add("hidden");
+  document.getElementById("game-screen").classList.remove("hidden");
+  document.getElementById("lobby-name").textContent = lobbyId;
+
+  updateTurn(state);
+  updateOpponents(state);
+  updateHand(state);
+  updateTopCard(state);
+});
+
 socket.on("chat", ({ sender, message }) => {
   const box = document.getElementById("chat-box");
   const p = document.createElement("p");
-  const nameColor = sender==="SUE"?"navy":"black";
-  p.innerHTML = `<strong style="color:${nameColor}">${sender}:</strong> ${message}`;
+  const displayName = sender === "SUE" ? `<strong style="color:navy;">${sender}</strong>` : `<strong>${sender}</strong>`;
+  p.innerHTML = `${displayName}: ${message}`;
   box.appendChild(p);
   box.scrollTop = box.scrollHeight;
 });
 
-// STATE UPDATES
-socket.on("updateState", state => {
-  // on first state, show game
-  if (!gameReady) {
-    document.getElementById("join-screen").classList.add("hidden");
-    document.getElementById("game-screen").classList.remove("hidden");
-    document.getElementById("lobby-name").textContent = lobbyId;
-    gameReady = true;
-  }
-  renderState(state);
+document.getElementById("draw-stack").addEventListener("click", () => {
+  socket.emit("drawCard", { name: playerName, lobby: lobbyId });
 });
 
-// LOBBY FULL
-socket.on("lobbyFull", () => {
-  alert("Lobby full, choose another.");
-  location.reload();
-});
-
-// LEAVE
 document.getElementById("leave-btn").addEventListener("click", () => {
   socket.emit("leaveLobby", { name: playerName, lobby: lobbyId });
   location.reload();
 });
 
-// RENDER FLAGS
-let gameReady = false;
-
-// RENDER FUNCTIONS
-function renderState(state) {
-  updateTurn(state.currentPlayer);
-  updateOpponents(state.players, state.currentPlayer);
-  updateHand(state.players, state.currentPlayer);
-  updateTopCard(state.topCard);
+function updateTurn(state) {
+  const turn = state.currentPlayer || "";
+  document.getElementById("current-turn").textContent = turn;
 }
 
-function updateTurn(current) {
-  document.getElementById("current-turn").textContent = current||"";
-}
+function updateOpponents(state) {
+  const list = document.getElementById("opponents");
+  list.innerHTML = "";
 
-function updateOpponents(players, current) {
-  const c = document.getElementById("opponents");
-  c.innerHTML="";
-  players.forEach(p=>{
-    if (p.name===playerName) return;
+  state.players.forEach((player) => {
+    if (player.name === playerName) return;
     const div = document.createElement("div");
-    div.className="opponent";
-    const flag = p.name===current?"👉 ":"";
-    div.innerHTML = `${flag}${p.name} 🃏${p.cards.length} (${p.score})`;
-    c.appendChild(div);
+    div.className = "opponent";
+    div.innerHTML = `
+      <div class="name">${player.name}</div>
+      <div class="cards">🃏 ${player.cards.length}</div>
+      <div class="score">(${player.score || 0})</div>
+    `;
+    list.appendChild(div);
   });
 }
 
-function updateHand(players, current) {
-  const you = players.find(p=>p.name===playerName);
-  const h = you ? you.cards : [];
-  const hc = document.getElementById("hand");
-  hc.innerHTML="";
-  h.forEach((card,i)=>{
+function updateHand(state) {
+  const hand = state.players.find((p) => p.name === playerName)?.cards || [];
+  const handContainer = document.getElementById("hand");
+  handContainer.innerHTML = "";
+
+  hand.forEach((card, index) => {
     const img = document.createElement("img");
-    img.src=`assets/cards/${card}.png`;
-    img.className="card";
-    img.onclick=()=>socket.emit("playCard", { name: playerName, lobby: lobbyId, index:i });
-    hc.appendChild(img);
+    img.src = `assets/cards/${card}.png`;
+    img.alt = card;
+    img.addEventListener("click", () => playCard(index));
+    handContainer.appendChild(img);
   });
 }
 
-function updateTopCard(top) {
-  const t = document.getElementById("pile-top");
-  if (top) {
-    t.src=`assets/cards/${top}.png`;
-    t.classList.remove("hidden");
-  } else {
-    t.classList.add("hidden");
+function updateTopCard(state) {
+  const pile = document.getElementById("pile-top");
+  if (state.topCard) {
+    pile.src = `assets/cards/${state.topCard}.png`;
+    pile.classList.remove("hidden");
   }
 }
 
-// DRAW CARD
-document.getElementById("draw-stack").addEventListener("click", () => {
-  socket.emit("drawCard", { name: playerName, lobby: lobbyId });
+document.getElementById("chatForm")?.addEventListener("submit", sendChat);
+document.getElementById("chat-send")?.addEventListener("click", sendChat);
+document.getElementById("chat-input")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendChat(e);
 });
 
-// CHAT SENDING
-document.getElementById("chatForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const inp = document.getElementById("chat-input");
-  const msg = inp.value.trim();
-  if (!msg) return;
-  socket.emit("chat", { sender: playerName, message: msg, lobby: lobbyId });
-  inp.value="";
-});
+function sendChat(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById("chat-input");
+  const msg = input.value.trim();
+  if (msg) {
+    socket.emit("chat", { sender: playerName, message: msg, lobby: lobbyId });
+    input.value = "";
+  }
+}
