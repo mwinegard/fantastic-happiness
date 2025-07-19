@@ -1,108 +1,62 @@
+<!-- public/admin.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>UNO Admin Panel</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 30px;
-      background: #f8f8f8;
-      color: #333;
-    }
-    h1 {
-      text-align: center;
-    }
-    .lobby {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      padding: 15px;
-      margin-bottom: 20px;
-    }
-    .player {
-      margin-left: 10px;
-      margin-top: 5px;
-    }
-    button {
-      padding: 6px 12px;
-      margin: 5px;
-      cursor: pointer;
-      background: #dc3545;
-      color: white;
-      border: none;
-      border-radius: 4px;
-    }
-    button:hover {
-      background: #a71d2a;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>UNO Admin Panel</h1>
-  <div id="lobbies">Loading lobbies...</div>
-
+  <h1>🎮 UNO Game Admin Panel</h1>
+  <div id="lobby-list"></div>
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    const lobbyList = document.getElementById("lobby-list");
 
-    const lobbiesDiv = document.getElementById("lobbies");
-
-    function renderLobbies(data) {
-      lobbiesDiv.innerHTML = '';
+    function renderAdmin(data) {
       if (Object.keys(data).length === 0) {
-        lobbiesDiv.innerHTML = "<p><i>No active lobbies at this time.</i></p>";
+        lobbyList.innerHTML = "<p>No active lobbies.</p>";
         return;
       }
 
-      Object.entries(data).forEach(([lobbyId, lobby]) => {
-        const lobbyDiv = document.createElement("div");
-        lobbyDiv.className = "lobby";
-
-        const title = document.createElement("h3");
-        title.textContent = `Lobby: ${lobbyId}`;
-        lobbyDiv.appendChild(title);
-
-        const playerList = document.createElement("ul");
-        (lobby.players || []).forEach(player => {
+      lobbyList.innerHTML = "";
+      for (const lobby in data) {
+        const div = document.createElement("div");
+        div.innerHTML = `<h2>Lobby: ${lobby}</h2>`;
+        const ul = document.createElement("ul");
+        data[lobby].players.forEach(p => {
           const li = document.createElement("li");
-          li.className = "player";
-          li.textContent = `${player.name} (${player.id}) - Score: ${player.score || 0} `;
-          
-          const kickBtn = document.createElement("button");
-          kickBtn.textContent = "Kick";
-          kickBtn.onclick = () => {
-            socket.emit("adminKickPlayer", { lobbyId, playerId: player.id });
-          };
-
-          li.appendChild(kickBtn);
-          playerList.appendChild(li);
+          li.innerHTML = `
+            ${p.name} 🃏 ${p.handSize} (${p.score})
+            <button onclick="kick('${lobby}', '${p.id}')">Kick</button>
+          `;
+          ul.appendChild(li);
         });
 
         const closeBtn = document.createElement("button");
         closeBtn.textContent = "Close Lobby";
-        closeBtn.onclick = () => {
-          socket.emit("adminCloseLobby", lobbyId);
-        };
+        closeBtn.onclick = () => closeLobby(lobby);
 
-        lobbyDiv.appendChild(playerList);
-        lobbyDiv.appendChild(closeBtn);
-        lobbiesDiv.appendChild(lobbyDiv);
-      });
+        div.appendChild(ul);
+        div.appendChild(closeBtn);
+        lobbyList.appendChild(div);
+      }
     }
 
-    socket.on("connect", () => {
-      socket.emit("adminRequestLobbies");
-    });
+    function kick(lobby, id) {
+      socket.emit("admin:kick_player", { lobby, id });
+    }
 
-    socket.on("adminLobbies", (data) => {
-      renderLobbies(data);
-    });
+    function closeLobby(lobby) {
+      socket.emit("admin:close_lobby", lobby);
+    }
+
+    socket.on("admin_data", renderAdmin);
 
     setInterval(() => {
-      socket.emit("adminRequestLobbies");
-    }, 5000);
+      socket.emit("admin:get_lobbies");
+    }, 3000);
   </script>
 </body>
 </html>
