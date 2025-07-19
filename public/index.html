@@ -1,29 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>UNO Game</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <h1>🎮 Fantastic Happiness</h1>
+
   <div id="lobby">
-    <input type="text" id="lobbyId" placeholder="Lobby ID">
-    <input type="text" id="playerName" placeholder="Your Name">
+    <input type="text" id="lobbyId" placeholder="Lobby ID" />
+    <input type="text" id="playerName" placeholder="Your Name" />
     <button id="joinBtn">Join Lobby</button>
   </div>
 
   <div id="game" style="display:none;">
     <h2>Lobby: <span id="currentLobby"></span></h2>
     <div id="players"></div>
+    <div id="topCardContainer">
+      <h2>Top Card:</h2>
+      <div id="topCard" class="card"></div>
+    </div>
+    <div id="handContainer">
+      <h2>Your Hand:</h2>
+      <div id="hand" class="card-hand"></div>
+    </div>
+    <button id="unoBtn" style="display:none; margin-top:20px;">Call UNO!</button>
     <div id="chat">
       <div id="messages"></div>
-      <input type="text" id="chatInput" placeholder="Say something...">
+      <input type="text" id="chatInput" placeholder="Say something..." />
       <button id="sendChat">Send</button>
     </div>
   </div>
-<div id="topCard" style="margin: 20px; font-size: 24px;"></div>
-<div id="hand" style="margin-top: 20px;"></div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
