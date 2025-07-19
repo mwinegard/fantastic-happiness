@@ -2,42 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Multiplayer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UNO Lobby</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
 </head>
 <body>
-  <div id="lobby-screen">
-    <h1>UNO</h1>
+  <div id="join-screen" class="centered">
+    <img src="assets/cards/back.png" class="logo" alt="UNO Logo" />
+    <h2>Join a Lobby</h2>
     <form id="join-form">
-      <input type="text" id="player-name" placeholder="Enter your name" maxlength="20" required />
-      <input type="text" id="lobby-id" placeholder="Lobby ID" required />
+      <input type="text" id="name-input" placeholder="Your Name" maxlength="20" pattern="^[a-zA-Z0-9 ]{1,20}$" required />
+      <input type="text" id="lobby-input" placeholder="Lobby ID" maxlength="20" pattern="^[a-zA-Z0-9]{1,20}$" required />
       <button type="submit">Join Game</button>
     </form>
   </div>
 
-  <div id="game-container" style="display:none;">
-    <div id="opponents-container"></div>
+  <div id="game-container" style="display: none;">
+    <div id="game-info">
+      <div id="opponents"></div>
+      <div id="score-summary"></div>
+      <div id="turn-timer">⏳ Turn: <span id="turn-countdown">60</span>s</div>
+    </div>
 
     <div id="table">
-      <div id="discard-pile"></div>
-      <div id="draw-pile" class="card-stack">
-        <img id="draw-stack" src="assets/cards/back.png" alt="Draw" />
+      <div id="discard-stack">
+        <img id="top-card" src="" alt="Top card" />
+        <div id="wild-color" style="display: none;"></div>
       </div>
-      <div id="wild-color-indicator"></div>
+      <div id="draw-stack">
+        <img src="assets/cards/back.png" id="draw-button" alt="Draw pile" />
+      </div>
     </div>
 
-    <div id="hand-container"></div>
+    <div id="hand"></div>
 
-    <div id="chat-container">
-      <div id="chat-messages"></div>
-      <form id="chat-form">
-        <input type="text" id="chat-input" placeholder="Say something..." maxlength="100" />
-        <button type="submit">Send</button>
-      </form>
+    <div id="wild-color-picker" style="display: none;">
+      <label>Choose a color:</label>
+      <select id="color-select">
+        <option value="red">🔴 Red</option>
+        <option value="yellow">🟡 Yellow</option>
+        <option value="green">🟢 Green</option>
+        <option value="blue">🔵 Blue</option>
+      </select>
+      <button id="confirm-color">Confirm</button>
     </div>
 
-    <button id="leave-button">Leave Game</button>
+    <div id="chat">
+      <div id="chat-log"></div>
+      <input type="text" id="chat-input" placeholder="Type message..." />
+    </div>
+
+    <button id="leave-game">Leave Game</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
