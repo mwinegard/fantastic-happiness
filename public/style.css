@@ -1,14 +1,15 @@
-/* Reset and Base */
+/* Base Reset */
 body {
   margin: 0;
+  padding: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #f6f9fc;
   color: #2c3e50;
 }
 
-h1, h3, h4 {
-  margin: 0.5em 0;
+h1, h2, h3, h4 {
   text-align: center;
+  margin: 0.5em 0;
 }
 
 .uno-container {
@@ -24,45 +25,41 @@ main {
   gap: 1em;
 }
 
-/* Table Area */
-#table {
+/* Game Sections */
+#table, #player-hand, #opponent-hands, #scoreboard {
   background: #ffffff;
   border: 1px solid #ccc;
+  border-radius: 8px;
   padding: 1em;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+}
+
+#player-hand, #opponent-hands {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5em;
+}
+
+#table {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-/* Hands */
-#player-hand,
-#opponent-hands {
+#table-pile {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 0.4em;
-  padding: 0.5em;
-  background: #ffffff;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
 
-#opponent-hands > div {
+/* Turn Info */
+#turn-info {
   text-align: center;
-  margin: 0.5em;
-}
-
-/* Card Styling */
-img {
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  transition: transform 0.2s ease;
-}
-
-img:hover {
-  transform: scale(1.05);
+  font-weight: bold;
+  font-size: 1.1em;
+  padding: 0.5em;
+  color: #0078D7;
 }
 
 /* Buttons */
@@ -90,23 +87,52 @@ button:hover {
   transform: translateY(-2px);
 }
 
-/* Turn Info */
-#turn-info {
-  text-align: center;
-  font-weight: bold;
-  font-size: 1.1em;
-  padding: 0.5em;
-  color: #0078D7;
-}
-
 /* Scoreboard */
 #scoreboard {
-  background: #ffffff;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 1em;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   margin-top: 1em;
+}
+
+/* Card Images */
+img {
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s ease;
+}
+
+img:hover {
+  transform: scale(1.05);
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 2em;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  text-align: center;
+  width: 90%;
+  max-width: 400px;
+}
+
+.modal-content input {
+  display: block;
+  margin: 1em auto;
+  padding: 0.6em;
+  font-size: 1em;
+  width: 80%;
+  border-radius: 6px;
+  border: 1px solid #ccc;
 }
 
 /* Responsive */
