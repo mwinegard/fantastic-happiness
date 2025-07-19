@@ -3,50 +3,53 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Game Lobby</title>
+  <title>Fantastic Happiness Uno</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="joinScreen">
-    <h1>Join Game Lobby</h1>
-    <form id="joinForm">
-      <input type="text" id="playerName" maxlength="20" placeholder="Your name" required pattern="[A-Za-z0-9 ]+"/>
-      <input type="text" id="lobbyId" maxlength="20" placeholder="Lobby ID" required pattern="[A-Za-z0-9]+"/>
+  <div id="join-screen">
+    <h1>🎴 Join a Game</h1>
+    <form id="join-form">
+      <input type="text" id="player-name" maxlength="20" placeholder="Your Name" required />
+      <input type="text" id="lobby-id" maxlength="20" placeholder="Lobby Name" required />
       <button type="submit">Join</button>
     </form>
+    <p id="join-error" class="error"></p>
   </div>
 
-  <div id="gameScreen" class="hidden">
-    <div class="topBar">
-      <div id="gameInfo"></div>
-    </div>
+  <div id="game-screen" class="hidden">
+    <header>
+      <h2>Lobby: <span id="lobby-name"></span></h2>
+      <button id="leave-btn">🚪 Leave</button>
+    </header>
 
-    <div class="mainArea">
-      <div class="sidebar">
-        <h3>Players</h3>
-        <ul id="playerList"></ul>
+    <section id="status-bar">
+      <p><strong>Turn:</strong> <span id="current-turn"></span></p>
+    </section>
+
+    <section id="opponents"></section>
+
+    <section id="game-area">
+      <div id="draw-pile">
+        <img id="draw-stack" src="assets/cards/back.png" alt="Draw Pile" />
       </div>
-
-      <div class="gameBoard">
-        <div class="pileArea">
-          <img id="pileTopCard" src="" alt="Top card" class="card hidden"/>
-          <div id="drawDeck" class="drawPile">
-            <img src="assets/cards/back.png" alt="Draw pile" />
-            <div class="drawStack"></div>
-          </div>
-        </div>
-
-        <div id="handArea" class="hand"></div>
+      <div id="discard-pile">
+        <img id="pile-top" src="" alt="Top Card" />
       </div>
+    </section>
 
-      <div class="chatPanel">
-        <div id="chatBox"></div>
-        <form id="chatForm">
-          <input type="text" id="chatInput" placeholder="Type a message" maxlength="100" required />
-          <button type="submit">📨</button>
-        </form>
+    <section id="your-hand">
+      <h3>Your Hand</h3>
+      <div id="hand"></div>
+    </section>
+
+    <section id="chat">
+      <div id="chat-box"></div>
+      <div class="chat-input">
+        <input type="text" id="chat-input" maxlength="120" placeholder="Type a message…" />
+        <button id="chat-send">📨</button>
       </div>
-    </div>
+    </section>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
