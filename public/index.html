@@ -22,7 +22,14 @@
 
     <div id="table">
       <h3>Discard Pile</h3>
-      <img id="discard" src="back.png" />
+      <div id="pile-container">
+        <img id="discard" src="back.png" />
+        <div id="draw-stack">
+          <img class="stack-card" src="back.png" />
+          <img class="stack-card" src="back.png" />
+          <img class="stack-card" src="back.png" id="draw-pile" />
+        </div>
+      </div>
       <div id="wild-color"></div>
     </div>
 
@@ -35,7 +42,6 @@
         <option value="green">🟢 Green</option>
         <option value="blue">🔵 Blue</option>
       </select>
-      <button id="draw">Draw Card</button>
       <button id="leave">Leave Game</button>
     </div>
   </div>
