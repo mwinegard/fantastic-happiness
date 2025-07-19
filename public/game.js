@@ -1,97 +1,107 @@
 const socket = io();
-let hand = [];
-let lobbyId = sessionStorage.getItem('lobbyId');
-let playerName = sessionStorage.getItem('playerName');
 
-function joinLobby(lobbyId, name) {
-  socket.emit('joinLobby', { lobbyId, name });
+let myHand = [];
+let myName = sessionStorage.getItem('playerName');
+let myLobby = sessionStorage.getItem('lobbyId');
+
+function joinLobby() {
+  socket.emit('joinLobby', {
+    lobbyId: myLobby,
+    name: myName
+  });
 }
 
-joinLobby(lobbyId, playerName);
+joinLobby();
 
-socket.on('yourHand', cards => {
-  hand = cards;
-  renderHand();
+socket.on('gameState', (state) => {
+  renderHand(state.hand);
+  renderTable(state.table);
+  renderOpponents(state.others);
+  document.getElementById('turn-info').innerText = `Current Turn: ${state.currentPlayer}${state.isMyTurn ? " (You!)" : ""}`;
+  renderChat(state.chat);
 });
 
-socket.on('updateGame', state => {
-  const current = state.players.find(p => p.id === state.currentPlayer);
-  document.getElementById('turn-info').innerText = `Current Turn: ${current?.name || "Waiting..."}`;
-  renderTablePile(state.tablePile);
-  renderOpponents(state.players, state.currentPlayer);
+socket.on('chatUpdate', ({ sender, msg }) => {
+  addToChat(`${sender}: ${msg}`);
 });
 
-socket.on('chatUpdate', ({ id, msg }) => {
-  const log = document.getElementById('chatLog');
-  if (log) {
-    const p = document.createElement('p');
-    p.textContent = msg;
-    log.appendChild(p);
-    log.scrollTop = log.scrollHeight;
-  }
+socket.on('gameOver', ({ winner }) => {
+  alert(`Game Over! Winner: ${winner}`);
+  window.location.reload();
 });
 
-function renderHand() {
-  const container = document.getElementById('player-hand');
-  container.innerHTML = '';
+function renderHand(hand) {
+  const el = document.getElementById('player-hand');
+  el.innerHTML = '';
   hand.forEach(card => {
     const img = document.createElement('img');
     img.src = `assets/cards/${card}`;
-    img.style.height = '100px';
-    img.style.margin = '4px';
-    img.style.cursor = 'pointer';
-    img.onclick = () => playCard(card);
-    container.appendChild(img);
+    img.style.height = '80px';
+    img.style.margin = '2px';
+    img.onclick = () => {
+      playCard(card);
+    };
+    el.appendChild(img);
   });
 }
-
-function renderTablePile(pile) {
-  const container = document.getElementById('table-pile');
-  container.innerHTML = '';
-  if (pile.length) {
-    const card = pile[pile.length - 1];
+function renderTable(table) {
+  const el = document.getElementById('table-pile');
+  el.innerHTML = '';
+  if (table.length) {
+    const top = table[table.length - 1];
     const img = document.createElement('img');
-    img.src = `assets/cards/${card}`;
+    img.src = `assets/cards/${top}`;
     img.style.height = '120px';
-    container.appendChild(img);
+    el.appendChild(img);
   }
 }
-
-function renderOpponents(players, currentPlayerId) {
-  const container = document.getElementById('opponent-hands');
-  container.innerHTML = '';
-  players.forEach(p => {
-    if (p.id === socket.id) return; // skip self
+function renderOpponents(others) {
+  const el = document.getElementById('opponent-hands');
+  el.innerHTML = '';
+  others.forEach(player => {
     const div = document.createElement('div');
-    div.style.margin = '10px';
-    div.innerHTML = `<strong>${p.name}</strong><br/>`;
-    for (let i = 0; i < p.handCount; i++) {
+    div.innerHTML = `<b>${player.name}</b><br>`;
+    for (let i = 0; i < player.count; i++) {
       const img = document.createElement('img');
       img.src = `assets/cards/back.png`;
-      img.style.height = '60px';
-      img.style.margin = '2px';
+      img.style.height = '50px';
+      img.style.margin = '1px';
       div.appendChild(img);
     }
-    container.appendChild(div);
+    el.appendChild(div);
   });
 }
-
 function playCard(card) {
   let chosenColor = null;
-  if (card.includes('wild')) {
-    chosenColor = prompt('Choose color: red, blue, green, yellow');
+  if (card.startsWith("wild")) {
+    chosenColor = prompt("Choose color: red, green, blue, yellow");
+    if (!["red","green","blue","yellow"].includes(chosenColor)) return;
   }
-  socket.emit('playCard', { card, chosenColor });
+  socket.emit("playCard", { card, chosenColor });
 }
-
 function drawCard() {
-  socket.emit('drawCard');
+  socket.emit("drawCard");
 }
-
 function sendChat() {
   const input = document.getElementById('chatInput');
-  if (input && input.value.trim()) {
+  if (input.value.trim()) {
     socket.emit('chatMessage', input.value.trim());
     input.value = '';
   }
+}
+function renderChat(chat) {
+  const el = document.getElementById('chatLog');
+  el.innerHTML = '';
+  chat.forEach(entry => {
+    const p = document.createElement('p');
+    p.textContent = `${entry.sender}: ${entry.msg}`;
+    el.appendChild(p);
+  });
+}
+function addToChat(line) {
+  const el = document.getElementById('chatLog');
+  const p = document.createElement('p');
+  p.textContent = line;
+  el.appendChild(p);
+  el.scrollTop = el.scrollHeight;
 }
