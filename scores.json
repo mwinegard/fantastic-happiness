@@ -1,1 +1,18 @@
-{}
+{
+  "Alice": {
+    "score": 235,
+    "wins": 2
+  },
+  "Bob": {
+    "score": 140,
+    "wins": 1
+  },
+  "Charlie": {
+    "score": 95,
+    "wins": 0
+  },
+  "Diana": {
+    "score": 180,
+    "wins": 1
+  }
+}
