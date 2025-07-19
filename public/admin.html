@@ -3,68 +3,92 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin Panel</title>
+  <title>UNO Admin Panel</title>
+  <link rel="stylesheet" href="style.css" />
   <style>
     body {
-      font-family: Arial, sans-serif;
       padding: 20px;
+      background-color: #f4f6fb;
     }
     h1 {
-      color: #005aa7;
+      color: #003366;
     }
     .lobby {
+      background: #fff;
       border: 1px solid #ccc;
+      border-radius: 8px;
       padding: 10px;
       margin: 10px 0;
-      border-radius: 6px;
+    }
+    .lobby-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    button {
+      margin-left: 10px;
+      background: #c62828;
     }
     .player {
       margin-left: 15px;
     }
-    button {
-      margin-right: 10px;
-      padding: 4px 8px;
-    }
   </style>
 </head>
 <body>
-  <h1>Admin Lobby Panel</h1>
+  <h1>UNO Admin Panel</h1>
   <div id="lobbies"></div>
+  <h2>🏆 Top Scores</h2>
+  <ul id="topScores"></ul>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    const lobbyContainer = document.getElementById("lobbies");
+    const topScores = document.getElementById("topScores");
 
     socket.emit("adminRequestLobbies");
+    socket.emit("adminRequestScores");
 
-    socket.on("adminLobbies", (data) => {
-      const container = document.getElementById("lobbies");
-      container.innerHTML = "";
-
-      Object.entries(data).forEach(([lobbyId, lobby]) => {
+    socket.on("adminLobbies", (lobbies) => {
+      lobbyContainer.innerHTML = "";
+      Object.keys(lobbies).forEach((id) => {
+        const lobby = lobbies[id];
         const div = document.createElement("div");
         div.className = "lobby";
-        div.innerHTML = `<strong>Lobby ID:</strong> ${lobbyId}<br><strong>Players:</strong><br>`;
-
-        lobby.players.forEach((p) => {
-          const pLine = document.createElement("div");
-          pLine.className = "player";
-          pLine.textContent = `🧍 ${p.name} (${p.hand.length} cards, Score: ${p.score})`;
-          const kickBtn = document.createElement("button");
-          kickBtn.textContent = "Kick";
-          kickBtn.onclick = () => socket.emit("adminKickPlayer", { lobbyId, playerId: p.id });
-          pLine.appendChild(kickBtn);
-          div.appendChild(pLine);
-        });
-
-        const closeBtn = document.createElement("button");
-        closeBtn.textContent = "Close Lobby";
-        closeBtn.onclick = () => socket.emit("adminCloseLobby", lobbyId);
-        div.appendChild(closeBtn);
-
-        container.appendChild(div);
+        div.innerHTML = `
+          <div class="lobby-header">
+            <strong>Lobby: ${id}</strong>
+            <button onclick="closeLobby('${id}')">Close Lobby</button>
+          </div>
+          <div>Players:
+            ${lobby.players.map(p => `
+              <div class="player">
+                ${p.name} 
+                <button onclick="kickPlayer('${id}', '${p.id}')">❌ Kick</button>
+              </div>
+            `).join("")}
+          </div>
+        `;
+        lobbyContainer.appendChild(div);
       });
     });
+
+    socket.on("adminTopScores", (scores) => {
+      topScores.innerHTML = "";
+      Object.entries(scores).sort((a, b) => b[1] - a[1]).forEach(([name, score]) => {
+        const li = document.createElement("li");
+        li.textContent = `${name}: ${score} pts`;
+        topScores.appendChild(li);
+      });
+    });
+
+    function kickPlayer(lobbyId, playerId) {
+      socket.emit("adminKickPlayer", { lobbyId, playerId });
+    }
+
+    function closeLobby(lobbyId) {
+      socket.emit("adminCloseLobby", lobbyId);
+    }
   </script>
 </body>
 </html>
