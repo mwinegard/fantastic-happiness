@@ -5,7 +5,7 @@ const assets = [
   "/style.css",
   "/game.js",
   "/manifest.json",
-  "/cards/back.png"
+  "/assets/cards/back.png"
 ];
 
 self.addEventListener("install", event => {
