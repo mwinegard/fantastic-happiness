@@ -1,7 +1,7 @@
 {
   "name": "fantastic-happiness",
   "version": "1.0.0",
-  "description": "Multiplayer UNO-style card game using Node.js and Socket.IO",
+  "description": "UNO-style multiplayer game",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,8 +9,5 @@
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2"
-  },
-  "engines": {
-    "node": ">=16"
   }
 }
