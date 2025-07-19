@@ -1,13 +1,13 @@
 {
   "name": "fantastic-happiness",
   "version": "1.0.0",
-  "description": "Multiplayer UNO-style web game",
+  "description": "Multiplayer UNO-style card game with custom deck",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=16 <19"
   },
   "dependencies": {
     "express": "^4.18.2",
