@@ -1,116 +1,35 @@
 body {
   font-family: Arial, sans-serif;
+  background: #e8f1f8;
   margin: 0;
   padding: 0;
-  background: #f0f0f5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-h1 {
-  color: #2b2e4a;
-}
-
-#lobby-form {
-  margin-top: 60px;
   text-align: center;
 }
 
+#lobby-form {
+  margin-top: 80px;
+}
+
 form input, form button {
-  margin: 10px;
   padding: 10px;
-  font-size: 16px;
-}
-
-#game {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 900px;
-  margin-top: 20px;
-}
-
-#sidebar {
-  width: 100%;
-  background: #ffffff;
-  padding: 10px;
-  border: 1px solid #ccc;
-}
-
-#player-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 10px 0;
-}
-
-#player-list li {
-  margin: 4px 0;
-  font-size: 16px;
-}
-
-#chat {
-  border-top: 1px solid #ccc;
-  padding-top: 10px;
-}
-
-#chat-box {
-  height: 150px;
-  overflow-y: auto;
-  background: #f9f9f9;
-  border: 1px solid #ddd;
-  padding: 5px;
-  margin-bottom: 5px;
-  font-size: 14px;
-}
-
-#chat-form {
-  display: flex;
-}
-
-#chat-input {
-  flex: 1;
-  padding: 5px;
-  font-size: 14px;
-}
-
-#chat-form button {
-  font-size: 20px;
-  padding: 0 12px;
-}
-
-#play-area {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  margin-top: 20px;
-}
-
-#discard-pile, #draw-pile {
   margin: 5px;
+  font-size: 16px;
 }
 
-#discard-pile img, #draw-pile img {
-  width: 80px;
-  height: auto;
-}
-
-#player-hand {
+#player-hand, #discard-pile, #draw-pile {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  margin-top: 15px;
+  margin-top: 20px;
+  flex-wrap: wrap;
 }
 
 .card {
   width: 80px;
-  height: auto;
   margin: 5px;
+  transition: transform 0.2s;
   cursor: pointer;
-  transition: transform 0.2s ease-in-out;
 }
 
 .card:hover {
-  transform: scale(1.05);
+  transform: scale(1.1);
 }
