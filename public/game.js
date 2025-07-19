@@ -5,10 +5,8 @@ let lobbyId = "";
 
 document.getElementById("join-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const nameInput = document.getElementById("player-name");
-  const lobbyInput = document.getElementById("lobby-id");
-  const name = nameInput.value.trim();
-  const lobby = lobbyInput.value.trim();
+  const name = document.getElementById("player-name").value.trim().slice(0, 20);
+  const lobby = document.getElementById("lobby-id").value.trim().slice(0, 20);
 
   if (!name || !lobby) return;
 
@@ -30,8 +28,9 @@ socket.on("lobbyFull", () => {
 socket.on("chat", ({ sender, message }) => {
   const box = document.getElementById("chat-box");
   const p = document.createElement("p");
-  const displayName = sender === "SUE" ? `<strong style="color:navy;">${sender}</strong>` : `<strong>${sender}</strong>`;
-  p.innerHTML = `${displayName}: ${message}`;
+  const nameColor = sender === "SUE" ? "navy" : "black";
+  const boldName = sender === "SUE" ? "SUE" : sender;
+  p.innerHTML = `<strong style="color:${nameColor};">${boldName}</strong>: ${message}`;
   box.appendChild(p);
   box.scrollTop = box.scrollHeight;
 });
@@ -41,6 +40,12 @@ socket.on("updateState", (state) => {
   updateOpponents(state);
   updateHand(state);
   updateTopCard(state);
+  updateDrawStack(state);
+});
+
+socket.on("gameOver", ({ winner, points }) => {
+  alert(`🎉 ${winner} is the Champion!\nThey scored ${points} points!`);
+  location.reload();
 });
 
 document.getElementById("leave-btn").addEventListener("click", () => {
@@ -58,20 +63,25 @@ function updateOpponents(state) {
   list.innerHTML = "";
 
   state.players.forEach((player) => {
-    if (player.name === playerName) return;
+    const isCurrent = player.name === state.currentPlayer;
+    const isSelf = player.name === playerName;
     const div = document.createElement("div");
     div.className = "opponent";
-    div.innerHTML = `
-      <div class="name">${player.name}</div>
-      <div class="cards">🃏 ${player.cards.length}</div>
-      <div class="score">(${player.score || 0})</div>
-    `;
-    list.appendChild(div);
+
+    if (!isSelf) {
+      div.innerHTML = `
+        <div class="name">${isCurrent ? "👉" : ""} ${player.name}</div>
+        <div class="cards">🃏 ${player.cards.length}</div>
+        <div class="score">(${player.score || 0})</div>
+      `;
+      list.appendChild(div);
+    }
   });
 }
 
 function updateHand(state) {
-  const hand = state.players.find((p) => p.name === playerName)?.cards || [];
+  const player = state.players.find((p) => p.name === playerName);
+  const hand = player?.cards || [];
   const handContainer = document.getElementById("hand");
   handContainer.innerHTML = "";
 
@@ -79,7 +89,14 @@ function updateHand(state) {
     const img = document.createElement("img");
     img.src = `assets/cards/${card}.png`;
     img.alt = card;
-    img.addEventListener("click", () => playCard(index));
+    img.className = "card";
+    img.addEventListener("click", () => {
+      if (card.includes("wild")) {
+        showColorPicker(index);
+      } else {
+        playCard(index, null);
+      }
+    });
     handContainer.appendChild(img);
   });
 }
@@ -89,15 +106,56 @@ function updateTopCard(state) {
   if (state.topCard) {
     pile.src = `assets/cards/${state.topCard}.png`;
     pile.classList.remove("hidden");
+  } else {
+    pile.classList.add("hidden");
+  }
+
+  // Show color indicator for wild
+  const wildColor = state.chosenColor;
+  const indicator = document.getElementById("color-indicator");
+  if (wildColor) {
+    indicator.textContent = "⬤";
+    indicator.style.color = wildColor;
+    indicator.classList.remove("hidden");
+  } else {
+    indicator.classList.add("hidden");
   }
 }
 
-document.getElementById("draw-stack").addEventListener("click", () => {
-  socket.emit("drawCard", { name: playerName, lobby: lobbyId });
-});
+function updateDrawStack(state) {
+  const drawStack = document.getElementById("draw-stack");
+  drawStack.innerHTML = "";
+  for (let i = 0; i < 3; i++) {
+    const img = document.createElement("img");
+    img.src = "assets/cards/back.png";
+    img.className = "card-stack";
+    drawStack.appendChild(img);
+  }
+}
 
-function playCard(index) {
-  socket.emit("playCard", { name: playerName, lobby: lobbyId, index });
+function playCard(index, chosenColor = null) {
+  socket.emit("playCard", {
+    name: playerName,
+    lobby: lobbyId,
+    index,
+    chosenColor,
+  });
+}
+
+function showColorPicker(index) {
+  const colorPicker = document.createElement("div");
+  colorPicker.id = "color-picker";
+  ["red", "blue", "green", "yellow"].forEach((color) => {
+    const btn = document.createElement("button");
+    btn.textContent = "⬤";
+    btn.style.color = color;
+    btn.addEventListener("click", () => {
+      playCard(index, color);
+      colorPicker.remove();
+    });
+    colorPicker.appendChild(btn);
+  });
+  document.body.appendChild(colorPicker);
 }
 
 document.getElementById("chatForm")?.addEventListener("submit", sendChat);
@@ -111,7 +169,11 @@ function sendChat(e) {
   const input = document.getElementById("chat-input");
   const msg = input.value.trim();
   if (msg) {
-    socket.emit("chat", { sender: playerName, message: msg, lobby: lobbyId });
+    socket.emit("chat", {
+      sender: playerName,
+      message: msg,
+      lobby: lobbyId,
+    });
     input.value = "";
   }
 }
