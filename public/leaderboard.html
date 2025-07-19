@@ -3,56 +3,106 @@
 <head>
   <meta charset="UTF-8">
   <title>Leaderboard</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
-      background: #f9f9f9;
       font-family: Arial, sans-serif;
+      background: #e8f1f8;
       padding: 20px;
+      margin: 0;
       text-align: center;
     }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
     table {
-      margin: 20px auto;
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
       border-collapse: collapse;
-      width: 300px;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
+
     th, td {
-      padding: 10px;
-      border: 1px solid #ddd;
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
     }
+
     th {
-      background: #004080;
+      background: #4CAF50;
       color: white;
     }
-    td {
-      background: #fff;
+
+    tr:hover {
+      background: #f1f1f1;
+    }
+
+    .rank {
+      font-weight: bold;
+    }
+
+    .name {
+      color: #222;
+    }
+
+    .score {
+      font-weight: bold;
+      color: #333;
+    }
+
+    #back {
+      display: inline-block;
+      margin-top: 20px;
+      text-decoration: none;
+      background: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
     }
   </style>
 </head>
 <body>
-  <h1>🏆 Top Scores</h1>
+  <h1>🏆 Leaderboard</h1>
   <table id="leaderboard">
     <thead>
-      <tr><th>Player</th><th>Score</th></tr>
+      <tr>
+        <th>Rank</th>
+        <th>Player</th>
+        <th>Score</th>
+      </tr>
     </thead>
-    <tbody></tbody>
+    <tbody>
+      <!-- Fetched rows go here -->
+    </tbody>
   </table>
 
-  <script>
-    fetch('/scores.json')
-      .then(res => res.json())
-      .then(data => {
-        const tbody = document.querySelector("#leaderboard tbody");
-        const sorted = Object.entries(data)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10);
+  <a id="back" href="/">← Back to Game</a>
 
-        for (let [name, score] of sorted) {
-          const row = document.createElement("tr");
-          row.innerHTML = `<td>${name}</td><td>${score}</td>`;
-          tbody.appendChild(row);
-        }
-      });
+  <script>
+    async function loadLeaderboard() {
+      const res = await fetch("/scores.json");
+      const scores = await res.json();
+      const tbody = document.querySelector("#leaderboard tbody");
+
+      const sorted = Object.entries(scores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 25);
+
+      tbody.innerHTML = sorted.map(([name, score], i) => `
+        <tr>
+          <td class="rank">#${i + 1}</td>
+          <td class="name">${name}</td>
+          <td class="score">${score}</td>
+        </tr>
+      `).join("");
+    }
+
+    loadLeaderboard();
   </script>
 </body>
 </html>
