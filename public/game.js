@@ -1,92 +1,92 @@
 const socket = io();
-let playerName = "";
-let lobbyId = "";
 
-const joinScreen = document.getElementById("join-screen");
-const gameScreen = document.getElementById("game-screen");
-const playerNameInput = document.getElementById("playerName");
-const lobbyInput = document.getElementById("lobbyId");
-const joinButton = document.getElementById("joinButton");
-const leaveButton = document.getElementById("leaveBtn");
-const playerInfo = document.getElementById("playerInfo");
+let playerName = localStorage.getItem("playerName") || "";
+let lobbyId = localStorage.getItem("lobbyId") || "";
+let selectedColor = null;
 
-const chatLog = document.getElementById("chat-log");
+if (!playerName || !lobbyId) {
+  playerName = prompt("Enter your name (max 20 chars):").slice(0, 20).replace(/[^a-zA-Z0-9 ]/g, "");
+  lobbyId = prompt("Enter lobby name:").slice(0, 20).replace(/[^a-zA-Z0-9 ]/g, "");
+  localStorage.setItem("playerName", playerName);
+  localStorage.setItem("lobbyId", lobbyId);
+}
+
+socket.emit("joinLobby", { playerName, lobbyId });
+
+// DOM refs
+const chatBox = document.getElementById("chatBox");
 const chatInput = document.getElementById("chatInput");
-const chatSend = document.getElementById("chatSend");
+const sendBtn = document.getElementById("sendBtn");
+const gameArea = document.getElementById("gameArea");
+const handArea = document.getElementById("hand");
+const pileCard = document.getElementById("pileCard");
+const drawStack = document.getElementById("drawStack");
+const opponentsList = document.getElementById("opponents");
 
-const handContainer = document.getElementById("hand");
-const pileCard = document.getElementById("pile-card");
-const drawStack = document.getElementById("draw-stack");
-
-// 👉 Join Game
-joinButton.addEventListener("click", () => {
-  playerName = playerNameInput.value.trim();
-  lobbyId = lobbyInput.value.trim();
-
-  if (!playerName || !lobbyId) return alert("Please enter a name and lobby code.");
-
-  socket.emit("joinLobby", { playerName, lobbyId });
-});
-
-// 👉 On successful join
-socket.on("joinedLobby", (state) => {
-  joinScreen.style.display = "none";
-  gameScreen.style.display = "block";
-  playerInfo.innerText = `👤 ${playerName} | Lobby: ${lobbyId}`;
-  renderState(state);
-});
-
-// 👉 Update game state
-socket.on("gameState", (state) => {
-  renderState(state);
-});
-
-// 👉 Receive chat
-socket.on("chatMessage", ({ sender, message, system }) => {
-  const msg = document.createElement("div");
-  msg.innerHTML = `<strong style="color:${system ? '#003f5c' : '#000'}">${sender}:</strong> ${message}`;
-  chatLog.appendChild(msg);
-  chatLog.scrollTop = chatLog.scrollHeight;
-});
-
-// 👉 Send chat
-chatSend.addEventListener("click", sendChat);
+sendBtn.addEventListener("click", sendMessage);
 chatInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendChat();
+  if (e.key === "Enter") sendMessage();
 });
 
-function sendChat() {
-  const message = chatInput.value.trim();
-  if (!message) return;
-  socket.emit("chatMessage", { lobbyId, sender: playerName, message });
-  chatInput.value = "";
+function sendMessage() {
+  const msg = chatInput.value.trim();
+  if (msg) {
+    socket.emit("chatMessage", { lobbyId, sender: playerName, message: msg });
+    chatInput.value = "";
+  }
 }
 
-// 👉 Leave
-leaveButton.addEventListener("click", () => {
-  socket.emit("leaveLobby", { lobbyId, playerName });
-  location.reload();
+socket.on("chatMessage", ({ sender, message, system }) => {
+  const entry = document.createElement("div");
+  entry.innerHTML = `<strong style="color:${system ? 'navy' : 'black'}">${sender}:</strong> ${message}`;
+  chatBox.appendChild(entry);
+  chatBox.scrollTop = chatBox.scrollHeight;
 });
 
-// 👉 Render cards & pile (placeholder)
-function renderState(state) {
-  handContainer.innerHTML = "";
-  const player = state.players.find(p => p.name === playerName);
-  if (player) {
-    player.hand.forEach(card => {
-      const img = document.createElement("img");
-      img.src = `assets/cards/${card}`;
-      handContainer.appendChild(img);
-    });
-  }
+socket.on("joinedLobby", () => {
+  document.getElementById("lobby").style.display = "none";
+  gameArea.style.display = "block";
+});
 
-  if (state.pileTopCard) {
-    pileCard.src = `assets/cards/${state.pileTopCard}`;
-  }
+socket.on("gameState", ({ players, pileTopCard, drawPileCount }) => {
+  const player = players.find(p => p.name === playerName);
+  if (!player) return;
 
-  if (state.drawPileCount > 0) {
-    drawStack.style.display = "inline";
+  handArea.innerHTML = "";
+  player.hand.forEach(card => {
+    const img = document.createElement("img");
+    img.src = `assets/cards/${card}`;
+    img.className = "card";
+    img.onclick = () => socket.emit("playCard", { lobbyId, playerName, card, selectedColor });
+    handArea.appendChild(img);
+  });
+
+  // Update opponents
+  opponentsList.innerHTML = players
+    .filter(p => p.name !== playerName)
+    .map(p => `<div>${p.name} 🃏 ${p.hand.length}</div>`)
+    .join("");
+
+  // Update pile
+  if (pileTopCard) {
+    pileCard.src = `assets/cards/${pileTopCard}`;
+    pileCard.style.display = "block";
   } else {
-    drawStack.style.display = "none";
+    pileCard.style.display = "none";
   }
-}
+
+  // Update draw stack count
+  drawStack.onclick = () => {
+    socket.emit("drawCard", { lobbyId, playerName });
+  };
+});
+
+// Wild color selector UI logic
+socket.on("selectColor", () => {
+  const color = prompt("Choose a color (red, green, blue, yellow):").toLowerCase();
+  if (["red", "green", "blue", "yellow"].includes(color)) {
+    selectedColor = color;
+  } else {
+    selectedColor = "red";
+  }
+});
