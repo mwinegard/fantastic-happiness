@@ -10,33 +10,20 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 10;
-const LOBBY_TIMEOUT_HOURS = 12;
+const DEFAULT_LOBBY = "default";
+const animalNames = ["Tiger", "Lion", "Panther", "Eagle", "Fox", "Bear", "Wolf", "Shark", "Falcon", "Owl"];
+const numberWords = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
 
-let lobbies = {};
-const scoresFile = path.join(__dirname, "scores.json");
-
-function loadScores() {
-  try {
-    return JSON.parse(fs.readFileSync(scoresFile, "utf-8"));
-  } catch {
-    return {};
+let lobbies = {
+  [DEFAULT_LOBBY]: {
+    createdAt: Date.now(),
+    players: [],
+    deck: [],
+    topCard: null,
+    currentPlayer: null,
+    currentIndex: 0,
   }
-}
-
-function saveScores(scores) {
-  fs.writeFileSync(scoresFile, JSON.stringify(scores, null, 2));
-}
-
-function cleanupLobbies() {
-  const now = Date.now();
-  for (const [lobbyId, lobby] of Object.entries(lobbies)) {
-    if (now - lobby.createdAt > LOBBY_TIMEOUT_HOURS * 3600000) {
-      delete lobbies[lobbyId];
-    }
-  }
-}
-
-setInterval(cleanupLobbies, 3600000);
+};
 
 function initDeck() {
   const colors = ["red", "blue", "green", "yellow"];
@@ -69,15 +56,12 @@ function emitState(lobby) {
   for (const p of lobby.players) {
     io.to(p.id).emit("updateState", state);
   }
-
-  console.log(`[EMIT STATE] Sent to: ${lobby.players.map(p => p.name).join(", ")}`);
 }
 
 function broadcastChat(lobby, sender, message) {
   for (const p of lobby.players) {
     io.to(p.id).emit("chat", { sender, message });
   }
-  console.log(`[CHAT] ${sender}: ${message}`);
 }
 
 function nextTurn(lobby) {
@@ -91,28 +75,18 @@ function startGame(lobby) {
   for (const p of lobby.players) {
     p.cards = lobby.deck.splice(0, 7);
   }
-
-  // Ensure top card isn't wild
-  let drawn;
-  do {
-    drawn = lobby.deck.pop();
-  } while (drawn.startsWith("wild"));
-  lobby.topCard = drawn;
-
+  lobby.topCard = lobby.deck.pop();
   lobby.currentIndex = 0;
   lobby.currentPlayer = lobby.players[0].name;
-
   broadcastChat(lobby, "SUE", "Game started!");
   emitState(lobby);
-
-  console.log(`[GAME START] Players: ${lobby.players.map(p => p.name).join(", ")}`);
 }
 
 function removePlayer(id, lobby) {
   const index = lobby.players.findIndex(p => p.id === id);
   if (index !== -1) {
     const [removed] = lobby.players.splice(index, 1);
-    broadcastChat(lobby, "SUE", `${removed.name} has left or been removed.`);
+    broadcastChat(lobby, "SUE", `${removed.name} has left the game.`);
     emitState(lobby);
   }
 }
@@ -120,99 +94,63 @@ function removePlayer(id, lobby) {
 app.use(express.static(path.join(__dirname, "public")));
 
 io.on("connection", socket => {
-  socket.on("joinLobby", ({ name, lobby }) => {
-    if (!name || !lobby) return;
-    if (!lobbies[lobby]) {
-      lobbies[lobby] = {
-        createdAt: Date.now(),
-        players: [],
-        deck: [],
-        topCard: null,
-        currentPlayer: null,
-        currentIndex: 0,
-      };
-    }
+  const lobby = lobbies[DEFAULT_LOBBY];
+  if (lobby.players.length >= MAX_PLAYERS) {
+    socket.emit("lobbyFull");
+    return;
+  }
 
-    const lobbyData = lobbies[lobby];
+  const index = lobby.players.length;
+  const randomAnimal = animalNames[Math.floor(Math.random() * animalNames.length)];
+  const autoName = `${numberWords[index]}-${randomAnimal}`;
 
-    if (lobbyData.players.length >= MAX_PLAYERS) {
-      socket.emit("lobbyFull");
-      return;
-    }
+  lobby.players.push({ name: autoName, id: socket.id, cards: [], score: 0 });
+  socket.join(DEFAULT_LOBBY);
+  socket.emit("assignedName", autoName);
 
-    lobbyData.players.push({ name, id: socket.id, cards: [], score: 0 });
-    socket.join(lobby);
-    broadcastChat(lobbyData, "SUE", `${name} has joined the game.`);
+  broadcastChat(lobby, "SUE", `${autoName} has joined.`);
 
-    console.log(`[JOIN] ${name} joined lobby ${lobby}`);
+  if (lobby.players.length === 2) {
+    broadcastChat(lobby, "SUE", "Game starting in 5 seconds...");
+    setTimeout(() => startGame(lobby), 5000);
+  }
 
-    if (lobbyData.players.length === 2) {
-      broadcastChat(lobbyData, "SUE", "Game will start in 30 seconds...");
-      let seconds = 30;
-      const interval = setInterval(() => {
-        seconds -= 5;
-        if (seconds <= 0) {
-          clearInterval(interval);
-          startGame(lobbyData);
-        } else {
-          broadcastChat(lobbyData, "SUE", `${seconds} seconds until game starts...`);
-        }
-      }, 5000);
-    } else {
-      emitState(lobbyData); // immediately update UI on join
+  socket.on("chat", ({ sender, message }) => {
+    broadcastChat(lobby, sender, message);
+  });
+
+  socket.on("drawCard", () => {
+    const p = lobby.players.find(p => p.id === socket.id);
+    if (p && lobby.deck.length) {
+      p.cards.push(lobby.deck.pop());
+      nextTurn(lobby);
     }
   });
 
-  socket.on("chat", ({ sender, message, lobby }) => {
-    const l = lobbies[lobby];
-    if (l) broadcastChat(l, sender, message);
-  });
-
-  socket.on("drawCard", ({ name, lobby }) => {
-    const l = lobbies[lobby];
-    const p = l?.players.find(p => p.name === name);
-    if (p && l?.deck.length) {
-      p.cards.push(l.deck.pop());
-      nextTurn(l);
-    }
-  });
-
-  socket.on("playCard", ({ name, lobby, index }) => {
-    const l = lobbies[lobby];
-    const p = l?.players.find(p => p.name === name);
-    if (!l || !p) return;
+  socket.on("playCard", ({ index }) => {
+    const p = lobby.players.find(p => p.id === socket.id);
+    if (!p) return;
 
     const card = p.cards[index];
     if (!card) return;
 
-    const [topColor] = l.topCard.split("_");
+    const [topColor] = lobby.topCard.split("_");
     const [cardColor] = card.split("_");
 
     if (cardColor === topColor || card.startsWith("wild")) {
-      l.topCard = card;
+      lobby.topCard = card;
       p.cards.splice(index, 1);
 
       if (p.cards.length === 0) {
-        broadcastChat(l, "SUE", `${p.name} wins the round!`);
-        const scores = loadScores();
-        const points = l.players.flatMap(p => p.cards).length * 10;
-        scores[p.name] = (scores[p.name] || 0) + points;
-        saveScores(scores);
+        broadcastChat(lobby, "SUE", `${p.name} wins the round!`);
       } else {
-        nextTurn(l);
+        nextTurn(lobby);
       }
     }
   });
 
-  socket.on("leaveLobby", ({ name, lobby }) => {
-    const l = lobbies[lobby];
-    if (l) removePlayer(socket.id, l);
-  });
-
   socket.on("disconnect", () => {
-    for (const [lobbyId, lobby] of Object.entries(lobbies)) {
-      removePlayer(socket.id, lobby);
-    }
+    removePlayer(socket.id, lobby);
   });
 });
 
