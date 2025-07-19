@@ -16,7 +16,7 @@ const opponentsDiv = document.getElementById("opponents");
 const wildIndicator = document.getElementById("wild-indicator");
 const yourTurnLabel = document.getElementById("your-turn");
 
-let playerId, currentState = {}, saidUNO = false;
+let playerId, currentLobby, currentState = {}, saidUNO = false;
 
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -24,6 +24,7 @@ joinForm.addEventListener("submit", (e) => {
   const lobby = lobbyInput.value.trim();
   if (name && lobby) {
     socket.emit("join", { name, lobby });
+    currentLobby = lobby;
     playSound("joined");
   }
 });
@@ -36,6 +37,7 @@ unoButton.addEventListener("click", () => {
 function renderState(state) {
   currentState = state;
   playerId = socket.id;
+
   const hand = state.hands[playerId] || [];
   const topCard = state.discardPile.at(-1);
   const wildColor = state.wildColor;
@@ -58,14 +60,21 @@ function renderState(state) {
   wildIndicator.innerText = wildColor ? `Wild Color: ${wildColor.toUpperCase()}` : "";
 
   drawPile.innerHTML = "";
-  const drawImg = document.createElement("img");
-  drawImg.src = "/assets/cards/back.png";
-  drawImg.className = "card";
-  drawImg.addEventListener("click", () => {
-    socket.emit("drawCard", { lobby: state.players[0].id });
+  for (let i = 0; i < 3; i++) {
+    const drawImg = document.createElement("img");
+    drawImg.src = "/assets/cards/back.png";
+    drawImg.className = "card";
+    drawImg.style.marginLeft = `${i * 3}px`;
+    drawImg.style.position = "absolute";
+    drawImg.style.top = `${i}px`;
+    drawImg.style.left = `${i}px`;
+    drawPile.appendChild(drawImg);
+  }
+
+  drawPile.onclick = () => {
+    socket.emit("drawCard", { lobby: currentLobby });
     playSound("draw");
-  });
-  drawPile.appendChild(drawImg);
+  };
 
   if (hand.length === 2 && state.currentTurn === playerId) {
     unoButton.style.display = "inline-block";
@@ -80,11 +89,7 @@ function renderState(state) {
     return `${pointer} ${p.name} 🃏 ${p.handSize}`;
   }).join(" | ");
 
-  if (state.currentTurn === playerId) {
-    yourTurnLabel.style.display = "block";
-  } else {
-    yourTurnLabel.style.display = "none";
-  }
+  yourTurnLabel.style.display = state.currentTurn === playerId ? "block" : "none";
 
   animateTimer();
   gameDiv.style.display = "block";
@@ -99,7 +104,7 @@ function tryPlayCard(card) {
       btn.onclick = () => {
         colorPicker.style.display = "none";
         socket.emit("playCard", {
-          lobby: currentState.players[0].id,
+          lobby: currentLobby,
           card,
           chosenColor: btn.dataset.color,
           saidUNO
@@ -109,12 +114,11 @@ function tryPlayCard(card) {
     });
   } else {
     socket.emit("playCard", {
-      lobby: currentState.players[0].id,
+      lobby: currentLobby,
       card,
       saidUNO
     });
 
-    // Play based on card type
     if (["skip", "reverse", "draw"].some(a => card.includes(a))) {
       playSound(card.includes("reverse") ? "reverse" : "skip");
     } else {
