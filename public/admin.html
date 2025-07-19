@@ -2,73 +2,107 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Admin</title>
+  <title>UNO Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: Arial; padding: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    button { padding: 4px 10px; }
-    h1 { color: #003366; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+      background: #f8f8f8;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+    }
+    .lobby {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .player {
+      margin-left: 10px;
+      margin-top: 5px;
+    }
+    button {
+      padding: 6px 12px;
+      margin: 5px;
+      cursor: pointer;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:hover {
+      background: #a71d2a;
+    }
   </style>
 </head>
 <body>
-  <h1>🎛️ UNO Admin Panel</h1>
-  <div id="lobbyTableContainer">
-    <table>
-      <thead>
-        <tr>
-          <th>Lobby</th>
-          <th>Players</th>
-          <th>Scores</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="lobbyTableBody"></tbody>
-    </table>
-  </div>
+  <h1>UNO Admin Panel</h1>
+  <div id="lobbies">Loading lobbies...</div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
 
-    function refreshLobbies() {
-      socket.emit("adminRequestLobbies");
+    const lobbiesDiv = document.getElementById("lobbies");
+
+    function renderLobbies(data) {
+      lobbiesDiv.innerHTML = '';
+      if (Object.keys(data).length === 0) {
+        lobbiesDiv.innerHTML = "<p><i>No active lobbies at this time.</i></p>";
+        return;
+      }
+
+      Object.entries(data).forEach(([lobbyId, lobby]) => {
+        const lobbyDiv = document.createElement("div");
+        lobbyDiv.className = "lobby";
+
+        const title = document.createElement("h3");
+        title.textContent = `Lobby: ${lobbyId}`;
+        lobbyDiv.appendChild(title);
+
+        const playerList = document.createElement("ul");
+        (lobby.players || []).forEach(player => {
+          const li = document.createElement("li");
+          li.className = "player";
+          li.textContent = `${player.name} (${player.id}) - Score: ${player.score || 0} `;
+          
+          const kickBtn = document.createElement("button");
+          kickBtn.textContent = "Kick";
+          kickBtn.onclick = () => {
+            socket.emit("adminKickPlayer", { lobbyId, playerId: player.id });
+          };
+
+          li.appendChild(kickBtn);
+          playerList.appendChild(li);
+        });
+
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "Close Lobby";
+        closeBtn.onclick = () => {
+          socket.emit("adminCloseLobby", lobbyId);
+        };
+
+        lobbyDiv.appendChild(playerList);
+        lobbyDiv.appendChild(closeBtn);
+        lobbiesDiv.appendChild(lobbyDiv);
+      });
     }
 
-    socket.on("adminLobbies", (lobbies) => {
-      const tbody = document.getElementById("lobbyTableBody");
-      tbody.innerHTML = "";
-
-      Object.entries(lobbies).forEach(([id, lobby]) => {
-        const row = document.createElement("tr");
-
-        const players = lobby.players.map(p => p.name).join(", ");
-        const scores = lobby.players.map(p => `${p.name}: ${p.score || 0}`).join(" | ");
-
-        row.innerHTML = `
-          <td>${id}</td>
-          <td>${players}</td>
-          <td>${scores}</td>
-          <td>
-            <button onclick="closeLobby('${id}')">Close Lobby</button>
-            ${lobby.players.map(p => `<button onclick="kickPlayer('${id}','${p.id}')">Kick ${p.name}</button>`).join(" ")}
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
+    socket.on("connect", () => {
+      socket.emit("adminRequestLobbies");
     });
 
-    function kickPlayer(lobbyId, playerId) {
-      socket.emit("adminKickPlayer", { lobbyId, playerId });
-    }
+    socket.on("adminLobbies", (data) => {
+      renderLobbies(data);
+    });
 
-    function closeLobby(lobbyId) {
-      socket.emit("adminCloseLobby", lobbyId);
-    }
-
-    setInterval(refreshLobbies, 5000);
-    refreshLobbies();
+    setInterval(() => {
+      socket.emit("adminRequestLobbies");
+    }, 5000);
   </script>
 </body>
 </html>
