@@ -9,138 +9,224 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const lobbies = {};
+const highScores = {}; // To track cumulative player scores
 
+// Serve frontend
 app.use(express.static("public"));
-
-// Admin login
 app.use("/admin.html", basicAuth({
   users: { admin: "password" },
   challenge: true
 }));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+// When lobby is full, send error
+function sendLobbyFull(socket) {
+  socket.emit("chatMessage", { from: "SUE", text: "**Lobby is full, try another.**" });
+  socket.disconnect(true);
+}
 
-io.on("connection", (socket) => {
+// Utility: broadcast game messages as SUE
+function broadcastGameMsg(lobbyId, msg) {
+  io.to(lobbyId).emit("chatMessage", { from: "SUE", text: `**${msg}**` });
+}
+
+io.on("connection", socket => {
   socket.on("joinLobby", ({ playerName, lobbyId }) => {
     if (!lobbies[lobbyId]) {
-      lobbies[lobbyId] = { players: [], deck: [], discard: [], timer: null };
+      lobbies[lobbyId] = {
+        players: [],
+        deck: [],
+        discard: [],
+        currentTurnIndex: 0,
+        countdown: null
+      };
     }
+    const lobby = lobbies[lobbyId];
+    if (lobby.players.length >= 10) return sendLobbyFull(socket);
 
-    const player = {
+    // Assign consistent UNO color to player
+    const usedColors = lobby.players.map(p => p.color);
+    const colors = ["red","blue","green","yellow"];
+    const color = colors.find(c => !usedColors.includes(c)) || colors[Math.floor(Math.random()*4)];
+
+    socket.join(lobbyId);
+    const newPlayer = {
       id: socket.id,
       name: playerName,
+      color,
       hand: [],
-      handCount: 0,
       score: 0,
-      missedTurns: 0
+      missed: 0
     };
+    lobby.players.push(newPlayer);
 
-    lobbies[lobbyId].players.push(player);
-    socket.join(lobbyId);
-    startGame(lobbyId);
+    // Pre-game checks:
+    io.to(lobbyId).emit("chatMessage", { from: "SUE", text: `**${playerName} has joined the lobby.**` });
+
+    if (lobby.players.length < 2) {
+      broadcastGameMsg(lobbyId, "Waiting for players...");
+    } else if (!lobby.countdown) {
+      // Start countdown
+      let t = 30;
+      broadcastGameMsg(lobbyId, "Game will begin in 30 seconds");
+      lobby.countdown = setInterval(() => {
+        t -= 5;
+        if (t > 0) broadcastGameMsg(lobbyId, `Game starts in ${t} seconds`);
+        else {
+          clearInterval(lobby.countdown);
+          lobby.countdown = null;
+          startGame(lobbyId);
+        }
+      }, 5000);
+    }
+
+    emitState(lobbyId);
   });
 
-  socket.on("playCard", ({ card, wildColor }) => {
-    const lobby = getLobbyForSocket(socket.id);
-    if (!lobby) return;
-    lobby.discard.push(card);
-    if (card.includes("wild") && wildColor) {
-      lobby.lastWildColor = wildColor;
-    } else {
-      lobby.lastWildColor = null;
-    }
-    nextTurn(lobby);
-    emitState(lobby);
+  socket.on("playCard", data => {
+    const lobbyId = getLobbyId(socket.id);
+    if (!lobbyId) return;
+    const lobby = lobbies[lobbyId];
+    const player = lobby.players.find(p => p.id === socket.id);
+    if (!player) return;
+
+    // Remove played card
+    const i = player.hand.indexOf(data.card);
+    if (i === -1) return;
+    player.hand.splice(i,1);
+    lobby.discard.push(data.card);
+    lobby.lastWildColor = data.wildColor || null;
+    lobby.currentTurnIndex = (lobby.currentTurnIndex + 1) % lobby.players.length;
+    emitState(lobbyId);
   });
 
   socket.on("drawCard", () => {
-    const lobby = getLobbyForSocket(socket.id);
-    if (!lobby) return;
+    const lobbyId = getLobbyId(socket.id);
+    if (!lobbyId) return;
+    const lobby = lobbies[lobbyId];
     const player = lobby.players.find(p => p.id === socket.id);
-    if (player) player.hand.push(drawFromDeck(lobby));
-    emitState(lobby);
+    if (player) {
+      player.hand.push(draw(lobby));
+      lobby.currentTurnIndex = (lobby.currentTurnIndex + 1) % lobby.players.length;
+      emitState(lobbyId);
+    }
   });
 
   socket.on("turnTimeout", () => {
-    const lobby = getLobbyForSocket(socket.id);
-    if (!lobby) return;
+    const lobbyId = getLobbyId(socket.id);
+    if (!lobbyId) return;
+    const lobby = lobbies[lobbyId];
     const player = lobby.players.find(p => p.id === socket.id);
     if (!player) return;
-    player.hand.push(drawFromDeck(lobby));
-    player.missedTurns++;
-    if (player.missedTurns >= 3) removePlayer(socket.id, lobby);
-    else nextTurn(lobby);
-    emitState(lobby);
+
+    player.hand.push(draw(lobby));
+    player.missed++;
+    if (player.missed >= 3) removePlayer(peer.id, lobby);
+    else lobby.currentTurnIndex = (lobby.currentTurnIndex + 1) % lobby.players.length;
+    emitState(lobbyId);
   });
 
-  socket.on("chatMessage", (msg) => {
+  socket.on("chatMessage", msg => {
     const lobbyId = getLobbyId(socket.id);
-    if (lobbyId) io.to(lobbyId).emit("chatMessage", msg);
+    if (!lobbyId) return;
+    const player = lobbies[lobbyId].players.find(p => p.id === socket.id);
+    if (!player) return;
+    io.to(lobbyId).emit("chatMessage", { from: player.name, color: player.color, text: msg });
   });
 
   socket.on("leaveGame", () => {
-    const lobby = getLobbyForSocket(socket.id);
-    if (lobby) {
-      removePlayer(socket.id, lobby);
-      emitState(lobby);
-    }
+    const lobbyId = getLobbyId(socket.id);
+    if (!lobbyId) return;
+    removePlayer(socket.id, lobbies[lobbyId]);
+    emitState(lobbyId);
   });
 
   socket.on("disconnect", () => {
-    const lobby = getLobbyForSocket(socket.id);
-    if (lobby) {
-      removePlayer(socket.id, lobby);
-      emitState(lobby);
-    }
+    const lobbyId = getLobbyId(socket.id);
+    if (!lobbyId) return;
+    removePlayer(socket.id, lobbies[lobbyId]);
+    emitState(lobbyId);
   });
 
-  // 🔧 Admin features
-  socket.on("adminRequestLobbies", () => {
-    socket.emit("adminLobbies", lobbies);
-  });
+  // --- Admin handlers ---
+  socket.on("adminRequestLobbies", () => socket.emit("adminLobbies", {
+    lobbies,
+    highScores
+  }));
 
   socket.on("adminKickPlayer", ({ lobbyId, playerId }) => {
-    const lobby = lobbies[lobbyId];
-    if (lobby) {
-      removePlayer(playerId, lobby);
-      emitState(lobby);
+    const l = lobbies[lobbyId];
+    if (l) {
+      removePlayer(playerId, l);
+      emitState(lobbyId);
     }
   });
 
-  socket.on("adminCloseLobby", (lobbyId) => {
+  socket.on("adminCloseLobby", lobbyId => {
     delete lobbies[lobbyId];
   });
 });
 
+// --- Utility Functions ---
+
 function startGame(lobbyId) {
   const lobby = lobbies[lobbyId];
-  const deck = createDeck();
-  shuffle(deck);
-  lobby.deck = deck;
-  lobby.discard = [deck.pop()];
-  lobby.lastWildColor = null;
+  clearInterval(lobby.countdown);
+  lobby.countdown = null;
 
-  for (const p of lobby.players) {
+  lobby.deck = createDeck();
+  shuffle(lobby.deck);
+  lobby.discard = [draw(lobby)];
+  lobby.players.forEach((p, idx) => {
     p.hand = [];
-    for (let i = 0; i < 7; i++) {
-      p.hand.push(deck.pop());
-    }
-    p.handCount = p.hand.length;
+    for (let i = 0; i < 7; i++) p.hand.push(draw(lobby));
+    p.missed = 0;
+  });
+  broadcastGameMsg(lobbyId, `Starting order: ${lobby.players.map(p => p.name).join(", ")}`);
+  emitState(lobbyId);
+}
+
+function emitState(lobbyId) {
+  const lobby = lobbies[lobbyId];
+  if (!lobby) return;
+  const turnId = lobby.players[lobby.currentTurnIndex]?.id;
+
+  lobby.players.forEach(p => {
+    io.to(p.id).emit("gameState", {
+      players: lobby.players.map(pl => ({
+        id: pl.id,
+        name: pl.name,
+        handCount: pl.hand.length,
+        score: pl.score
+      })),
+      currentTurn: turnId,
+      topCard: lobby.discard[lobby.discard.length - 1],
+      lastWildColor: lobby.lastWildColor,
+      yourHand: p.hand
+    });
+  });
+}
+
+function removePlayer(playerId, lobby) {
+  const idx = lobby.players.findIndex(p => p.id === playerId);
+  if (idx === -1) return;
+  const removed = lobby.players.splice(idx,1)[0];
+  const hand = removed.hand;
+  if (lobby.players.length === 1) {
+    const winner = lobby.players[0];
+    const pts = calculatePoints(hand);
+    winner.score += pts;
+    highScores[winner.name] = (highScores[winner.name]||0) + pts;
+    io.to(winner.id).emit("chatMessage", { from:"SUE", text:"**Congratulations, you are the Champion!**" });
+    delete lobbies[getLobbyIdByLobby(lobby)];
+  } else {
+    // redistribute cards
+    hand.forEach((c,i) => {
+      lobby.players[i % lobby.players.length].hand.push(c);
+    });
   }
-
-  lobby.currentTurn = lobby.players[0]?.id;
-  emitState(lobby);
 }
 
-function nextTurn(lobby) {
-  const currentIndex = lobby.players.findIndex(p => p.id === lobby.currentTurn);
-  const nextIndex = (currentIndex + 1) % lobby.players.length;
-  lobby.currentTurn = lobby.players[nextIndex].id;
-}
-
-function drawFromDeck(lobby) {
+function draw(lobby) {
   if (lobby.deck.length === 0) {
     lobby.deck = [...lobby.discard];
     lobby.discard = [];
@@ -149,97 +235,40 @@ function drawFromDeck(lobby) {
   return lobby.deck.pop();
 }
 
-function removePlayer(socketId, lobby) {
-  const leaving = lobby.players.find(p => p.id === socketId || p.id === socketId.id);
-  if (!leaving) return;
-  const handToSplit = [...leaving.hand];
-  lobby.players = lobby.players.filter(p => p.id !== socketId && p.id !== socketId.id);
-
-  if (lobby.players.length === 1) {
-    lobby.players[0].score += calculatePoints(handToSplit);
-    io.to(lobby.players[0].id).emit("chatMessage", "🎉 Congratulations, you are the Champion!");
-    delete lobbies[getLobbyId(socketId)];
-  } else {
-    let i = 0;
-    while (handToSplit.length > 0) {
-      lobby.players[i % lobby.players.length].hand.push(handToSplit.pop());
-      i++;
-    }
-  }
-
-  if (lobby.players.length === 0) {
-    delete lobbies[getLobbyId(socketId)];
-  }
-}
-
 function calculatePoints(cards) {
-  let total = 0;
-  for (const c of cards) {
-    if (c.match(/[0-9]/)) total += parseInt(c.match(/[0-9]/)[0]);
-    else if (c.includes("draw4") || c.includes("wild")) total += 50;
-    else if (c.includes("draw") || c.includes("skip") || c.includes("reverse")) total += 20;
-  }
-  return total;
-}
-
-function emitState(lobby) {
-  for (const p of lobby.players) {
-    io.to(p.id).emit("gameState", {
-      players: lobby.players.map(pl => ({
-        id: pl.id,
-        name: pl.name,
-        handCount: pl.hand.length,
-        score: pl.score
-      })),
-      currentTurn: lobby.currentTurn,
-      topCard: lobby.discard[lobby.discard.length - 1],
-      lastWildColor: lobby.lastWildColor,
-      deckSize: lobby.deck.length,
-      discardSize: lobby.discard.length,
-      yourHand: p.hand
-    });
-  }
+  return cards.reduce((acc,c) => {
+    if (/\d/.test(c)) return acc + parseInt(c.match(/\d/)[0]);
+    if (c.includes("draw4")||c.includes("wild")) return acc + 50;
+    return acc + 20;
+  },0);
 }
 
 function getLobbyId(socketId) {
-  return Object.keys(lobbies).find(lobbyId =>
-    lobbies[lobbyId].players.some(p => p.id === socketId || p.id === socketId.id)
-  );
-}
-
-function getLobbyForSocket(socketId) {
-  const lobbyId = getLobbyId(socketId);
-  return lobbies[lobbyId];
+  return Object.entries(lobbies).find(([_, lb]) => 
+    lb.players.some(p => p.id === socketId)
+  )?.[0];
 }
 
 function createDeck() {
-  const colors = ["red", "yellow", "green", "blue"];
-  const values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "skip", "reverse", "draw"];
-  const deck = [];
-
-  for (const color of colors) {
-    for (const value of values) {
-      if (value === "0") deck.push(`${color}_0.png`);
-      else {
-        deck.push(`${color}_${value}.png`);
-        deck.push(`${color}_${value}.png`);
-      }
-    }
-  }
-
-  ["wild.png", "wild_draw4.png"].forEach(card => {
-    deck.push(card, card);
+  const colors = ["red","yellow","green","blue"];
+  const vals = ["0","1","2","3","4","5","6","7","8","9","skip","reverse","draw"];
+  const d = [];
+  colors.forEach(col => {
+    vals.forEach(v => {
+      d.push(`${col}_${v}.png`);
+      if (v !== "0") d.push(`${col}_${v}.png`);
+    });
   });
-
-  return deck;
+  ["wild.png","wild_draw4.png"].forEach(c => { d.push(c,c); });
+  return d;
 }
 
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+function shuffle(a) {
+  for (let i=a.length-1;i>0;i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
   }
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
