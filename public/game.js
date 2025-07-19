@@ -8,6 +8,9 @@ const discardPile = document.getElementById("discard-pile");
 const drawStack = document.getElementById("draw-stack");
 const opponentsContainer = document.getElementById("opponents-container");
 const wildColorIndicator = document.getElementById("wild-color-indicator");
+const chatForm = document.getElementById("chat-form");
+const chatInput = document.getElementById("chat-input");
+const chatMessages = document.getElementById("chat-messages");
 
 let isMyTurn = false;
 
@@ -31,15 +34,15 @@ socket.on("gameState", (state) => {
   document.getElementById("game-container").style.display = "block";
   isMyTurn = state.isMyTurn;
 
-  // Render discard
+  // Discard pile
   discardPile.innerHTML = `<img src="assets/cards/${state.table[state.table.length - 1]}" class="card" />`;
 
-  // Show current wild color
+  // Wild color display
   wildColorIndicator.innerHTML = state.lastWildColor
     ? `🎨 ${state.lastWildColor.toUpperCase()}`
     : "";
 
-  // Render hand
+  // Player hand
   handContainer.innerHTML = "";
   state.hand.forEach((card) => {
     const img = document.createElement("img");
@@ -59,12 +62,11 @@ socket.on("gameState", (state) => {
     handContainer.appendChild(img);
   });
 
-  // Render opponents
+  // Opponents
   opponentsContainer.innerHTML = "";
   state.others.forEach((opponent) => {
     const row = document.createElement("div");
     row.className = "opponent";
-
     row.innerText = `${state.currentPlayer === opponent.name ? "👉 " : ""}${opponent.name} 🃏 ${opponent.count} (${opponent.score})`;
     opponentsContainer.appendChild(row);
   });
@@ -79,3 +81,27 @@ document.getElementById("leave-button").addEventListener("click", () => {
   socket.emit("leaveGame");
   location.reload();
 });
+
+// Chat
+chatForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const msg = chatInput.value.trim();
+  if (msg) {
+    socket.emit("chat", msg);
+    chatInput.value = "";
+  }
+});
+
+socket.on("chat", ({ name, message }) => {
+  const entry = document.createElement("div");
+  entry.textContent = `${name}: ${message}`;
+  chatMessages.appendChild(entry);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
+// Optional: Unregister old service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((reg) => reg.unregister());
+  });
+}
