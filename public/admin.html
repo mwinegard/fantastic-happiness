@@ -31,7 +31,9 @@
 <body>
   <h1>Admin Panel</h1>
   <div id="admin"></div>
-
+<div><h2>Leaderboard</h2>
+  <button onclick="clearLeaderboard()">🧹 Clear Leaderboard</button></div>
+  
   <script>
     async function loadAdmin() {
       const res = await fetch("/admin-state");
@@ -79,6 +81,15 @@
     }
 
     loadAdmin();
+
+    function clearLeaderboard() {
+  if (confirm("Are you sure? This will erase all scores.")) {
+    fetch("/admin/clear-scores", { method: "POST" }).then(res => {
+      if (res.ok) alert("Leaderboard cleared.");
+      else alert("Failed to clear leaderboard.");
+    });
+  }
+}
   </script>
 </body>
 </html>
