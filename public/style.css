@@ -1,128 +1,24 @@
 body {
-  font-family: Arial, sans-serif;
-  background: #e8f1f8;
+  font-family: sans-serif;
   margin: 0;
-  padding: 0;
-  text-align: center;
+  padding: 20px;
+  background: #f8f9fa;
 }
-
-/* Join Form */
-#lobby-form {
-  margin-top: 80px;
+#lobby, #game {
+  max-width: 500px;
+  margin: auto;
 }
-form input,
-form button {
+input, button {
   padding: 10px;
   margin: 5px;
-  font-size: 16px;
 }
-
-/* Game Layout */
-#player-hand,
-#discard-pile,
-#draw-pile {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-  flex-wrap: wrap;
-}
-#discard-section {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-}
-.card {
-  width: 80px;
-  margin: 5px;
-  transition: transform 0.2s;
-  cursor: pointer;
-}
-.card:hover {
-  transform: scale(1.1);
-}
-
-/* UNO Button */
-#uno-button {
-  background: #ff4d4d;
-  color: white;
-  font-size: 20px;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  margin: 10px auto;
-  display: block;
-  animation: pulse 1s infinite;
-  cursor: pointer;
-}
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.08); }
-  100% { transform: scale(1); }
-}
-
-/* Wild Color Indicator */
-#wild-color-indicator {
-  font-size: 32px;
-}
-
-/* Turn Info */
-#your-turn {
-  font-weight: bold;
-  margin-top: 10px;
-}
-
-/* Timer Bar */
-#turn-timer {
-  width: 80%;
-  height: 6px;
-  background: #ccc;
-  margin: 10px auto;
-  border-radius: 4px;
-}
-#timer-bar {
-  height: 100%;
-  background: #4caf50;
-  width: 100%;
-  transition: width 1s linear;
-  border-radius: 4px;
-}
-
-/* Scoreboard */
-#scoreboard {
-  margin: 10px auto;
-  font-size: 16px;
-}
-#scoreboard .current {
-  font-weight: bold;
-  color: #d62828;
-}
-
-/* Wild Selector */
-#wild-selector button {
-  font-size: 18px;
-  padding: 5px 10px;
-  margin: 4px;
-}
-
-/* Chat System */
 #chat {
   margin-top: 20px;
 }
-#chat input {
-  padding: 5px;
-  font-size: 14px;
-}
-#chat-send {
-  padding: 5px 10px;
-  font-size: 14px;
-}
 #messages {
-  max-height: 180px;
+  height: 200px;
   overflow-y: auto;
-  margin: 10px;
   background: #fff;
-  padding: 5px;
-  border-radius: 8px;
-  border: 1px solid #aaa;
+  padding: 10px;
+  border: 1px solid #ccc;
 }
