@@ -1,83 +1,13 @@
-
-body {
-  font-family: "Segoe UI", sans-serif;
-  background: linear-gradient(to right, #0078D4, #00B4F0);
-  color: white;
-  margin: 0;
-  padding: 20px;
-  text-align: center;
-}
-
-h2, h3 {
-  color: #ffffff;
-  margin: 10px 0;
-}
-
-#table-pile img {
-  height: 120px;
-  margin: 10px auto;
-}
-
-#hand {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 15px;
-}
-
-#hand img {
-  height: 100px;
-  border-radius: 8px;
-  transition: transform 0.3s ease;
-}
-
-#hand img:hover {
-  transform: scale(1.1);
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.5);
-}
-
-button {
-  background: #ffffff;
-  color: #0078D4;
-  border: none;
-  border-radius: 4px;
-  padding: 10px 20px;
-  margin-top: 20px;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #e6f4ff;
-}
-
-#chat {
-  margin-top: 20px;
-}
-
-#chat input {
-  width: 60%;
-  padding: 10px;
-  border-radius: 4px;
-  border: none;
-  font-size: 14px;
-  margin-right: 8px;
-}
-
-#chatLog {
-  margin-top: 15px;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 10px;
-  height: 120px;
-  overflow-y: auto;
-  border-radius: 4px;
-  text-align: left;
-}
-
-#chatLog p {
-  margin: 0 0 5px 0;
-  color: #f0f0f0;
-  font-size: 14px;
+body { font-family: 'Segoe UI', Arial, sans-serif; margin:0; background: #f0f4f8; text-align:center; }
+#game { max-width:600px; margin:0 auto; }
+#player-hand, #opponent-hands { display: flex; flex-wrap: wrap; justify-content:center; }
+#player-hand img, #opponent-hands img { margin: 2px; border-radius: 6px; }
+#table-pile { margin: 12px auto; }
+button { margin: 10px; padding: 10px 16px; border-radius: 4px; border:none; background: #0078D4; color: white; font-size: 16px; }
+#chat { margin:16px 0 4px 0; }
+#chatInput { width: 50%; padding: 7px; border-radius: 3px; border: 1px solid #ccc; }
+#chatLog { max-height:90px; overflow:auto; background: #e9eef3; border-radius:3px; text-align:left; margin:0 auto 8px auto; padding: 6px; }
+@media (max-width:600px) {
+  #game { width:100vw; }
+  #player-hand img { height:56px !important; }
 }
