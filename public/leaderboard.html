@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Leaderboard</title>
+</head>
+<body>
+  <h1>🏆 Leaderboard</h1>
+  <ul id="board"></ul>
+
+  <script>
+    fetch('/leaderboard')
+      .then(res => res.json())
+      .then(data => {
+        const ul = document.getElementById('board');
+        data.forEach((entry, i) => {
+          ul.innerHTML += `<li>#${i + 1}: ${entry.name} — ${entry.score} pts</li>`;
+        });
+      });
+  </script>
+</body>
+</html>
