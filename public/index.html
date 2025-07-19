@@ -2,54 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>UNO Multiplayer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UNO Game</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
 </head>
 <body>
-  <div class="container">
+  <div id="joinScreen">
+    <h1>UNO Game</h1>
+    <form id="joinForm">
+      <input type="text" id="nameInput" maxlength="20" pattern="[A-Za-z0-9]+" placeholder="Your Name" required />
+      <input type="text" id="lobbyInput" maxlength="20" pattern="[A-Za-z0-9]+" placeholder="Lobby Name" required />
+      <button type="submit">Join</button>
+    </form>
+  </div>
 
-    <div id="joinSection">
-      <h2>🎴 Join a Game</h2>
-      <form id="joinForm">
-        <input type="text" id="playerName" placeholder="Your name (max 20)" maxlength="20" required pattern="[A-Za-z0-9]+" />
-        <input type="text" id="lobbyId" placeholder="Lobby ID (max 20)" maxlength="20" required pattern="[A-Za-z0-9]+" />
-        <button type="submit">Join</button>
-      </form>
-    </div>
-
-    <div id="gameArea" class="hidden">
-      <div class="status-bar">
-        <div id="yourTurn">⏳ Waiting...</div>
-      </div>
-
-      <div class="play-area">
-        <div class="discard-pile">
-          <h4>Discard</h4>
-          <div id="discardStack"></div>
-        </div>
-
-        <div class="draw-pile">
-          <h4>Draw</h4>
-          <div id="drawStack" class="draw-stack"></div>
+  <div id="gameScreen" style="display: none">
+    <div id="gameArea">
+      <div id="topSection">
+        <div id="opponents"></div>
+        <div id="discardSection">
+          <div id="discard" class="pile"></div>
+          <div id="drawStack" class="pile"></div>
         </div>
       </div>
 
-      <div id="hand" class="hand-container"></div>
+      <div id="turnInfo" class="turn-info"></div>
 
-      <div class="chat-container">
+      <div id="hand" class="hand"></div>
+
+      <div id="chatSection">
         <div id="chat" class="chat-box"></div>
-        <form id="chatForm">
-          <input
-            type="text"
-            id="chatInput"
-            placeholder="Type a message..."
-            maxlength="100"
-            autocomplete="off"
-            required
-          />
-          <button type="submit" title="Send">📨</button>
-        </form>
+        <div class="chat-input">
+          <input id="chatInput" type="text" maxlength="100" placeholder="Type a message..." />
+          <button id="sendBtn">📨</button>
+        </div>
       </div>
     </div>
   </div>
