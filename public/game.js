@@ -45,7 +45,7 @@ function playSound(name) {
 if (muteBtn) {
   muteBtn.addEventListener("click", () => {
     muted = !muted;
-    muteBtn.textContent = muted ? "ð Sound Off" : "ð Sound On";
+    muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
   });
 }
 
@@ -104,9 +104,9 @@ socket.on("state", (state) => {
   // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === socket.id ? "ð " : "";
+    const mark = p.id === socket.id ? "👉 " : "";
     const li = document.createElement("li");
-    li.innerText = `${mark}${p.name} ð ${p.handSize} (${p.score})`;
+    li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
   });
 
