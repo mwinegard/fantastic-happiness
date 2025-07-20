@@ -1,5 +1,3 @@
-// public/game.js
-
 const socket = io();
 
 const joinForm = document.getElementById("join-form");
@@ -18,9 +16,12 @@ const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
 const leaveBtn = document.getElementById("leave-btn");
 const muteBtn = document.getElementById("mute-toggle");
+const lobbyTitle = document.getElementById("lobby-name-display");
+const countdownTimer = document.getElementById("countdown-timer");
 
 let currentLobby = "";
 let muted = false;
+let countdownInterval = null;
 
 const sounds = {
   draw: new Audio("/assets/sounds/draw.mp3"),
@@ -45,7 +46,7 @@ function playSound(name) {
 if (muteBtn) {
   muteBtn.addEventListener("click", () => {
     muted = !muted;
-    muteBtn.textContent = muted ? "ð Sound Off" : "ð Sound On";
+    muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
   });
 }
 
@@ -81,17 +82,20 @@ socket.on("chat", ({ from, message }) => {
   entry.innerHTML = `<strong>${from}:</strong> ${message}`;
   chatLog.appendChild(entry);
   chatLog.scrollTop = chatLog.scrollHeight;
+
+  if (from === "SUE" && message.includes("Game will start in")) {
+    startCountdown(30);
+  }
 });
 
 socket.on("state", (state) => {
   document.getElementById("lobby-form").style.display = "none";
   gameDiv.style.display = "flex";
-  document.getElementById("lobby-name-display").innerText = currentLobby;
+  lobbyTitle.innerText = currentLobby;
 
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
-  // Turn indicator
   if (state.currentTurn) {
     turnIndicator.style.display = "block";
     turnIndicator.innerText = state.currentTurn === playerId
@@ -101,17 +105,23 @@ socket.on("state", (state) => {
     turnIndicator.style.display = "none";
   }
 
-  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === socket.id ? "ð " : "";
     const li = document.createElement("li");
-    li.innerText = `${mark}${p.name} ð ${p.handSize} (${p.score})`;
+    const isYou = p.id === playerId;
+    li.innerText = `${isYou ? "👉 " : ""}${p.name} 🏅 ${p.handSize} (${p.score || 0})`;
     playerList.appendChild(li);
   });
 
-  // Player hand
   handDiv.innerHTML = "";
+
+  if (!state.hasStarted) {
+    renderBackCards(7);
+    return;
+  }
+
+  stopCountdown();
+
   hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
@@ -157,10 +167,8 @@ socket.on("state", (state) => {
     handDiv.appendChild(img);
   });
 
-  // UNO button
   unoButton.style.display = hand.length === 2 ? "block" : "none";
 
-  // Discard pile
   discardPile.innerHTML = "";
   if (state.discardPile?.length) {
     const topCard = state.discardPile[state.discardPile.length - 1];
@@ -170,7 +178,6 @@ socket.on("state", (state) => {
     discardPile.appendChild(topImg);
   }
 
-  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
@@ -183,3 +190,31 @@ socket.on("state", (state) => {
   });
   drawPile.appendChild(drawImg);
 });
+
+function renderBackCards(count) {
+  handDiv.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    const back = document.createElement("img");
+    back.src = "/assets/cards/back.png";
+    back.className = "card";
+    handDiv.appendChild(back);
+  }
+}
+
+function startCountdown(seconds) {
+  let remaining = seconds;
+  countdownTimer.style.display = "block";
+  countdownTimer.textContent = `Starting in ${remaining}s`;
+
+  clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    remaining--;
+    countdownTimer.textContent = `Starting in ${remaining}s`;
+    if (remaining <= 0) stopCountdown();
+  }, 1000);
+}
+
+function stopCountdown() {
+  clearInterval(countdownInterval);
+  countdownTimer.style.display = "none";
+}
