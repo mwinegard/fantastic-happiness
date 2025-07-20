@@ -4,6 +4,7 @@ body {
   margin: 0;
   padding: 0;
   text-align: center;
+  overflow-x: hidden;
 }
 
 #lobby-form {
@@ -32,28 +33,36 @@ form input, form button {
 #player-list {
   list-style: none;
   padding: 0;
+  font-size: 14px;
 }
 
 #game-board {
   width: 80%;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   position: relative;
 }
 
+#turn-indicator {
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
 #discard-pile, #draw-pile {
   margin: 0 30px;
   position: relative;
+  display: inline-block;
 }
 
 .card {
   width: 80px;
-  border-radius: 10px;
+  border-radius: 12px;
   margin: 5px;
   cursor: pointer;
   transition: transform 0.2s ease;
-  box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
 }
 
 .card:hover {
@@ -68,14 +77,12 @@ form input, form button {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 20px;
+  margin: 20px auto 90px;
+  max-width: 100%;
 }
 
 #uno-btn {
-  position: absolute;
-  bottom: -40px;
-  right: 50%;
-  transform: translateX(50%);
+  margin-top: 20px;
   padding: 10px 20px;
   font-weight: bold;
   font-size: 18px;
@@ -86,29 +93,43 @@ form input, form button {
 }
 
 #chat-section {
-  margin-top: 20px;
-  padding: 10px;
-  background: #fff;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  background: #ffffff;
   border-top: 2px solid #ccc;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
 }
 
 #chat-log {
-  height: 150px;
-  overflow-y: scroll;
+  flex: 1 1 100%;
+  max-height: 140px;
+  overflow-y: auto;
   text-align: left;
-  padding: 10px;
+  padding: 5px 10px;
+  font-size: 14px;
+  background: #f5f5f5;
   border: 1px solid #aaa;
   margin-bottom: 10px;
-  background: #f7f7f7;
 }
 
 #chat-box {
-  width: 60%;
+  flex-grow: 1;
   padding: 10px;
   font-size: 14px;
+  margin-right: 10px;
 }
 
 #chat-send {
-  padding: 10px 15px;
+  padding: 10px 20px;
   font-size: 14px;
+  background-color: #008cff;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
 }
