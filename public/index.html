@@ -1,55 +1,39 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>UNO Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div id="lobby-form">
-    <form id="join-form">
-      <input id="name" placeholder="Your Name" maxlength="20" required />
-      <input id="lobby" placeholder="Lobby Name" maxlength="20" required />
-      <button type="submit">Join</button>
-    </form>
+<div id="lobby-form">
+  <form id="join-form">
+    <input id="name" placeholder="Your Name" maxlength="20" required />
+    <input id="lobby" placeholder="Lobby Name" maxlength="20" required />
+    <button type="submit">Join</button>
+  </form>
+</div>
+
+<div id="game" style="display: none;">
+  <div class="game-column col-player">
+    <div id="lobby-name" style="text-align: center; text-decoration: underline; font-weight: bold;"></div>
+    <ul id="player-list"></ul>
+    <button id="leave-btn">Leave Lobby</button>
   </div>
 
-  <div id="game" style="display: none;">
-    <div id="top-area">
-      <div class="column" id="player-column">
-        <div id="lobby-header">Lobby: <span id="lobby-name"></span></div>
-        <ul id="player-list"></ul>
-        <button id="leave-lobby">Leave Lobby</button>
-      </div>
-
-      <div class="column" id="pile-column">
-        <div id="discard-container">
-          <div id="discard-pile"></div>
-        </div>
-        <div id="draw-container">
-          <div id="draw-pile"></div>
-        </div>
-      </div>
-
-      <div class="column" id="meta-column">
-        <button id="uno-btn">UNO!</button>
-        <div id="turn-indicator">Waiting...</div>
-      </div>
-    </div>
-
-    <div id="player-hand"></div>
-
-    <div id="chat-container">
-      <div id="chat-log"></div>
-      <div id="chat-controls">
-        <input id="chat-box" placeholder="Type a message..." />
-        <button id="chat-send">Send</button>
-      </div>
-    </div>
+  <div class="game-column col-pile">
+    <div id="discard-pile"></div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="game.js"></script>
-</body>
-</html>
+  <div class="game-column col-draw">
+    <div id="draw-pile"></div>
+  </div>
+
+  <div class="game-column col-meta">
+    <div id="turn-indicator" style="display: none;"></div>
+    <button id="uno-btn" style="display: none;">UNO!</button>
+  </div>
+
+  <div id="player-hand"></div>
+
+  <div id="chat-container">
+    <div id="chat-log"></div>
+    <input id="chat-box" placeholder="Type a message..." />
+    <button id="chat-send">Send</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
