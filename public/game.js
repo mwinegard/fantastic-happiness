@@ -17,6 +17,7 @@ const turnIndicator = document.getElementById("turn-indicator");
 const leaveBtn = document.getElementById("leave-btn");
 
 let currentLobby = "";
+let lastChatSender = "";
 
 const sounds = {
   draw: new Audio("/assets/sounds/draw.mp3"),
@@ -65,10 +66,23 @@ leaveBtn.addEventListener("click", () => {
 });
 
 socket.on("chat", ({ from, message }) => {
+  lastChatSender = from;
   const entry = document.createElement("div");
   entry.innerHTML = `<strong>${from}:</strong> ${message}`;
   chatLog.appendChild(entry);
   chatLog.scrollTop = chatLog.scrollHeight;
+
+  if (window.happyMode && from !== "SUE") {
+    const rudeBtn = document.createElement("button");
+    rudeBtn.innerText = "Rude?";
+    rudeBtn.style.margin = "0.5em";
+    rudeBtn.onclick = () => {
+      socket.emit("rudeReport", { player: lastChatSender, lobby: currentLobby });
+      rudeBtn.remove();
+    };
+    document.getElementById("meta-column").appendChild(rudeBtn);
+    setTimeout(() => rudeBtn.remove(), 5000);
+  }
 });
 
 socket.on("state", (state) => {
@@ -92,7 +106,7 @@ socket.on("state", (state) => {
   // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === socket.id ? "👉 " : "";
+    const mark = p.id === playerId ? "👉 " : "";
     const li = document.createElement("li");
     li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
@@ -117,7 +131,8 @@ socket.on("state", (state) => {
               card,
               chosenColor: btn.dataset.color
             });
-            playSound("wild");
+            if (card.startsWith("wild_")) playSound("special");
+            else playSound("wild");
           };
         });
       } else {
@@ -159,88 +174,6 @@ socket.on("state", (state) => {
   drawPile.appendChild(drawImg);
 });
 
-// Leaderboard modal logic
-const leaderboardModal = document.getElementById("leaderboard-modal");
-const leaderboardToggle = document.getElementById("leaderboard-toggle");
-const leaderboardClose = document.getElementById("leaderboard-close");
-const leaderboardContainer = document.getElementById("leaderboard-container");
-
-let leaderboardData = [];
-let currentSort = { column: null, asc: true };
-
-leaderboardToggle.onclick = () => {
-  leaderboardModal.style.display = "flex";
-  loadLeaderboard();
-};
-
-leaderboardClose.onclick = () => {
-  leaderboardModal.style.display = "none";
-};
-
-window.onclick = (e) => {
-  if (e.target === leaderboardModal) {
-    leaderboardModal.style.display = "none";
-  }
-};
-
-function loadLeaderboard() {
-  fetch('/scores')
-    .then(res => res.json())
-    .then(data => {
-      leaderboardData = data;
-      renderLeaderboard();
-    });
-}
-
-function renderLeaderboard() {
-  if (!leaderboardData.length) {
-    leaderboardContainer.innerHTML = "<p>No scores yet.</p>";
-    return;
-  }
-
-  const headers = [
-    { key: "name", label: "Name" },
-    { key: "wins", label: "Wins" },
-    { key: "score", label: "Score" }
-  ];
-
-  const headerRow = headers.map(h => {
-    let cls = "";
-    if (currentSort.column === h.key) {
-      cls = currentSort.asc ? "sorted-asc" : "sorted-desc";
-    }
-    return `<th class="${cls}" onclick="sortByLeaderboard('${h.key}')">${h.label}</th>`;
-  }).join("");
-
-  const rows = leaderboardData.map(score => `
-    <tr>
-      <td>${score.name}</td>
-      <td>${score.wins || 0}</td>
-      <td>${score.score || 0}</td>
-    </tr>
-  `).join("");
-
-  leaderboardContainer.innerHTML = `
-    <table>
-      <thead><tr>${headerRow}</tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-window.sortByLeaderboard = function (column) {
-  if (currentSort.column === column) {
-    currentSort.asc = !currentSort.asc;
-  } else {
-    currentSort.column = column;
-    currentSort.asc = true;
-  }
-
-  leaderboardData.sort((a, b) => {
-    const valA = a[column] || 0;
-    const valB = b[column] || 0;
-    return currentSort.asc ? valA - valB : valB - valA;
-  });
-
-  renderLeaderboard();
-};
+socket.on("happyMode", () => {
+  window.happyMode = true;
+});
