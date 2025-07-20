@@ -3,6 +3,7 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const fs = require("fs-extra");
 const { specialCardLogic } = require("./public/specialCards");
 
 const app = express();
@@ -46,6 +47,36 @@ function shuffle(arr) {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+function getCardValue(card) {
+  if (!card) return 0;
+  if (card.startsWith("wild")) return 50;
+  const [color, value] = card.split("_");
+  if (!value) return 0;
+  const num = parseInt(value);
+  if (!isNaN(num)) return num;
+  const specials = ["draw", "skip", "reverse", "it", "noc", "look", "moon", "happy", "recycle", "pinkypromise", "shopping"];
+  return specials.includes(value) ? 20 : 0;
+}
+
+async function updateLeaderboard(name, points, win = false) {
+  const path = "scores.json";
+  let data = {};
+  try {
+    data = await fs.readJson(path);
+  } catch {
+    data = {};
+  }
+
+  if (!data[name]) {
+    data[name] = { score: 0, wins: 0 };
+  }
+
+  data[name].score += points;
+  if (win) data[name].wins += 1;
+
+  await fs.writeJson(path, data, { spaces: 2 });
 }
 
 function resetGame(game) {
@@ -139,6 +170,23 @@ function sendState(lobbyId) {
   });
 }
 
+app.get("/scores", async (req, res) => {
+  try {
+    const data = await fs.readJson("scores.json");
+    const result = Object.entries(data).map(([name, { score, wins }]) => ({
+      name, score, wins
+    }));
+    res.json(result);
+  } catch {
+    res.json([]);
+  }
+});
+
+app.post("/clear-scores", async (req, res) => {
+  await fs.writeJson("scores.json", {}, { spaces: 2 });
+  res.sendStatus(200);
+});
+
 io.on("connection", (socket) => {
   socket.on("join", ({ name, lobby }) => {
     if (!lobbies[lobby]) {
@@ -179,7 +227,7 @@ io.on("connection", (socket) => {
     sendState(lobby);
   });
 
-  socket.on("playCard", ({ lobby, card, chosenColor }) => {
+  socket.on("playCard", async ({ lobby, card, chosenColor }) => {
     const game = lobbies[lobby];
     if (!game || socket.id !== game.currentTurn) return;
 
@@ -194,6 +242,40 @@ io.on("connection", (socket) => {
       specialCardLogic[card](game, socket.id, io);
     }
 
+    if (hand.length === 0) {
+      const winner = game.players[socket.id];
+      const winnerName = winner.name;
+
+      let points = 0;
+      for (const pid of game.order) {
+        if (pid !== socket.id) {
+          for (const c of game.hands[pid] || []) {
+            points += getCardValue(c);
+          }
+        }
+      }
+
+      winner.score += points;
+      await updateLeaderboard(winnerName, points, true);
+
+      if (winner.score >= 500) {
+        io.to(lobby).emit("chat", {
+          from: "SUE",
+          message: `🏆 ${winnerName} reached 500 points and wins the game! Scores reset.`
+        });
+        Object.values(game.players).forEach(p => p.score = 0);
+      } else {
+        io.to(lobby).emit("chat", {
+          from: "SUE",
+          message: `🎉 ${winnerName} wins the round and earns ${points} points!`
+        });
+      }
+
+      resetGame(game);
+      sendState(lobby);
+      return;
+    }
+
     advanceTurn(game);
     sendState(lobby);
   });
@@ -201,7 +283,6 @@ io.on("connection", (socket) => {
   socket.on("drawCard", ({ lobby }) => {
     const game = lobbies[lobby];
     if (!game || socket.id !== game.currentTurn) return;
-
     game.hands[socket.id].push(game.deck.pop());
     advanceTurn(game);
     sendState(lobby);
@@ -211,7 +292,6 @@ io.on("connection", (socket) => {
     const name = Object.values(lobbies)
       .flatMap(g => Object.values(g.players))
       .find(p => p.id === socket.id)?.name || "Unknown";
-
     io.emit("chat", { from: name, message });
   });
 
