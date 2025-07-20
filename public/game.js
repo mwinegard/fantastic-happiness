@@ -1,6 +1,5 @@
 const socket = io();
 
-// DOM elements
 const joinForm = document.getElementById("join-form");
 const nameInput = document.getElementById("name");
 const lobbyInput = document.getElementById("lobby");
@@ -14,6 +13,7 @@ const chatSend = document.getElementById("chat-send");
 const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
+const wildColorButtons = document.getElementById("wild-color-buttons");
 
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -51,6 +51,7 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
+  turnIndicator.style.display = "block";
   turnIndicator.innerText = state.currentTurn === playerId
     ? "It is your turn."
     : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
@@ -68,24 +69,24 @@ socket.on("state", (state) => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
-
     img.addEventListener("click", () => {
       if (state.currentTurn !== playerId) return;
 
-      const specialPattern = /(happy|noc|relax|boss|packyourbags|rainbow|moon|look|it|pinkypromise|shopping)/i;
-      if (specialPattern.test(card)) {
-        new Audio("special.mp3").play();
-      }
-
       if (card.startsWith("wild")) {
-        const color = prompt("Choose a color (red, green, blue, yellow):");
-        if (!["red", "blue", "green", "yellow"].includes(color)) return;
-        socket.emit("playCard", { lobby: state.players[0].id, card, chosenColor: color });
+        wildColorButtons.style.display = "flex";
+        wildColorButtons.onclick = null;
+
+        wildColorButtons.querySelectorAll("button").forEach(btn => {
+          btn.onclick = () => {
+            const color = btn.dataset.color;
+            wildColorButtons.style.display = "none";
+            socket.emit("playCard", { lobby: state.players[0].id, card, chosenColor: color });
+          };
+        });
       } else {
         socket.emit("playCard", { lobby: state.players[0].id, card });
       }
     });
-
     handDiv.appendChild(img);
   });
 
@@ -112,4 +113,10 @@ socket.on("state", (state) => {
     }
   });
   drawPile.appendChild(drawImg);
+});
+
+// Audio handlers
+socket.on("playSound", (sound) => {
+  const audio = new Audio(`/assets/sfx/${sound}.mp3`);
+  audio.play().catch(() => {});
 });
