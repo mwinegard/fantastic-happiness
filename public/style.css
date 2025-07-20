@@ -1,104 +1,177 @@
-body {
-  font-family: Arial, sans-serif;
-  background: #e8f1f8;
+* {
+  box-sizing: border-box;
+}
+
+html, body {
   margin: 0;
   padding: 0;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  font-family: Arial, sans-serif;
+  background: #e8f1f8;
 }
 
 #lobby-form {
-  margin-top: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
 }
 
-form input,
-form button {
+form input, form button {
   padding: 10px;
   margin: 5px;
   font-size: 16px;
 }
 
-#game-body {
+#game {
   display: flex;
-  height: 40vh;
-}
-
-#player-column,
-#sidebar-column {
-  width: 20%;
+  flex-direction: column;
+  height: 100vh;
   padding: 10px;
 }
 
-#center-column {
-  width: 60%;
+/* Top area: 40% height, 4 columns */
+#top-area {
+  display: flex;
+  flex: 0 0 40vh;
+  width: 100%;
+  padding: 10px;
+  gap: 10px;
+}
+
+.column {
+  padding: 10px;
+}
+
+#player-column {
+  width: 20%;
+  overflow-y: auto;
+}
+
+#pile-column {
+  width: 30%;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 40px;
+  gap: 20px;
 }
 
-#discard-pile,
-#draw-pile {
+#meta-column {
+  width: 30%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+}
+
+#right-column {
+  width: 20%;
+  text-align: center;
+}
+
+/* Piles */
+#discard-pile, #draw-pile {
   display: flex;
   align-items: center;
+  justify-content: center;
+}
+
+#discard-pile {
+  visibility: hidden; /* Hidden until game starts */
 }
 
 #player-hand {
-  height: 40vh;
-  overflow-x: auto;
-  white-space: nowrap;
-  padding: 10px;
-  border-top: 2px solid #ccc;
+  flex: 0 0 40vh;
   display: flex;
-  align-items: center;
   justify-content: flex-start;
-  background: #f5f8fb;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  padding: 10px;
+  border-top: 2px solid #999;
+  border-bottom: 2px solid #999;
+  background: #fff;
 }
 
-.card {
-  height: 100px;
-  margin: 0 5px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.card:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-
-#turn-indicator {
-  display: none;
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
-#chat-footer {
-  height: 20vh;
+/* Chat Footer */
+#chat-container {
+  flex: 1 1 20vh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 10px;
-  background: #fff;
-  border-top: 2px solid #ccc;
+  background: #dfe9f3;
 }
 
 #chat-log {
   flex: 1;
   overflow-y: auto;
-  margin-bottom: 5px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
 }
 
-#chat-input {
+#chat-controls {
   display: flex;
-  gap: 5px;
+  gap: 10px;
 }
 
 #chat-box {
   flex: 1;
-  padding: 8px;
+  padding: 10px;
   font-size: 14px;
+}
+
+#chat-send {
+  padding: 10px 20px;
+}
+
+/* Cards */
+.card {
+  width: 80px;
+  height: auto;
+  margin: 5px;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+  border-radius: 8px;
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.card:hover {
+  transform: scale(1.1);
+}
+
+.card.stack {
+  position: relative;
+  top: -4px;
+  left: -2px;
+  z-index: 1;
+}
+
+#uno-btn {
+  padding: 10px 20px;
+  background: red;
+  color: white;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  display: none;
+}
+
+/* Turn indicator */
+#turn-indicator {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  margin-top: 10px;
+  display: none;
+}
+
+/* Lobby header */
+#lobby-header {
+  font-size: 20px;
+  font-weight: bold;
+  text-decoration: underline;
+  margin-bottom: 10px;
 }
