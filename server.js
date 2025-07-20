@@ -10,14 +10,10 @@ const io = new Server(server);
 
 const lobbies = {};
 let scores = {};
-
 const SCORES_FILE = path.join(__dirname, "scores.json");
+
 if (fs.existsSync(SCORES_FILE)) {
   scores = JSON.parse(fs.readFileSync(SCORES_FILE));
-}
-
-function getPlayerOrder(lobby) {
-  return Object.keys(lobby.players).sort();
 }
 
 function saveScores() {
@@ -36,9 +32,11 @@ function createDeck() {
       if (val !== "0") deck.push(`${color}_${val}`);
     }
   }
+
   for (let w of wilds) {
     for (let i = 0; i < 4; i++) deck.push(w);
   }
+
   return deck;
 }
 
@@ -66,109 +64,31 @@ function emitState(lobby) {
 }
 
 function nextTurn(lobby) {
-  const ids = getPlayerOrder(lobby);
-  const curIdx = ids.indexOf(lobby.currentTurn);
-  lobby.currentTurn = ids[(curIdx + lobby.direction + ids.length) % ids.length];
-  lobby.turnStart = Date.now();
+  const ids = Object.keys(lobby.players);
+  const currentIdx = ids.indexOf(lobby.currentTurn);
+  const direction = lobby.reverse ? -1 : 1;
+  const nextIdx = (currentIdx + direction + ids.length) % ids.length;
+  lobby.currentTurn = ids[nextIdx];
   emitState(lobby);
-  startTurnTimer(lobby);
-}
-
-function startTurnTimer(lobby) {
-  if (lobby.turnTimeout) clearTimeout(lobby.turnTimeout);
-  lobby.turnTimeout = setTimeout(() => {
-    const pid = lobby.currentTurn;
-    const hand = lobby.hands[pid];
-    if (!hand) return;
-
-    sendSystemMessage(lobby, `${lobby.players[pid].name} took too long. Auto-draw.`);
-    const card = lobby.deck.pop();
-    hand.push(card);
-    lobby.turnMissed[pid] = (lobby.turnMissed[pid] || 0) + 1;
-
-    if (lobby.turnMissed[pid] >= 3) {
-      sendSystemMessage(lobby, `${lobby.players[pid].name} removed after 3 missed turns.`);
-      delete lobby.players[pid];
-      delete lobby.hands[pid];
-      if (Object.keys(lobby.players).length < 2) {
-        sendSystemMessage(lobby, `Game ended. Not enough players.`);
-        delete lobbies[lobby.id];
-        return;
-      }
-    }
-
-    nextTurn(lobby);
-  }, 60000);
-}
-
-function calculateScore(hand) {
-  return hand.reduce((total, card) => {
-    if (card.includes("wild")) return total + 50;
-    if (card.includes("skip") || card.includes("reverse") || card.includes("draw")) return total + 20;
-    return total + parseInt(card.split("_")[1]) || 0;
-  }, 0);
 }
 
 function endRound(lobby, winnerId) {
   const winnerName = lobby.players[winnerId].name;
-  const others = Object.entries(lobby.hands).filter(([pid]) => pid !== winnerId);
-  const totalScore = others.reduce((sum, [, hand]) => sum + calculateScore(hand), 0);
+  const points = Object.entries(lobby.hands)
+    .filter(([id]) => id !== winnerId)
+    .reduce((sum, [, hand]) => sum + hand.reduce((s, c) => {
+      if (c.includes("wild")) return s + 50;
+      if (c.includes("skip") || c.includes("reverse") || c.includes("draw")) return s + 20;
+      return s + parseInt(c.split("_")[1]) || 0;
+    }, 0), 0);
 
   scores[winnerName] = scores[winnerName] || { score: 0, wins: 0 };
-  scores[winnerName].score += totalScore;
+  scores[winnerName].score += points;
   scores[winnerName].wins += 1;
   saveScores();
 
-  sendSystemMessage(lobby, `${winnerName} wins the round and earns ${totalScore} points!`);
+  sendSystemMessage(lobby, `🎉 ${winnerName} wins the round and earns ${points} points!`);
   delete lobbies[lobby.id];
-}
-
-function startGame(lobby) {
-  if (Object.keys(lobby.players).length < 2) return;
-
-  lobby.deck = shuffle(createDeck());
-  lobby.hands = {};
-  lobby.discardPile = [];
-
-  let card;
-  do { card = lobby.deck.pop(); } while (card.startsWith("wild"));
-  lobby.discardPile.push(card);
-
-  for (const pid of Object.keys(lobby.players)) {
-    lobby.hands[pid] = lobby.deck.splice(0, 7);
-  }
-
-  lobby.turnMissed = {};
-  lobby.direction = 1;
-  lobby.currentTurn = Object.keys(lobby.players)[0];
-
-  sendSystemMessage(lobby, `Game started!`);
-  emitState(lobby);
-  startTurnTimer(lobby);
-}
-
-function startCountdown(lobby) {
-  if (lobby.started || lobby.countdown) return;
-  let seconds = 30;
-
-  lobby.countdown = setInterval(() => {
-    if (Object.keys(lobby.players).length < 2) {
-      clearInterval(lobby.countdown);
-      lobby.countdown = null;
-      sendSystemMessage(lobby, "Waiting for more players...");
-      return;
-    }
-
-    if (seconds % 5 === 0 || seconds === 30) {
-      sendSystemMessage(lobby, `Game starting in ${seconds} seconds...`);
-    }
-
-    if (--seconds <= 0) {
-      clearInterval(lobby.countdown);
-      lobby.started = true;
-      startGame(lobby);
-    }
-  }, 1000);
 }
 
 io.on("connection", (socket) => {
@@ -183,31 +103,23 @@ io.on("connection", (socket) => {
         players: {},
         deck: [],
         discardPile: [],
-        direction: 1,
-        hands: {}
+        hands: {},
+        wildColor: null,
+        reverse: false,
+        unoPressed: {}
       };
-      sendSystemMessage(lobbies[lobby], `${name} created lobby.`);
     }
 
     const lobbyObj = lobbies[lobby];
     lobbyObj.players[socket.id] = { id: socket.id, name };
-    if (lobbyObj.started) {
-      lobbyObj.hands[socket.id] = lobbyObj.deck.splice(0, 7);
-    }
-    if (!lobbyObj.hands[socket.id]) {
-      lobbyObj.hands[socket.id] = [];
-    }
+    lobbyObj.hands[socket.id] = [];
 
     sendSystemMessage(lobbyObj, `${name} joined.`);
-    startCountdown(lobbyObj);
-    emitState(lobbyObj);
-  });
-
-  socket.on("chat", (message) => {
-    const lobby = Object.values(lobbies).find(l => l.players[socket.id]);
-    if (!lobby) return;
-    const name = lobby.players[socket.id].name;
-    io.to(lobby.id).emit("chat", { from: name, message });
+    if (Object.keys(lobbyObj.players).length === 2) {
+      startGame(lobbyObj);
+    } else {
+      emitState(lobbyObj);
+    }
   });
 
   socket.on("playCard", ({ lobby, card, chosenColor }) => {
@@ -215,26 +127,28 @@ io.on("connection", (socket) => {
     if (!lobbyObj) return;
 
     const playerId = socket.id;
+    if (playerId !== lobbyObj.currentTurn) return;
+
     const hand = lobbyObj.hands[playerId];
-    if (!hand || lobbyObj.currentTurn !== playerId) return;
+    const index = hand.indexOf(card);
+    if (index === -1) return;
 
-    const cardIndex = hand.indexOf(card);
-    if (cardIndex === -1) return;
-
-    const topCard = lobbyObj.discardPile[lobbyObj.discardPile.length - 1];
-    const [topColor, topValue] = topCard.split("_");
-    const [cardColor, cardValue] = card.includes("_") ? card.split("_") : [null, card];
+    const top = lobbyObj.discardPile[lobbyObj.discardPile.length - 1];
+    const [topColor, topValue] = top.split("_");
+    const [cardColor, cardValue] = card.split("_");
 
     const isWild = card.startsWith("wild");
-    const isValidPlay =
-      isWild ||
-      cardColor === topColor ||
-      cardValue === topValue ||
-      (topCard === "wild" && cardColor === lobbyObj.wildColor);
+    const valid = isWild || cardColor === topColor || cardValue === topValue || top === "wild";
 
-    if (!isValidPlay) return;
+    if (!valid) return;
 
-    hand.splice(cardIndex, 1);
+    if (hand.length === 2 && !lobbyObj.unoPressed[playerId]) {
+      sendSystemMessage(lobbyObj, `${lobbyObj.players[playerId].name} forgot to press UNO! Draw 2 penalty!`);
+      hand.push(...lobbyObj.deck.splice(0, 2));
+    }
+
+    lobbyObj.unoPressed[playerId] = false;
+    hand.splice(index, 1);
     lobbyObj.discardPile.push(card);
 
     if (hand.length === 0) {
@@ -243,82 +157,99 @@ io.on("connection", (socket) => {
     }
 
     if (isWild) {
-      if (!chosenColor || !["red", "blue", "green", "yellow"].includes(chosenColor)) return;
+      if (!["red", "green", "blue", "yellow"].includes(chosenColor)) return;
       lobbyObj.wildColor = chosenColor;
-      io.to(lobby).emit("chat", { from: "SUE", message: `Wild card color chosen: ${chosenColor}` });
+      sendSystemMessage(lobbyObj, `Wild color selected: ${chosenColor}`);
     } else {
       lobbyObj.wildColor = null;
     }
 
-    const playerIds = getPlayerOrder(lobbyObj);
-    let curIndex = playerIds.indexOf(playerId);
-    let nextIndex = (curIndex + 1) % playerIds.length;
-    let skipCount = 0;
+    const ids = Object.keys(lobbyObj.players);
+    const idx = ids.indexOf(playerId);
+    let nextIdx = (idx + 1) % ids.length;
 
     if (cardValue === "reverse") {
-      lobbyObj.direction *= -1;
-      io.to(lobby).emit("chat", { from: "SUE", message: `Play direction has reversed.` });
+      lobbyObj.reverse = !lobbyObj.reverse;
+      sendSystemMessage(lobbyObj, `Play direction reversed.`);
     }
 
     if (cardValue === "skip") {
-      skipCount = 1;
-      const skipped = playerIds[nextIndex];
-      io.to(lobby).emit("chat", { from: "SUE", message: `${lobbyObj.players[skipped].name} was skipped.` });
+      nextIdx = (nextIdx + 1) % ids.length;
+      sendSystemMessage(lobbyObj, `${lobbyObj.players[ids[nextIdx]].name} was skipped.`);
     }
 
-    if (cardValue === "draw" || cardValue === "draw2" || cardValue === "draw4") {
+    if (card === "wild_draw4" || cardValue === "draw") {
       const drawAmount = card.includes("4") ? 4 : 2;
-      const victimId = playerIds[nextIndex];
-      lobbyObj.hands[victimId].push(...lobbyObj.deck.splice(0, drawAmount));
-      io.to(lobby).emit("chat", {
-        from: "SUE",
-        message: `${lobbyObj.players[victimId].name} drew ${drawAmount} cards.`
-      });
-      skipCount = 1;
+      const targetId = ids[(idx + 1) % ids.length];
+      lobbyObj.hands[targetId].push(...lobbyObj.deck.splice(0, drawAmount));
+      sendSystemMessage(lobbyObj, `${lobbyObj.players[targetId].name} draws ${drawAmount} cards.`);
+      nextIdx = (nextIdx + 1) % ids.length;
     }
 
-    for (let i = 0; i < skipCount + 1; i++) {
-      nextIndex = (nextIndex + lobbyObj.direction + playerIds.length) % playerIds.length;
-    }
-
-    lobbyObj.currentTurn = playerIds[nextIndex];
+    lobbyObj.currentTurn = ids[nextIdx];
     emitState(lobbyObj);
   });
 
   socket.on("drawCard", ({ lobby }) => {
-    lobby = lobby.toLowerCase();
     const lobbyObj = lobbies[lobby];
-    if (!lobbyObj) return;
-
     const pid = socket.id;
-    if (pid !== lobbyObj.currentTurn) return;
+    if (!lobbyObj || pid !== lobbyObj.currentTurn) return;
 
-    const card = lobbyObj.deck.pop();
-    lobbyObj.hands[pid].push(card);
-    nextTurn(lobbyObj);
+    lobbyObj.hands[pid].push(lobbyObj.deck.pop());
+    const ids = Object.keys(lobbyObj.players);
+    const idx = ids.indexOf(pid);
+    lobbyObj.currentTurn = ids[(idx + 1) % ids.length];
+    emitState(lobbyObj);
+  });
+
+  socket.on("chat", ({ message }) => {
+    const lobby = Object.values(lobbies).find(l => l.players[socket.id]);
+    if (!lobby) return;
+    const name = lobby.players[socket.id].name;
+    io.to(lobby.id).emit("chat", { from: name, message });
+
+    if (message.toLowerCase().includes("uno")) {
+      lobby.unoPressed[socket.id] = true;
+    }
   });
 
   socket.on("disconnect", () => {
-    for (let lobbyId in lobbies) {
-      const lobby = lobbies[lobbyId];
+    for (let lid in lobbies) {
+      const lobby = lobbies[lid];
       if (lobby.players[socket.id]) {
-        const name = lobby.players[socket.id].name;
-        sendSystemMessage(lobby, `${name} left.`);
+        sendSystemMessage(lobby, `${lobby.players[socket.id].name} left.`);
         delete lobby.players[socket.id];
         delete lobby.hands[socket.id];
-        if (Object.keys(lobby.players).length < 2) {
-          delete lobbies[lobbyId];
-        } else {
-          emitState(lobby);
-        }
+        emitState(lobby);
         break;
       }
     }
   });
 });
 
+function startGame(lobby) {
+  lobby.deck = shuffle(createDeck());
+  lobby.hands = {};
+  lobby.discardPile = [];
+  lobby.unoPressed = {};
+
+  let firstCard;
+  do {
+    firstCard = lobby.deck.pop();
+  } while (firstCard.startsWith("wild"));
+
+  lobby.discardPile.push(firstCard);
+
+  for (const pid of Object.keys(lobby.players)) {
+    lobby.hands[pid] = lobby.deck.splice(0, 7);
+  }
+
+  lobby.currentTurn = Object.keys(lobby.players)[0];
+  emitState(lobby);
+}
+
 app.use(express.static(path.join(__dirname, "public")));
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`UNO server running on http://localhost:${PORT}`);
+  console.log(`UNO server running at http://localhost:${PORT}`);
 });
