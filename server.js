@@ -67,14 +67,14 @@ function startGameCountdown(lobbyId) {
     const game = lobbies[lobbyId];
     if (!game || Object.keys(game.players).length < 2) return;
     resetGame(game);
-    io.to(lobbyId).emit("chat", { from: "SUE", message: "🟢 Game started!" });
+    io.to(lobbyId).emit("chat", { from: "SUE", message: "ð¢ Game started!" });
     sendState(lobbyId);
     delete countdowns[lobbyId];
   }, 30000);
 
   io.to(lobbyId).emit("chat", {
     from: "SUE",
-    message: "⏱ Game will start in 30 seconds..."
+    message: "â± Game will start in 30 seconds..."
   });
 }
 
@@ -87,7 +87,7 @@ function startTurnTimer(game) {
     if (game.turnMisses[curId] >= TURN_MISS_LIMIT) {
       io.to(game.id).emit("chat", {
         from: "SUE",
-        message: `⏳ ${game.players[curId].name} missed 3 turns and was removed.`
+        message: `â³ ${game.players[curId].name} missed 3 turns and was removed.`
       });
       removePlayer(game, curId);
     } else {
@@ -105,27 +105,23 @@ function advanceTurn(game) {
   startTurnTimer(game);
 }
 
-function removePlayer(game, playerId) {
-  const hand = game.hands[playerId] || [];
-  const rest = game.order.filter(id => id !== playerId);
-  const redistribute = rest.length;
-  hand.forEach((card, i) => {
-    const pid = rest[i % redistribute];
-    game.hands[pid].push(card);
-  });
+function removePlayer(socketId) {
+  for (const [lobbyId, game] of Object.entries(lobbies)) {
+    if (game?.players?.[socketId]) {
+      delete game.players[socketId];
 
-  delete game.players[playerId];
-  delete game.hands[playerId];
-  game.order = game.order.filter(id => id !== playerId);
+      if (Array.isArray(game.order)) {
+        game.order = game.order.filter(id => id !== socketId);
+      }
 
-  if (game.order.length === 1) {
-    const winnerId = game.order[0];
-    game.players[winnerId].score += 50;
-    io.to(game.id).emit("chat", {
-      from: "SUE",
-      message: `🏁 ${game.players[winnerId].name} wins by default and earns 50 points.`
-    });
-    resetGame(game);
+      if (Object.keys(game.players).length === 0) {
+        delete lobbies[lobbyId];
+      } else {
+        sendState(lobbyId);
+      }
+
+      break;
+    }
   }
 }
 
