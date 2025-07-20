@@ -238,3 +238,11 @@ footer#chat-footer {
 #leaderboard-container th.sorted-desc::after {
   content: " ↓";
 }
+
+
+
+.card.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  filter: grayscale(50%);
+}
