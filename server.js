@@ -1,4 +1,4 @@
-// [server.js]
+// server.js
 
 const express = require("express");
 const http = require("http");
@@ -9,11 +9,18 @@ const fs = require("fs");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const PORT = process.env.PORT || 3000;
 
+const specialCards = require("./specialCards");
 const lobbies = {};
+let scores = {};
+
 const SCORES_FILE = path.join(__dirname, "scores.json");
-let scores = fs.existsSync(SCORES_FILE) ? JSON.parse(fs.readFileSync(SCORES_FILE)) : {};
+if (fs.existsSync(SCORES_FILE)) {
+  scores = JSON.parse(fs.readFileSync(SCORES_FILE));
+}
+function saveScores() {
+  fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2));
+}
 
 function createDeck() {
   const colors = ["red", "blue", "green", "yellow"];
@@ -28,8 +35,7 @@ function createDeck() {
     }
   }
 
-  for (let wild of wilds) for (let i = 0; i < 4; i++) deck.push(wild);
-
+  for (let w of wilds) for (let i = 0; i < 4; i++) deck.push(w);
   return deck;
 }
 
@@ -37,8 +43,8 @@ function shuffle(deck) {
   return deck.sort(() => Math.random() - 0.5);
 }
 
-function sendSystemMessage(lobby, msg) {
-  io.to(lobby.id).emit("chat", { from: "SUE", message: msg });
+function sendSystemMessage(lobby, message) {
+  io.to(lobby.id).emit("chat", { from: "SUE", message });
 }
 
 function emitState(lobby) {
@@ -56,56 +62,8 @@ function emitState(lobby) {
   io.to(lobby.id).emit("state", state);
 }
 
-function getPlayerOrder(lobby) {
-  return Object.keys(lobby.players).sort();
-}
-
-function triggerSpecialCard(card, lobby, playerId) {
-  if (!card.includes("_")) return;
-
-  const name = card.toLowerCase();
-  switch (name) {
-    case "blue_look":
-      sendSystemMessage(lobby, "🔍 Player peeked and reordered top 4 cards.");
-      const top4 = lobby.deck.splice(-4);
-      lobby.deck.push(...top4.reverse());
-      break;
-    case "green_recycle":
-      sendSystemMessage(lobby, "♻️ All hands reshuffled!");
-      const allCards = Object.values(lobby.hands).flat();
-      shuffle(allCards);
-      const count = Object.keys(lobby.hands).length;
-      Object.keys(lobby.hands).forEach(pid => {
-        lobby.hands[pid] = allCards.splice(0, Math.floor(allCards.length / count));
-      });
-      break;
-    case "red_noc":
-      const randomId = getPlayerOrder(lobby).find(pid => pid !== playerId);
-      lobby.hands[randomId].push(...lobby.deck.splice(0, 3));
-      sendSystemMessage(lobby, `📩 ${lobby.players[randomId].name} received a NOC!`);
-      break;
-    case "wild_relax":
-      sendSystemMessage(lobby, `🧘 ${lobby.players[playerId].name} blocked a draw card.`);
-      break;
-    case "wild_rainbow":
-      sendSystemMessage(lobby, `🌈 Discarding 1 card of each color if possible.`);
-      break;
-    // Add more card triggers here...
-  }
-}
-
-function nextTurn(lobby) {
-  const order = getPlayerOrder(lobby);
-  let idx = order.indexOf(lobby.currentTurn);
-  const direction = lobby.reverse ? -1 : 1;
-  lobby.currentTurn = order[(idx + direction + order.length) % order.length];
-  emitState(lobby);
-  startTurnTimer(lobby);
-}
-
 function startTurnTimer(lobby) {
   if (lobby.turnTimeout) clearTimeout(lobby.turnTimeout);
-
   lobby.turnTimeout = setTimeout(() => {
     const pid = lobby.currentTurn;
     const hand = lobby.hands[pid];
@@ -113,99 +71,181 @@ function startTurnTimer(lobby) {
 
     const card = lobby.deck.pop();
     hand.push(card);
-    sendSystemMessage(lobby, `${lobby.players[pid].name} timed out. Drew 1 card.`);
-    nextTurn(lobby);
+    sendSystemMessage(lobby, `${lobby.players[pid].name} took too long. Drew a card.`);
+    advanceTurn(lobby);
   }, 60000);
+}
+
+function advanceTurn(lobby, skip = false) {
+  const ids = Object.keys(lobby.players);
+  let idx = ids.indexOf(lobby.currentTurn);
+  if (lobby.direction === -1) {
+    idx = (idx - 1 + ids.length) % ids.length;
+  } else {
+    idx = (idx + 1) % ids.length;
+  }
+  lobby.currentTurn = ids[idx];
+  emitState(lobby);
+  startTurnTimer(lobby);
 }
 
 function startGame(lobby) {
   lobby.deck = shuffle(createDeck());
   lobby.hands = {};
   lobby.discardPile = [];
-  lobby.started = true;
 
   let firstCard;
-  do { firstCard = lobby.deck.pop(); } while (firstCard.startsWith("wild"));
+  do {
+    firstCard = lobby.deck.pop();
+  } while (firstCard.startsWith("wild"));
   lobby.discardPile.push(firstCard);
 
   for (const pid of Object.keys(lobby.players)) {
     lobby.hands[pid] = lobby.deck.splice(0, 7);
   }
 
+  lobby.direction = 1;
   lobby.currentTurn = Object.keys(lobby.players)[0];
-  sendSystemMessage(lobby, "🎮 Game started!");
+  sendSystemMessage(lobby, `Game started!`);
   emitState(lobby);
   startTurnTimer(lobby);
 }
 
+function processSpecialCard(card, lobby, playerId, io) {
+  if (specialCards[card]) {
+    specialCards[card](lobby, playerId, io);
+  }
+}
+
 io.on("connection", (socket) => {
   socket.on("join", ({ name, lobby }) => {
+    if (!name || !lobby) return;
+
     lobby = lobby.toLowerCase();
     socket.join(lobby);
 
     if (!lobbies[lobby]) {
-      lobbies[lobby] = { id: lobby, players: {}, deck: [], discardPile: [], hands: {}, reverse: false };
+      lobbies[lobby] = {
+        id: lobby,
+        players: {},
+        hands: {},
+        deck: [],
+        discardPile: [],
+        direction: 1
+      };
+      sendSystemMessage(lobbies[lobby], `${name} created lobby.`);
     }
 
-    const obj = lobbies[lobby];
-    obj.players[socket.id] = { id: socket.id, name };
-    if (!obj.hands[socket.id]) obj.hands[socket.id] = [];
+    const lobbyObj = lobbies[lobby];
+    lobbyObj.players[socket.id] = { id: socket.id, name };
+    if (!lobbyObj.hands[socket.id]) {
+      lobbyObj.hands[socket.id] = [];
+    }
 
-    sendSystemMessage(obj, `${name} joined.`);
-    if (!obj.started && Object.keys(obj.players).length >= 2) startGame(obj);
-    emitState(obj);
+    if (lobbyObj.started) {
+      lobbyObj.hands[socket.id] = lobbyObj.deck.splice(0, 7);
+    }
+
+    sendSystemMessage(lobbyObj, `${name} joined.`);
+    if (!lobbyObj.started && Object.keys(lobbyObj.players).length >= 2) {
+      lobbyObj.started = true;
+      startGame(lobbyObj);
+    } else {
+      emitState(lobbyObj);
+    }
   });
 
-  socket.on("chat", (msg) => {
+  socket.on("chat", ({ message }) => {
     const lobby = Object.values(lobbies).find(l => l.players[socket.id]);
     if (!lobby) return;
     const name = lobby.players[socket.id].name;
-    io.to(lobby.id).emit("chat", { from: name, message: msg });
+    io.to(lobby.id).emit("chat", { from: name, message });
   });
 
   socket.on("playCard", ({ lobby, card, chosenColor }) => {
-    const obj = lobbies[lobby];
-    if (!obj || obj.currentTurn !== socket.id) return;
+    const lobbyObj = lobbies[lobby];
+    if (!lobbyObj) return;
 
-    const hand = obj.hands[socket.id];
-    const idx = hand.indexOf(card);
-    if (idx === -1) return;
+    const playerId = socket.id;
+    const hand = lobbyObj.hands[playerId];
+    if (!hand || lobbyObj.currentTurn !== playerId) return;
 
-    const top = obj.discardPile[obj.discardPile.length - 1];
-    const [tc, tv] = top.split("_");
-    const [cc, cv] = card.split("_");
+    const topCard = lobbyObj.discardPile[lobbyObj.discardPile.length - 1];
+    const [topColor, topValue] = topCard.includes("_") ? topCard.split("_") : [null, topCard];
+    const [cardColor, cardValue] = card.includes("_") ? card.split("_") : [null, card];
+    const isWild = card.startsWith("wild");
 
-    const wild = cc === "wild";
-    if (!wild && cc !== tc && cv !== tv) return;
+    const isValidPlay = isWild ||
+      cardColor === topColor ||
+      cardValue === topValue ||
+      (topCard === "wild" && cardColor === lobbyObj.wildColor);
 
-    hand.splice(idx, 1);
-    obj.discardPile.push(card);
+    if (!isValidPlay) return;
 
-    triggerSpecialCard(card, obj, socket.id);
+    const cardIndex = hand.indexOf(card);
+    if (cardIndex === -1) return;
 
-    obj.currentTurn = getPlayerOrder(obj)[(getPlayerOrder(obj).indexOf(socket.id) + 1) % getPlayerOrder(obj).length];
-    emitState(obj);
+    hand.splice(cardIndex, 1);
+    lobbyObj.discardPile.push(card);
+
+    if (isWild) {
+      if (!["red", "blue", "green", "yellow"].includes(chosenColor)) return;
+      lobbyObj.wildColor = chosenColor;
+      io.to(lobby).emit("chat", {
+        from: "SUE",
+        message: `Wild color chosen: ${chosenColor.toUpperCase()} 🎨`
+      });
+    } else {
+      lobbyObj.wildColor = null;
+    }
+
+    processSpecialCard(card, lobbyObj, playerId, io);
+
+    if (hand.length === 0) {
+      const winnerName = lobbyObj.players[playerId].name;
+      sendSystemMessage(lobbyObj, `🎉 ${winnerName} has won the round!`);
+      scores[winnerName] = scores[winnerName] || { score: 0, wins: 0 };
+      scores[winnerName].wins += 1;
+      saveScores();
+      return;
+    }
+
+    advanceTurn(lobbyObj);
   });
 
   socket.on("drawCard", ({ lobby }) => {
-    const obj = lobbies[lobby];
-    if (!obj || obj.currentTurn !== socket.id) return;
-    obj.hands[socket.id].push(obj.deck.pop());
-    nextTurn(obj);
+    const lobbyObj = lobbies[lobby];
+    if (!lobbyObj) return;
+
+    const pid = socket.id;
+    if (pid !== lobbyObj.currentTurn) return;
+
+    const card = lobbyObj.deck.pop();
+    lobbyObj.hands[pid].push(card);
+    advanceTurn(lobbyObj);
   });
 
   socket.on("disconnect", () => {
     for (const lid in lobbies) {
-      const obj = lobbies[lid];
-      if (obj.players[socket.id]) {
-        sendSystemMessage(obj, `${obj.players[socket.id].name} left.`);
-        delete obj.players[socket.id];
-        delete obj.hands[socket.id];
-        emitState(obj);
+      const lobby = lobbies[lid];
+      if (lobby.players[socket.id]) {
+        sendSystemMessage(lobby, `${lobby.players[socket.id].name} disconnected.`);
+        delete lobby.players[socket.id];
+        delete lobby.hands[socket.id];
+        if (Object.keys(lobby.players).length < 2) {
+          delete lobbies[lid];
+        } else {
+          emitState(lobby);
+        }
+        break;
       }
     }
   });
 });
 
 app.use(express.static(path.join(__dirname, "public")));
-server.listen(PORT, () => console.log(`UNO server running on http://localhost:${PORT}`));
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
