@@ -13,6 +13,8 @@
       <input id="lobby" placeholder="Lobby Name" maxlength="20" required />
       <button type="submit">Join</button>
     </form>
+    <br>
+    <button id="leaderboard-toggle">🏆 Leaderboard</button>
   </div>
 
   <div id="game" style="display:none;">
@@ -21,6 +23,7 @@
         <h3 id="lobby-title">Lobby: <span id="lobby-name-display"></span></h3>
         <ul id="player-list"></ul>
         <button id="leave-btn">Leave Lobby</button>
+        <button id="leaderboard-toggle">🏆 Leaderboard</button>
       </div>
 
       <div id="pile-column">
@@ -56,5 +59,13 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="special-cards.js"></script>
   <script src="game.js"></script>
+  <!-- Leaderboard Modal -->
+<div id="leaderboard-modal" class="modal">
+  <div class="modal-content">
+    <span id="leaderboard-close">&times;</span>
+    <h2>🏆 Leaderboard</h2>
+    <div id="leaderboard-container"></div>
+  </div>
+</div>
 </body>
 </html>
