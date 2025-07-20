@@ -1,172 +1,157 @@
-body {
-  font-family: Arial, sans-serif;
-  background: #f8f8fc;
+html, body {
   margin: 0;
   padding: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-#lobby-form {
-  margin: auto;
-  text-align: center;
-  padding: 2em;
-}
-
-form input, form button {
-  padding: 10px;
-  margin: 5px;
-  font-size: 16px;
-}
-
-#game {
-  display: flex;
-  flex-direction: column;
   height: 100%;
-}
-
-#main-columns {
-  display: flex;
-  flex: 1 1 auto;
-  height: 40vh;
-  padding: 10px;
+  font-family: sans-serif;
   box-sizing: border-box;
 }
 
-#player-column, #pile-column, #meta-column {
+body {
+  display: flex;
+  flex-direction: column;
+  background: #f0f0f0;
+}
+
+#game {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 10px;
+  height: 100vh;
+}
+
+.main-container {
+  display: flex;
+  height: 40vh;
+  padding: 1em;
+  gap: 1em;
 }
 
 #player-column {
-  flex: 1;
-  background: #eef2f7;
-  border-right: 1px solid #ccc;
-}
-
-#player-column h3 {
-  text-decoration: underline;
-  margin: 5px;
-}
-
-#player-list {
-  list-style: none;
-  padding: 0;
-  margin: 10px 0;
-}
-
-#player-list li {
-  margin: 4px 0;
+  width: 20%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  padding: 1em;
+  border-radius: 8px;
 }
 
 #pile-column {
-  flex: 1;
-  justify-content: center;
+  width: 60%;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
 }
 
-.pile {
-  margin: 10px;
+#discard-pile, #draw-pile {
+  width: 45%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 #meta-column {
-  flex: 1;
-  justify-content: center;
-  background: #f4f4f4;
+  width: 20%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1em;
+  gap: 0.5em;
 }
 
-#turn-indicator {
-  font-weight: bold;
-  margin-bottom: 1em;
-}
-
-#uno-btn {
-  padding: 10px 20px;
-  font-size: 16px;
-  background: red;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+#hand-section {
+  height: 40vh;
+  padding: 1em;
+  background: #fff;
+  display: flex;
+  overflow-x: auto;
+  border-top: 1px solid #ccc;
 }
 
 #player-hand {
-  height: 40vh;
   display: flex;
-  align-items: center;
-  overflow-x: auto;
-  padding: 10px;
-  border-top: 1px solid #ccc;
-  border-bottom: 1px solid #ccc;
-  background: #fff;
+  gap: 10px;
+  height: 100%;
 }
 
 .card {
-  width: 80px;
-  margin: 5px;
-  transition: transform 0.2s;
-  cursor: pointer;
+  height: 100px;
+  aspect-ratio: 2/3;
   border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
 .card:hover {
   transform: scale(1.1);
 }
 
-#chat {
-  height: 20vh;
-  background: #eaeef2;
+.stack {
+  box-shadow: 0px 4px 6px rgba(0,0,0,0.2);
+}
+
+#wild-buttons {
   display: flex;
   flex-direction: column;
-  padding: 10px;
-  box-sizing: border-box;
+  gap: 0.5em;
+}
+
+.wild-choice {
+  width: 100%;
+  padding: 0.5em;
+  border: none;
+  font-weight: bold;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.wild-choice.red { background: red; }
+.wild-choice.blue { background: blue; }
+.wild-choice.green { background: green; }
+.wild-choice.yellow { background: gold; color: black; }
+
+footer#chat-footer {
+  height: 20vh;
+  background: #222;
+  color: white;
+  padding: 1em;
+  display: flex;
+  flex-direction: column;
 }
 
 #chat-log {
   flex: 1;
   overflow-y: auto;
-  background: #fff;
-  padding: 10px;
-  margin-bottom: 10px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
+  margin-bottom: 0.5em;
 }
 
 #chat-controls {
   display: flex;
-  gap: 8px;
+  gap: 0.5em;
 }
 
 #chat-box {
   flex: 1;
-  padding: 10px;
-  font-size: 16px;
+  padding: 0.5em;
 }
 
 #chat-send {
-  padding: 10px 15px;
-  font-size: 16px;
-}
-#wild-color-picker {
-  margin-top: 10px;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
+  padding: 0.5em 1em;
 }
 
-.color-btn {
-  padding: 10px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
+@media (max-width: 768px) {
+  .main-container {
+    flex-direction: column;
+    height: auto;
+  }
 
-.color-btn:hover {
-  transform: scale(1.1);
+  #player-column,
+  #pile-column,
+  #meta-column {
+    width: 100%;
+  }
+
+  #hand-section {
+    height: auto;
+  }
 }
