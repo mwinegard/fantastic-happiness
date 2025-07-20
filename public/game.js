@@ -1,5 +1,3 @@
-// public/game.js
-
 const socket = io();
 
 const joinForm = document.getElementById("join-form");
@@ -19,8 +17,6 @@ const turnIndicator = document.getElementById("turn-indicator");
 const leaveBtn = document.getElementById("leave-btn");
 
 let currentLobby = "";
-let currentHand = [];
-let currentTurnId = null;
 
 const sounds = {
   draw: new Audio("/assets/sounds/draw.mp3"),
@@ -39,6 +35,11 @@ const sounds = {
 function playSound(name) {
   const sound = sounds[name];
   if (sound) sound.play().catch(() => {});
+}
+
+function disableCardElement(img) {
+  img.classList.add("disabled");
+  img.title = "You can't play this card right now.";
 }
 
 joinForm.addEventListener("submit", (e) => {
@@ -81,80 +82,74 @@ socket.on("state", (state) => {
   document.getElementById("lobby-name-display").innerText = currentLobby;
 
   const playerId = socket.id;
-  currentTurnId = state.currentTurn;
-  currentHand = state.hands[playerId] || [];
+  const hand = state.hands[playerId] || [];
 
-  // Turn indicator
-  if (currentTurnId) {
+  if (state.currentTurn) {
     turnIndicator.style.display = "block";
-    turnIndicator.innerText =
-      currentTurnId === playerId
-        ? "It is your turn."
-        : `It is ${state.players.find(p => p.id === currentTurnId)?.name}'s turn.`;
+    turnIndicator.innerText = state.currentTurn === playerId
+      ? "It is your turn."
+      : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
   } else {
     turnIndicator.style.display = "none";
   }
 
-  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === playerId ? "👉 " : "";
+    const mark = p.id === socket.id ? "👉 " : "";
     const li = document.createElement("li");
     li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
   });
 
-  // Player hand
   handDiv.innerHTML = "";
-  currentHand.forEach(card => {
+  hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
 
-    const canPlay = canPlayCard(card, state.discardPile[state.discardPile.length - 1]);
+    let isClickable = state.currentTurn === playerId;
 
-    // rainbow logic block
-    if (card === "wild_rainbow") {
-      const hasAllColors = hasFourColors(currentHand);
+    if (isClickable && card === "wild_rainbow") {
+      const colorsInHand = hand.map(c => c.split("_")[0]);
+      const requiredColors = ["red", "blue", "green", "yellow"];
+      const hasAllColors = requiredColors.every(color => colorsInHand.includes(color));
       if (!hasAllColors) {
-        img.style.opacity = "0.5";
-        img.style.pointerEvents = "none";
+        isClickable = false;
+        disableCardElement(img);
       }
     }
 
-    img.addEventListener("click", () => {
-      if (state.currentTurn !== playerId) return;
-
-      if (card.startsWith("wild") && card !== "wild_rainbow") {
-        wildButtons.style.display = "flex";
-        wildButtons.querySelectorAll("button").forEach(btn => {
-          btn.onclick = () => {
-            wildButtons.style.display = "none";
-            socket.emit("playCard", {
-              lobby: currentLobby,
-              card,
-              chosenColor: btn.dataset.color
-            });
-            playSound(card.startsWith("wild_") ? "special" : "wild");
-          };
-        });
-      } else {
-        socket.emit("playCard", { lobby: currentLobby, card });
-        if (card.includes("draw")) playSound("draw");
-        else if (card.includes("skip")) playSound("skip");
-        else if (card.includes("reverse")) playSound("reverse");
-        else if (card.startsWith("wild_")) playSound("special");
-        else playSound("number");
-      }
-    });
+    if (isClickable) {
+      img.addEventListener("click", () => {
+        if (card.startsWith("wild") && card !== "wild_rainbow") {
+          wildButtons.style.display = "flex";
+          wildButtons.querySelectorAll("button").forEach(btn => {
+            btn.onclick = () => {
+              wildButtons.style.display = "none";
+              socket.emit("playCard", {
+                lobby: currentLobby,
+                card,
+                chosenColor: btn.dataset.color
+              });
+              playSound("wild");
+            };
+          });
+        } else {
+          socket.emit("playCard", { lobby: currentLobby, card });
+          if (card.includes("draw")) playSound("draw");
+          else if (card.includes("skip")) playSound("skip");
+          else if (card.includes("reverse")) playSound("reverse");
+          else if (card.startsWith("wild_")) playSound("special");
+          else playSound("number");
+        }
+      });
+    }
 
     handDiv.appendChild(img);
   });
 
-  // UNO button
-  unoButton.style.display = currentHand.length === 2 ? "block" : "none";
+  unoButton.style.display = hand.length === 2 ? "block" : "none";
 
-  // Discard pile
   discardPile.innerHTML = "";
   if (state.discardPile?.length) {
     const topCard = state.discardPile[state.discardPile.length - 1];
@@ -164,7 +159,6 @@ socket.on("state", (state) => {
     discardPile.appendChild(topImg);
   }
 
-  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
@@ -177,18 +171,3 @@ socket.on("state", (state) => {
   });
   drawPile.appendChild(drawImg);
 });
-
-function canPlayCard(card, topCard) {
-  if (!topCard) return true;
-  if (card === "wild_rainbow") return hasFourColors(currentHand);
-  if (card.startsWith("wild")) return true;
-  const topColor = topCard.split("_")[0];
-  const cardColor = card.split("_")[0];
-  return cardColor === topColor || topCard.startsWith(cardColor);
-}
-
-function hasFourColors(hand) {
-  const required = ["red", "blue", "green", "yellow"];
-  const colorsInHand = new Set(hand.map(c => c.split("_")[0]));
-  return required.every(c => colorsInHand.has(c));
-}
