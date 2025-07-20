@@ -13,23 +13,15 @@ const chatSend = document.getElementById("chat-send");
 const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
-const leaveBtn = document.getElementById("leave-btn");
-const lobbyNameHeader = document.getElementById("lobby-name");
-
-let currentLobby = "";
+const colorPicker = document.getElementById("color-picker");
 
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = nameInput.value.trim();
   const lobby = lobbyInput.value.trim().toLowerCase();
   if (name && lobby) {
-    currentLobby = lobby;
     socket.emit("join", { name, lobby });
   }
-});
-
-leaveBtn.addEventListener("click", () => {
-  location.reload(); // resets to join screen
 });
 
 chatSend.addEventListener("click", sendMessage);
@@ -40,7 +32,7 @@ chatBox.addEventListener("keypress", (e) => {
 function sendMessage() {
   const msg = chatBox.value.trim();
   if (msg) {
-    socket.emit("chat", { message: msg });
+    socket.emit("chat", msg);
     chatBox.value = "";
   }
 }
@@ -52,6 +44,8 @@ socket.on("chat", ({ from, message }) => {
   chatLog.scrollTop = chatLog.scrollHeight;
 });
 
+let waitingForColor = false;
+
 socket.on("state", (state) => {
   document.getElementById("lobby-form").style.display = "none";
   gameDiv.style.display = "block";
@@ -59,48 +53,53 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
-  // Lobby name
-  lobbyNameHeader.innerText = `Lobby: ${currentLobby}`;
-
-  // Show turn info only after game starts
-  turnIndicator.style.display = state.currentTurn ? "block" : "none";
   turnIndicator.innerText = state.currentTurn === playerId
     ? "It is your turn."
     : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
+  turnIndicator.style.display = "block";
 
-  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === playerId ? "👉 " : "";
+    const mark = p.id === socket.id ? "👉 " : "";
     const li = document.createElement("li");
     li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
   });
 
-  // Player hand
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
     img.addEventListener("click", () => {
-      if (state.currentTurn !== playerId) return;
+      if (state.currentTurn !== playerId || waitingForColor) return;
 
       if (card.startsWith("wild")) {
-        const color = prompt("Choose a color (red, green, blue, yellow):");
-        if (!["red", "blue", "green", "yellow"].includes(color)) return;
-        socket.emit("playCard", { lobby: currentLobby, card, chosenColor: color });
+        waitingForColor = true;
+        colorPicker.style.display = "flex";
+        colorPicker.onclick = null;
+
+        colorPicker.querySelectorAll("button").forEach(btn => {
+          btn.onclick = () => {
+            const chosenColor = btn.dataset.color;
+            socket.emit("playCard", {
+              lobby: state.players[0].id,
+              card,
+              chosenColor
+            });
+            colorPicker.style.display = "none";
+            waitingForColor = false;
+          };
+        });
       } else {
-        socket.emit("playCard", { lobby: currentLobby, card });
+        socket.emit("playCard", { lobby: state.players[0].id, card });
       }
     });
     handDiv.appendChild(img);
   });
 
-  // Show UNO button if needed
   unoButton.style.display = hand.length === 2 ? "block" : "none";
 
-  // Discard pile
   discardPile.innerHTML = "";
   if (state.discardPile.length > 0) {
     const topCard = state.discardPile[state.discardPile.length - 1];
@@ -110,14 +109,13 @@ socket.on("state", (state) => {
     discardPile.appendChild(topImg);
   }
 
-  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
   drawImg.className = "card stack";
   drawImg.addEventListener("click", () => {
     if (state.currentTurn === playerId) {
-      socket.emit("drawCard", { lobby: currentLobby });
+      socket.emit("drawCard", { lobby: state.players[0].id });
     }
   });
   drawPile.appendChild(drawImg);
