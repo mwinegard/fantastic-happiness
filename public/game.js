@@ -1,3 +1,5 @@
+// public/game.js
+
 const socket = io();
 
 const joinForm = document.getElementById("join-form");
@@ -15,8 +17,10 @@ const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
 const leaveBtn = document.getElementById("leave-btn");
+const muteBtn = document.getElementById("mute-toggle");
 
 let currentLobby = "";
+let muted = false;
 
 const sounds = {
   draw: new Audio("/assets/sounds/draw.mp3"),
@@ -33,13 +37,16 @@ const sounds = {
 };
 
 function playSound(name) {
+  if (muted) return;
   const sound = sounds[name];
   if (sound) sound.play().catch(() => {});
 }
 
-function disableCardElement(img) {
-  img.classList.add("disabled");
-  img.title = "You can't play this card right now.";
+if (muteBtn) {
+  muteBtn.addEventListener("click", () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
+  });
 }
 
 joinForm.addEventListener("submit", (e) => {
@@ -84,6 +91,7 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
+  // Turn indicator
   if (state.currentTurn) {
     turnIndicator.style.display = "block";
     turnIndicator.innerText = state.currentTurn === playerId
@@ -93,6 +101,7 @@ socket.on("state", (state) => {
     turnIndicator.style.display = "none";
   }
 
+  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
     const mark = p.id === socket.id ? "👉 " : "";
@@ -101,55 +110,57 @@ socket.on("state", (state) => {
     playerList.appendChild(li);
   });
 
+  // Player hand
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
 
-    let isClickable = state.currentTurn === playerId;
+    const isRainbow = card === "wild_rainbow";
+    const hasColors = ["red", "green", "blue", "yellow"].every(color =>
+      hand.some(c => c.startsWith(color))
+    );
 
-    if (isClickable && card === "wild_rainbow") {
-      const colorsInHand = hand.map(c => c.split("_")[0]);
-      const requiredColors = ["red", "blue", "green", "yellow"];
-      const hasAllColors = requiredColors.every(color => colorsInHand.includes(color));
-      if (!hasAllColors) {
-        isClickable = false;
-        disableCardElement(img);
+    if (isRainbow && !hasColors) {
+      img.classList.add("disabled");
+      return;
+    }
+
+    img.addEventListener("click", () => {
+      if (state.currentTurn !== playerId) return;
+
+      if (card.startsWith("wild")) {
+        wildButtons.style.display = "flex";
+        wildButtons.querySelectorAll("button").forEach(btn => {
+          btn.onclick = () => {
+            wildButtons.style.display = "none";
+            socket.emit("playCard", {
+              lobby: currentLobby,
+              card,
+              chosenColor: btn.dataset.color
+            });
+            playSound("wild");
+          };
+        });
+      } else {
+        socket.emit("playCard", { lobby: currentLobby, card });
+
+        if (card.includes("draw")) playSound("draw");
+        else if (card.includes("skip")) playSound("skip");
+        else if (card.includes("reverse")) playSound("reverse");
+        else if (card.startsWith("wild_")) playSound("special");
+        else playSound("number");
       }
-    }
-
-    if (isClickable) {
-      img.addEventListener("click", () => {
-        if (card.startsWith("wild") && card !== "wild_rainbow") {
-          wildButtons.style.display = "flex";
-          wildButtons.querySelectorAll("button").forEach(btn => {
-            btn.onclick = () => {
-              wildButtons.style.display = "none";
-              socket.emit("playCard", {
-                lobby: currentLobby,
-                card,
-                chosenColor: btn.dataset.color
-              });
-              playSound("wild");
-            };
-          });
-        } else {
-          socket.emit("playCard", { lobby: currentLobby, card });
-          if (card.includes("draw")) playSound("draw");
-          else if (card.includes("skip")) playSound("skip");
-          else if (card.includes("reverse")) playSound("reverse");
-          else if (card.startsWith("wild_")) playSound("special");
-          else playSound("number");
-        }
-      });
-    }
+    });
 
     handDiv.appendChild(img);
   });
 
+  // UNO button
   unoButton.style.display = hand.length === 2 ? "block" : "none";
 
+  // Discard pile
   discardPile.innerHTML = "";
   if (state.discardPile?.length) {
     const topCard = state.discardPile[state.discardPile.length - 1];
@@ -159,6 +170,7 @@ socket.on("state", (state) => {
     discardPile.appendChild(topImg);
   }
 
+  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
