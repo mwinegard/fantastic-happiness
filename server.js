@@ -1,3 +1,4 @@
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -15,7 +16,9 @@ const SCORES_FILE = path.join(__dirname, "scores.json");
 if (fs.existsSync(SCORES_FILE)) {
   scores = JSON.parse(fs.readFileSync(SCORES_FILE));
 }
-
+function getPlayerOrder(lobby) {
+  return Object.keys(lobby.players).sort();
+}
 function saveScores() {
   fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2));
 }
@@ -216,65 +219,77 @@ io.on("connection", (socket) => {
   });
 
   socket.on("playCard", ({ lobby, card, chosenColor }) => {
-    lobby = lobby.toLowerCase();
-    const lobbyObj = lobbies[lobby];
-    if (!lobbyObj) return;
+  const lobbyObj = lobbies[lobby];
+  if (!lobbyObj) return;
 
-    const pid = socket.id;
-    if (pid !== lobbyObj.currentTurn) return;
+  const playerId = socket.id;
+  const hand = lobbyObj.hands[playerId];
+  if (!hand || lobbyObj.currentTurn !== playerId) return;
 
-    const hand = lobbyObj.hands[pid];
-    const topCard = lobbyObj.discardPile.slice(-1)[0];
-    if (!hand.includes(card)) return;
+  const cardIndex = hand.indexOf(card);
+  if (cardIndex === -1) return;
 
-    const [topColor, topVal] = topCard.split("_");
-    const [playColor, playVal] = card.split("_");
+  const topCard = lobbyObj.discardPile[lobbyObj.discardPile.length - 1];
+  const [topColor, topValue] = topCard.split("_");
+  const [cardColor, cardValue] = card.includes("_") ? card.split("_") : [null, card];
 
-    if (!card.startsWith("wild") && playColor !== topColor && playVal !== topVal) return;
+  const isWild = card.startsWith("wild");
+  const isValidPlay =
+    isWild ||
+    cardColor === topColor ||
+    cardValue === topValue ||
+    (topCard === "wild" && cardColor === lobbyObj.wildColor);
 
-    hand.splice(hand.indexOf(card), 1);
-    lobbyObj.discardPile.push(card);
+  if (!isValidPlay) return;
 
-    if (card === "wild_draw4" || card === "wild") {
-      if (!["red", "green", "blue", "yellow"].includes(chosenColor)) return;
-      lobbyObj.lastWildColor = chosenColor;
-      sendSystemMessage(lobbyObj, `Color changed to ${chosenColor}`);
-    }
+  hand.splice(cardIndex, 1);
+  lobbyObj.discardPile.push(card);
 
-    const ids = Object.keys(lobbyObj.players);
-    const currentIdx = ids.indexOf(pid);
+  if (isWild) {
+    if (!chosenColor || !["red", "blue", "green", "yellow"].includes(chosenColor)) return;
+    lobbyObj.wildColor = chosenColor;
+    io.to(lobby).emit("chat", { from: "SUE", message: `Wild card color chosen: ${chosenColor}` });
+  } else {
+    lobbyObj.wildColor = null;
+  }
 
-    if (card.includes("draw")) {
-      const nextIdx = (currentIdx + lobbyObj.direction + ids.length) % ids.length;
-      const nextPid = ids[nextIdx];
-      const drawCount = card === "draw2" || card === "draw" ? 2 : 4;
-      lobbyObj.hands[nextPid].push(...lobbyObj.deck.splice(0, drawCount));
-      sendSystemMessage(lobbyObj, `${lobbyObj.players[nextPid].name} draws ${drawCount} cards.`);
-      lobbyObj.currentTurn = ids[(nextIdx + lobbyObj.direction + ids.length) % ids.length];
-    } else if (card.includes("skip")) {
-      const skipIdx = (currentIdx + lobbyObj.direction * 2 + ids.length) % ids.length;
-      const skippedName = lobbyObj.players[ids[(currentIdx + lobbyObj.direction) % ids.length]].name;
-      sendSystemMessage(lobbyObj, `${skippedName} is skipped.`);
-      lobbyObj.currentTurn = ids[skipIdx];
-    } else if (card.includes("reverse")) {
-      lobbyObj.direction *= -1;
-      sendSystemMessage(lobbyObj, `Play direction has reversed!`);
-      if (Object.keys(lobbyObj.players).length === 2) {
-        // 2 players → reverse means same turn again
-      } else {
-        nextTurn(lobbyObj);
-      }
-    } else {
-      nextTurn(lobbyObj);
-    }
+  const playerIds = getPlayerOrder(lobbyObj);
+  const curIndex = playerIds.indexOf(playerId);
+  let nextIndex = (curIndex + 1) % playerIds.length;
+  let skipCount = 0;
 
-    if (hand.length === 0) {
-      endRound(lobbyObj, pid);
-    } else {
-      emitState(lobbyObj);
-    }
-  });
+  if (cardValue === "reverse") {
+    lobbyObj.reverse = !lobbyObj.reverse;
+    io.to(lobby).emit("chat", { from: "SUE", message: `Play direction has reversed.` });
+    nextIndex = (playerIds.length + curIndex - 1) % playerIds.length;
+  }
 
+  if (cardValue === "skip") {
+    skipCount = 1;
+    const skipped = playerIds[nextIndex];
+    io.to(lobby).emit("chat", { from: "SUE", message: `${lobbyObj.players[skipped].name} was skipped.` });
+  }
+
+  if (cardValue === "draw" || cardValue === "draw2" || cardValue === "draw4") {
+    const drawAmount = card.includes("4") ? 4 : 2;
+    const victimId = playerIds[nextIndex];
+    lobbyObj.hands[victimId].push(...lobbyObj.deck.splice(0, drawAmount));
+    io.to(lobby).emit("chat", {
+      from: "SUE",
+      message: `${lobbyObj.players[victimId].name} drew ${drawAmount} cards.`
+    });
+    skipCount = 1;
+  }
+
+  for (let i = 0; i < skipCount + 1; i++) {
+    nextIndex = lobbyObj.reverse
+      ? (playerIds.length + nextIndex - 1) % playerIds.length
+      : (nextIndex + 1) % playerIds.length;
+  }
+
+  lobbyObj.currentTurn = playerIds[nextIndex];
+  emitState(lobbyObj);
+});
   socket.on("drawCard", ({ lobby }) => {
     lobby = lobby.toLowerCase();
     const lobbyObj = lobbies[lobby];
