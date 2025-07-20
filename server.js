@@ -109,14 +109,18 @@ function removePlayer(game, playerId) {
   const hand = game.hands[playerId] || [];
   const rest = game.order.filter(id => id !== playerId);
   const redistribute = rest.length;
-  hand.forEach((card, i) => {
-    const pid = rest[i % redistribute];
-    game.hands[pid].push(card);
-  });
+  if (redistribute > 0) {
+    hand.forEach((card, i) => {
+      const pid = rest[i % redistribute];
+      if (game.hands[pid]) {
+        game.hands[pid].push(card);
+      }
+    });
+  }
 
   delete game.players[playerId];
   delete game.hands[playerId];
-  game.order = game.order.filter(id => id !== playerId);
+  game.order = rest;
 
   if (game.order.length === 1) {
     const winnerId = game.order[0];
