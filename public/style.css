@@ -35,6 +35,18 @@ body {
   border-radius: 8px;
 }
 
+#player-column ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+#lobby-title {
+  font-size: 1.1em;
+  font-weight: bold;
+  text-decoration: underline;
+  margin-bottom: 0.5em;
+}
+
 #pile-column {
   width: 60%;
   display: flex;
@@ -42,7 +54,8 @@ body {
   align-items: center;
 }
 
-#discard-pile, #draw-pile {
+#discard-pile,
+#draw-pile {
   width: 45%;
   display: flex;
   justify-content: center;
@@ -69,16 +82,19 @@ body {
 
 #player-hand {
   display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 10px;
   height: 100%;
 }
 
 .card {
   height: 100px;
-  aspect-ratio: 2/3;
+  aspect-ratio: 2 / 3;
   border-radius: 8px;
   cursor: pointer;
   transition: transform 0.2s;
+  object-fit: contain;
 }
 
 .card:hover {
@@ -86,7 +102,7 @@ body {
 }
 
 .stack {
-  box-shadow: 0px 4px 6px rgba(0,0,0,0.2);
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
 }
 
 #wild-buttons {
@@ -105,10 +121,19 @@ body {
   cursor: pointer;
 }
 
-.wild-choice.red { background: red; }
-.wild-choice.blue { background: blue; }
-.wild-choice.green { background: green; }
-.wild-choice.yellow { background: gold; color: black; }
+.wild-choice.red {
+  background: red;
+}
+.wild-choice.blue {
+  background: blue;
+}
+.wild-choice.green {
+  background: green;
+}
+.wild-choice.yellow {
+  background: gold;
+  color: black;
+}
 
 footer#chat-footer {
   height: 20vh;
