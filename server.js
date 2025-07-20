@@ -8,7 +8,6 @@ const { specialCardLogic } = require("./public/specialCards");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 app.use(express.static("public"));
 
 const lobbies = {};
@@ -34,7 +33,7 @@ function createDeck() {
   });
 
   deck.push(...wilds);
-  return shuffle([...deck, ...deck]); // double deck
+  return shuffle([...deck, ...deck]);
 }
 
 function shuffle(arr) {
@@ -57,22 +56,38 @@ io.on("connection", (socket) => {
         discardPile: [],
         direction: 1,
         currentTurn: null,
+        started: false,
+        startCountdown: null,
         happyActive: false
       };
     }
 
     const lobbyObj = lobbies[lobby];
-    lobbyObj.players[socket.id] = { id: socket.id, name, score: 0 };
-    lobbyObj.order.push(socket.id);
-    lobbyObj.hands[socket.id] = lobbyObj.deck.splice(0, 7);
 
-    socket.join(lobby);
-    if (lobbyObj.order.length === 1) {
-      lobbyObj.discardPile.push(lobbyObj.deck.pop());
-      lobbyObj.currentTurn = socket.id;
+    if (Object.keys(lobbyObj.players).length >= 10) {
+      socket.emit("chat", { from: "SUE", message: `❌ Lobby full. Max 10 players.` });
+      return;
     }
 
+    lobbyObj.players[socket.id] = { id: socket.id, name, score: 0 };
+    lobbyObj.order.push(socket.id);
+    socket.join(lobby);
+
     io.to(lobby).emit("chat", { from: "SUE", message: `${name} joined.` });
+
+    if (!lobbyObj.started && Object.keys(lobbyObj.players).length >= 2 && !lobbyObj.startCountdown) {
+      lobbyObj.startCountdown = setTimeout(() => {
+        if (Object.keys(lobbyObj.players).length >= 2) {
+          startGame(lobbyObj);
+        }
+      }, 30000);
+
+      io.to(lobby).emit("chat", {
+        from: "SUE",
+        message: `🕒 Game will start in 30 seconds...`
+      });
+    }
+
     sendState(lobby);
   });
 
@@ -81,44 +96,42 @@ io.on("connection", (socket) => {
     if (!game || game.currentTurn !== socket.id) return;
 
     const hand = game.hands[socket.id];
-    const cardIndex = hand.indexOf(card);
-    if (cardIndex === -1) return;
+    if (!hand.includes(card)) return;
 
     const topCard = game.discardPile[game.discardPile.length - 1];
     const topColor = topCard.split("_")[0];
     const cardColor = card.split("_")[0];
 
-    // Rainbow Special
     if (card === "wild_rainbow") {
       const colorsInHand = hand.map(c => c.split("_")[0]);
-      const requiredColors = ["red", "blue", "green", "yellow"];
-      const hasAllColors = requiredColors.every(color => colorsInHand.includes(color));
-      if (!hasAllColors) {
-        game.hands[socket.id].push(game.deck.pop()); // auto draw
+      const required = ["red", "blue", "green", "yellow"];
+      const hasAll = required.every(color => colorsInHand.includes(color));
+
+      if (!hasAll) {
+        game.hands[socket.id].push(game.deck.pop());
         advanceTurn(game);
         sendState(lobby);
         return;
       }
     }
 
-    // Color matching logic
-    if (cardColor !== "wild" && topColor !== cardColor && !topCard.startsWith(cardColor)) return;
+    if (cardColor !== "wild" && cardColor !== topColor && !topCard.startsWith(cardColor)) return;
 
-    game.discardPile.push(hand.splice(cardIndex, 1)[0]);
+    hand.splice(hand.indexOf(card), 1);
+    game.discardPile.push(card);
 
-    // Execute special card logic if applicable
     if (specialCardLogic[card]) {
       specialCardLogic[card](game, socket.id, io);
     }
 
-    // Rainbow play post-discard
     if (card === "wild_rainbow") {
-      const requiredColors = ["red", "blue", "green", "yellow"];
+      const required = ["red", "blue", "green", "yellow"];
       const discards = [];
-      requiredColors.forEach(color => {
+      required.forEach(color => {
         const match = hand.find(c => c.startsWith(color));
         if (match) discards.push(match);
       });
+
       discards.forEach(c => {
         const i = hand.indexOf(c);
         if (i !== -1) {
@@ -128,25 +141,24 @@ io.on("connection", (socket) => {
       });
 
       const lastCard = discards[discards.length - 1];
-      if (lastCard.includes("draw")) {
+      if (lastCard?.includes("draw")) {
         const next = getNextPlayer(game);
         game.hands[next].push(...game.deck.splice(0, 2));
-      } else if (lastCard.includes("skip")) {
-        advanceTurn(game); // skip
-      } else if (lastCard.includes("reverse")) {
+      } else if (lastCard?.includes("skip")) {
+        advanceTurn(game);
+      } else if (lastCard?.includes("reverse")) {
         if (game.order.length === 2) {
-          advanceTurn(game); // treat reverse as skip
+          advanceTurn(game);
         } else {
           game.direction *= -1;
         }
       }
 
-      const newColor = lastCard.split("_")[0];
+      const newColor = lastCard?.split("_")[0];
       game.lastColor = newColor;
     }
 
-    // Win check
-    if (game.hands[socket.id].length === 0) {
+    if (hand.length === 0) {
       game.players[socket.id].score += 1;
       io.to(lobby).emit("chat", {
         from: "SUE",
@@ -172,7 +184,6 @@ io.on("connection", (socket) => {
   socket.on("chat", ({ message }) => {
     const lobby = Object.keys(lobbies).find(l => lobbies[l].players[socket.id]);
     if (!lobby) return;
-
     const game = lobbies[lobby];
     const from = game.players[socket.id]?.name || "Unknown";
     io.to(lobby).emit("chat", { from, message });
@@ -184,6 +195,16 @@ io.on("connection", (socket) => {
         delete lobby.players[socket.id];
         delete lobby.hands[socket.id];
         lobby.order = lobby.order.filter(id => id !== socket.id);
+
+        if (lobby.order.length < 2 && lobby.startCountdown) {
+          clearTimeout(lobby.startCountdown);
+          lobby.startCountdown = null;
+          io.to(lobby.id).emit("chat", {
+            from: "SUE",
+            message: `⚠️ Countdown canceled. Not enough players.`
+          });
+        }
+
         if (lobby.order.length === 0) {
           delete lobbies[lobby.id];
         } else {
@@ -196,25 +217,64 @@ io.on("connection", (socket) => {
   });
 });
 
+function startGame(lobby) {
+  lobby.started = true;
+  lobby.startCountdown = null;
+  lobby.deck = createDeck();
+  lobby.discardPile = [];
+
+  let firstCard;
+  do {
+    firstCard = lobby.deck.pop();
+  } while (firstCard.startsWith("wild") || specialCardLogic[firstCard]);
+  lobby.discardPile.push(firstCard);
+
+  lobby.hands = {};
+  lobby.order.forEach(pid => {
+    lobby.hands[pid] = lobby.deck.splice(0, 7);
+  });
+
+  lobby.currentTurn = lobby.order[0];
+
+  io.to(lobby.id).emit("chat", {
+    from: "SUE",
+    message: `🎮 Game started! First card is ${firstCard.toUpperCase().replace("_", " ")}`
+  });
+
+  sendState(lobby.id);
+}
+
+function resetGame(game) {
+  game.started = false;
+  game.startCountdown = null;
+
+  if (game.order.length >= 2) {
+    game.startCountdown = setTimeout(() => {
+      if (game.order.length >= 2) {
+        startGame(game);
+      }
+    }, 30000);
+
+    io.to(game.id).emit("chat", {
+      from: "SUE",
+      message: `🔁 Next round starts in 30 seconds...`
+    });
+  } else {
+    io.to(game.id).emit("chat", {
+      from: "SUE",
+      message: `⏳ Waiting for more players to start again.`
+    });
+  }
+}
+
 function advanceTurn(game) {
   const idx = game.order.indexOf(game.currentTurn);
-  const nextIdx = (idx + game.direction + game.order.length) % game.order.length;
-  game.currentTurn = game.order[nextIdx];
+  game.currentTurn = game.order[(idx + game.direction + game.order.length) % game.order.length];
 }
 
 function getNextPlayer(game) {
   const idx = game.order.indexOf(game.currentTurn);
   return game.order[(idx + game.direction + game.order.length) % game.order.length];
-}
-
-function resetGame(game) {
-  game.deck = createDeck();
-  game.discardPile = [game.deck.pop()];
-  game.hands = {};
-  game.order.forEach(id => {
-    game.hands[id] = game.deck.splice(0, 7);
-  });
-  game.currentTurn = game.order[0];
 }
 
 function sendState(lobbyId) {
@@ -229,5 +289,5 @@ function sendState(lobbyId) {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
