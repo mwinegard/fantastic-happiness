@@ -105,23 +105,27 @@ function advanceTurn(game) {
   startTurnTimer(game);
 }
 
-function removePlayer(socketId) {
-  for (const [lobbyId, game] of Object.entries(lobbies)) {
-    if (game?.players?.[socketId]) {
-      delete game.players[socketId];
+function removePlayer(game, playerId) {
+  const hand = game.hands[playerId] || [];
+  const rest = game.order.filter(id => id !== playerId);
+  const redistribute = rest.length;
+  hand.forEach((card, i) => {
+    const pid = rest[i % redistribute];
+    game.hands[pid].push(card);
+  });
 
-      if (Array.isArray(game.order)) {
-        game.order = game.order.filter(id => id !== socketId);
-      }
+  delete game.players[playerId];
+  delete game.hands[playerId];
+  game.order = game.order.filter(id => id !== playerId);
 
-      if (Object.keys(game.players).length === 0) {
-        delete lobbies[lobbyId];
-      } else {
-        sendState(lobbyId);
-      }
-
-      break;
-    }
+  if (game.order.length === 1) {
+    const winnerId = game.order[0];
+    game.players[winnerId].score += 50;
+    io.to(game.id).emit("chat", {
+      from: "SUE",
+      message: `🏁 ${game.players[winnerId].name} wins by default and earns 50 points.`
+    });
+    resetGame(game);
   }
 }
 
@@ -193,13 +197,4 @@ io.on("connection", (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log("Server running on port " + PORT);
-});
-
-
-app.get("/lobbies", (req, res) => {
-  const activeLobbies = {};
-  for (const [lobbyId, game] of Object.entries(lobbies)) {
-    activeLobbies[lobbyId] = Object.values(game.players).map(p => p.name);
-  }
-  res.json(activeLobbies);
 });
