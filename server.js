@@ -135,7 +135,8 @@ function sendState(lobbyId) {
     players: Object.values(game.players),
     hands: game.hands,
     discardPile: game.discardPile,
-    currentTurn: game.currentTurn
+    currentTurn: game.currentTurn,
+    hasStarted: game.hasStarted  // ✅ Add this
   });
 }
 
