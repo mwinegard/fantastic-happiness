@@ -16,24 +16,39 @@
   </div>
 
   <div id="game" style="display:none;">
-    <div id="layout">
+    <div id="game-body">
       <div id="player-column">
         <ul id="player-list"></ul>
       </div>
-      <div id="game-board">
-        <div id="turn-indicator"></div>
+
+      <div id="center-column">
         <div id="discard-pile"></div>
         <div id="draw-pile"></div>
+      </div>
+
+      <div id="sidebar-column">
+        <div id="turn-indicator"></div>
         <button id="uno-btn" style="display:none;">UNO!</button>
       </div>
     </div>
+
     <div id="player-hand"></div>
+
+    <div id="chat-footer">
+      <div id="chat-log"></div>
+      <div id="chat-input">
+        <input id="chat-box" placeholder="Say something..." />
+        <button id="chat-send">Send</button>
+      </div>
+    </div>
   </div>
 
-  <div id="chat-section">
-    <div id="chat-log"></div>
-    <input id="chat-box" placeholder="Type message..." />
-    <button id="chat-send">📨</button>
+  <div class="color-selector" id="color-selector" style="display: none;">
+    <p>Select a color:</p>
+    <button style="background:red" data-color="red">Red</button>
+    <button style="background:blue" data-color="blue">Blue</button>
+    <button style="background:green" data-color="green">Green</button>
+    <button style="background:gold" data-color="yellow">Yellow</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
