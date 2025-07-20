@@ -1,169 +1,154 @@
-const socket = io();
-let playerId, currentLobby;
+// public/game.js
 
-const loginSection = document.getElementById("login");
-const gameSection = document.getElementById("game");
+const socket = io();
+
+const joinForm = document.getElementById("join-form");
 const nameInput = document.getElementById("name");
 const lobbyInput = document.getElementById("lobby");
-const joinBtn = document.getElementById("join");
-const handDiv = document.getElementById("hand");
-const discardImg = document.getElementById("discard");
-const drawBtn = document.getElementById("draw-btn");
-const leaveBtn = document.getElementById("leave-btn");
-const wildButtons = document.getElementById("wild-buttons");
-const chatInput = document.getElementById("chat-input");
-const chatBtn = document.getElementById("chat-btn");
-const chatBox = document.getElementById("chat-box");
+const gameDiv = document.getElementById("game");
+const handDiv = document.getElementById("player-hand");
+const drawPile = document.getElementById("draw-pile");
+const discardPile = document.getElementById("discard-pile");
 const unoButton = document.getElementById("uno-btn");
+const wildButtons = document.getElementById("wild-buttons");
+const chatBox = document.getElementById("chat-box");
+const chatSend = document.getElementById("chat-send");
+const chatLog = document.getElementById("chat-log");
+const playerList = document.getElementById("player-list");
+const turnIndicator = document.getElementById("turn-indicator");
+const leaveBtn = document.getElementById("leave-btn");
+const muteBtn = document.getElementById("mute-toggle");
+const lobbyNameDisplay = document.getElementById("lobby-name-display");
 
-joinBtn.addEventListener("click", () => {
+let currentLobby = "";
+let muted = false;
+
+const sounds = {
+  draw: new Audio("/assets/sounds/draw.mp3"),
+  skip: new Audio("/assets/sounds/skip.mp3"),
+  reverse: new Audio("/assets/sounds/reverse.mp3"),
+  wild: new Audio("/assets/sounds/wild.mp3"),
+  number: new Audio("/assets/sounds/number.mp3"),
+  win: new Audio("/assets/sounds/win.mp3"),
+  lose: new Audio("/assets/sounds/lose.mp3"),
+  start: new Audio("/assets/sounds/start.mp3"),
+  joined: new Audio("/assets/sounds/joined.mp3"),
+  uno: new Audio("/assets/sounds/uno.mp3"),
+  special: new Audio("/assets/sounds/special.mp3")
+};
+
+function playSound(name) {
+  if (muted) return;
+  const sound = sounds[name];
+  if (sound) sound.play().catch(() => {});
+}
+
+if (muteBtn) {
+  muteBtn.addEventListener("click", () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
+  });
+}
+
+joinForm.addEventListener("submit", (e) => {
+  e.preventDefault();
   const name = nameInput.value.trim();
-  const lobby = lobbyInput.value.trim();
-  if (!name || !lobby) return;
-
-  playerId = socket.id;
-  currentLobby = lobby;
-  socket.emit("join", { name, lobby });
-  loginSection.style.display = "none";
-  gameSection.style.display = "block";
-});
-
-socket.on("state", state => {
-  handDiv.innerHTML = "";
-
-  const hand = state.hands[playerId] || [];
-  if (!state.hasStarted) {
-    for (let i = 0; i < 7; i++) {
-      const img = document.createElement("img");
-      img.src = "/assets/cards/back.png";
-      img.className = "card disabled";
-      handDiv.appendChild(img);
-    }
-  } else {
-    hand.forEach(card => {
-      const img = document.createElement("img");
-      img.src = `/assets/cards/${card}.png`;
-      img.className = "card";
-
-      const isRainbow = card === "wild_rainbow";
-      const hasColors = ["red", "green", "blue", "yellow"].every(color =>
-        hand.some(c => c.startsWith(color))
-      );
-
-      if (isRainbow && !hasColors) {
-        img.classList.add("disabled");
-        return;
-      }
-
-      img.addEventListener("click", () => {
-        if (state.currentTurn !== playerId || !state.hasStarted) return;
-
-        if (card.startsWith("wild")) {
-          wildButtons.style.display = "flex";
-          wildButtons.querySelectorAll("button").forEach(btn => {
-            btn.onclick = () => {
-              wildButtons.style.display = "none";
-              socket.emit("playCard", {
-                lobby: currentLobby,
-                card,
-                chosenColor: btn.dataset.color
-              });
-              playSound("wild");
-            };
-          });
-        } else {
-          socket.emit("playCard", { lobby: currentLobby, card });
-
-          if (card.includes("draw")) playSound("draw");
-          else if (card.includes("skip")) playSound("skip");
-          else if (card.includes("reverse")) playSound("reverse");
-          else if (card.startsWith("wild_")) playSound("special");
-          else playSound("number");
-        }
-      });
-
-      handDiv.appendChild(img);
-    });
+  const lobby = lobbyInput.value.trim().toLowerCase();
+  if (name && lobby) {
+    currentLobby = lobby;
+    socket.emit("join", { name, lobby });
+    document.getElementById("lobby-form").style.display = "none";
+    document.getElementById("game").style.display = "block";
+    lobbyNameDisplay.textContent = lobby;
   }
-
-  const discard = state.discardPile[state.discardPile.length - 1];
-  discardImg.src = discard ? `/assets/cards/${discard}.png` : "";
 });
 
-drawBtn.addEventListener("click", () => {
-  socket.emit("drawCard", { lobby: currentLobby });
+chatSend.addEventListener("click", () => {
+  const msg = chatBox.value.trim();
+  if (msg) {
+    socket.emit("chat", msg);
+    chatBox.value = "";
+  }
 });
 
 leaveBtn.addEventListener("click", () => {
-  location.reload();
+  socket.emit("leave");
+  window.location.reload();
 });
 
-chatBtn.addEventListener("click", () => {
-  const msg = chatInput.value.trim();
-  if (!msg) return;
-  socket.emit("chat", { message: msg });
-  chatInput.value = "";
+socket.on("state", (state) => {
+  renderGame(state);
 });
 
-socket.on("chat", ({ from, message }) => {
-  const div = document.createElement("div");
-  div.textContent = `${from}: ${message}`;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
+socket.on("chat", (msg) => {
+  const p = document.createElement("p");
+  p.textContent = msg;
+  chatLog.appendChild(p);
+  chatLog.scrollTop = chatLog.scrollHeight;
 });
 
-unoButton.addEventListener("click", () => {
-  socket.emit("uno", { lobby: currentLobby });
-  playSound("uno");
-});
+function renderGame(state) {
+  // Update hand, piles, turn, etc.
+  const hand = state.hands?.[socket.id] || [];
+  handDiv.innerHTML = "";
+  hand.forEach(card => {
+    const img = document.createElement("img");
+    img.src = state.hasStarted ? `/assets/cards/${card}.png` : `/assets/cards/back.png`;
+    img.className = "card";
+    if (state.hasStarted) {
+      img.addEventListener("click", () => {
+        socket.emit("play", card);
+      });
+    }
+    handDiv.appendChild(img);
+  });
 
-function playSound(type) {
-  const audio = new Audio(`/assets/sounds/${type}.mp3`);
-  audio.play();
+  discardPile.innerHTML = "";
+  const top = state.discardPile?.[state.discardPile.length - 1];
+  if (top) {
+    const img = document.createElement("img");
+    img.src = `/assets/cards/${top}.png`;
+    img.className = "card";
+    discardPile.appendChild(img);
+  }
+
+  drawPile.innerHTML = "";
+  if (state.hasStarted) {
+    const drawImg = document.createElement("img");
+    drawImg.src = `/assets/cards/back.png`;
+    drawImg.className = "card";
+    drawImg.addEventListener("click", () => socket.emit("draw"));
+    drawPile.appendChild(drawImg);
+  }
+
+  turnIndicator.style.display = "block";
+  turnIndicator.textContent = socket.id === state.currentTurn ? "It's your turn!" : "Waiting for other players...";
+
+  // Player list
+  playerList.innerHTML = "";
+  state.players.forEach(player => {
+    const li = document.createElement("li");
+    li.textContent = player.name;
+    if (player.id === state.currentTurn) {
+      li.classList.add("active");
+    }
+    playerList.appendChild(li);
+  });
+
+  unoButton.style.display = state.hands?.[socket.id]?.length === 2 ? "inline-block" : "none";
 }
 
-// leaderboard modal logic
-const leaderboardBtnList = document.querySelectorAll("#leaderboard-toggle");
-const leaderboardModal = document.getElementById("leaderboard-modal");
-const leaderboardClose = document.getElementById("leaderboard-close");
+unoButton.addEventListener("click", () => {
+  socket.emit("uno");
+});
 
-leaderboardBtnList.forEach(btn => {
+document.querySelectorAll(".wild-choice").forEach(btn => {
   btn.addEventListener("click", () => {
-    leaderboardModal.style.display = "flex";
-    loadLeaderboard();
+    socket.emit("chooseColor", btn.dataset.color);
+    wildButtons.style.display = "none";
   });
 });
 
-leaderboardClose.addEventListener("click", () => {
-  leaderboardModal.style.display = "none";
+socket.on("chooseColor", () => {
+  wildButtons.style.display = "block";
 });
-
-function loadLeaderboard() {
-  fetch('/scores')
-    .then(res => res.json())
-    .then(data => {
-      const container = document.getElementById("leaderboard-container");
-      if (!data.length) {
-        container.innerHTML = "<p>No scores yet.</p>";
-        return;
-      }
-
-      const headers = ["Name", "Wins", "Score"];
-      const rows = data.map(row => `
-        <tr>
-          <td>${row.name}</td>
-          <td>${row.wins || 0}</td>
-          <td>${row.score || 0}</td>
-        </tr>
-      `).join("");
-
-      container.innerHTML = `
-        <table>
-          <thead>
-            <tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      `;
-    });
-}
