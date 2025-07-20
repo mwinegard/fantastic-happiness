@@ -15,45 +15,46 @@
     </form>
   </div>
 
-  <div id="game" style="display: none;">
-    <div id="main-columns">
+  <div id="game" style="display:none;">
+    <div class="main-container">
       <div id="player-column">
-        <h3 id="lobby-name">Lobby</h3>
+        <h3 id="lobby-title">Lobby: <span id="lobby-name-display"></span></h3>
         <ul id="player-list"></ul>
         <button id="leave-btn">Leave Lobby</button>
       </div>
 
       <div id="pile-column">
-        <div id="discard-pile" class="pile"></div>
-        <div id="draw-pile" class="pile"></div>
+        <div id="discard-pile"></div>
+        <div id="draw-pile"></div>
       </div>
 
       <div id="meta-column">
-        <div id="turn-indicator" style="display: none;"></div>
-        <br>
-        <div id="wild-color-picker" style="display: none;">
-  <button class="color-btn" data-color="red" style="background: red; color: white;">Red</button>
-  <button class="color-btn" data-color="blue" style="background: blue; color: white;">Blue</button>
-  <button class="color-btn" data-color="green" style="background: green; color: white;">Green</button>
-  <button class="color-btn" data-color="yellow" style="background: goldenrod; color: black;">Yellow</button>
-</div>
-        <br>
-        <button id="uno-btn" style="display: none;">UNO!</button>
+        <div id="turn-indicator" style="display:none;"></div>
+        <button id="uno-btn" style="display:none;">UNO!</button>
+        <div id="wild-buttons" style="display:none;">
+          <button data-color="red" class="wild-choice red">Red</button>
+          <button data-color="blue" class="wild-choice blue">Blue</button>
+          <button data-color="green" class="wild-choice green">Green</button>
+          <button data-color="yellow" class="wild-choice yellow">Yellow</button>
+        </div>
       </div>
     </div>
 
-    <div id="player-hand"></div>
+    <div id="hand-section">
+      <div id="player-hand"></div>
+    </div>
 
-    <div id="chat">
+    <footer id="chat-footer">
       <div id="chat-log"></div>
       <div id="chat-controls">
-        <input type="text" id="chat-box" placeholder="Type a message" />
+        <input type="text" id="chat-box" placeholder="Say something..." />
         <button id="chat-send">📨</button>
       </div>
-    </div>
+    </footer>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="special-cards.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
