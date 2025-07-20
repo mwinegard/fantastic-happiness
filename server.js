@@ -1,5 +1,3 @@
-// server.js
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -82,6 +80,8 @@ function startTurnTimer(game) {
   clearTimeout(game.turnTimeout);
   game.turnTimeout = setTimeout(() => {
     const curId = game.currentTurn;
+    if (!curId || !game.hands[curId]) return;
+
     game.turnMisses[curId] = (game.turnMisses[curId] || 0) + 1;
 
     if (game.turnMisses[curId] >= TURN_MISS_LIMIT) {
@@ -91,10 +91,13 @@ function startTurnTimer(game) {
       });
       removePlayer(game, curId);
     } else {
-      game.hands[curId].push(game.deck.pop());
+      if (game.hands[curId]) {
+        game.hands[curId].push(game.deck.pop());
+      }
       advanceTurn(game);
-      sendState(game.id);
     }
+
+    sendState(game.id);
   }, TURN_TIMEOUT);
 }
 
@@ -109,6 +112,7 @@ function removePlayer(game, playerId) {
   const hand = game.hands[playerId] || [];
   const rest = game.order.filter(id => id !== playerId);
   const redistribute = rest.length;
+
   if (redistribute > 0) {
     hand.forEach((card, i) => {
       const pid = rest[i % redistribute];
@@ -120,7 +124,7 @@ function removePlayer(game, playerId) {
 
   delete game.players[playerId];
   delete game.hands[playerId];
-  game.order = rest;
+  game.order = game.order.filter(id => id !== playerId);
 
   if (game.order.length === 1) {
     const winnerId = game.order[0];
