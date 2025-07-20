@@ -1,241 +1,198 @@
-/* Reset + base */
+/* === Global Layout === */
 body {
   font-family: Arial, sans-serif;
+  background: #e8f1f8;
   margin: 0;
-  padding: 0;
+  padding: 10px;
   box-sizing: border-box;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #e8f1f8;
+  overflow: hidden;
 }
 
-/* Lobby form */
+/* === Join Lobby === */
 #lobby-form {
   margin-top: 80px;
   text-align: center;
 }
 
-form input,
-form button {
+form input, form button {
   padding: 10px;
   margin: 5px;
   font-size: 16px;
 }
 
-/* Game layout */
+/* === Game Layout === */
 #game {
-  flex: 1;
   display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-#top-area {
-  display: flex;
-  height: 40vh;
+  flex-wrap: wrap;
   width: 100%;
-}
-
-.column {
+  height: 100vh;
+  overflow: hidden;
+  gap: 10px;
   padding: 10px;
   box-sizing: border-box;
 }
 
-/* Column widths */
-#player-column {
-  width: 20%;
-  background: #f0f0f0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-#pile-column {
-  width: 60%;
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-}
-
-#meta-column {
-  width: 20%;
-  text-align: center;
-  padding-top: 20px;
-}
-
-#lobby-header {
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 10px;
-  font-size: 18px;
-  text-decoration: underline;
-}
-
-#player-list {
-  list-style: none;
-  padding-left: 0;
-  font-size: 16px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-#leave-lobby {
-  margin: 10px;
+.game-column {
   padding: 10px;
-  font-size: 14px;
-  border: none;
-  background: #ccc;
-  border-radius: 5px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background-color: #f8f8f8;
+  transition: all 0.4s ease-in-out;
+}
+
+/* === Game Columns: Desktop === */
+@media (min-width: 1025px) {
+  .col-player { width: 20%; height: 40vh; }
+  .col-pile   { width: 30%; height: 40vh; display: flex; justify-content: space-around; align-items: center; }
+  .col-draw   { width: 30%; height: 40vh; display: flex; justify-content: space-around; align-items: center; }
+  .col-meta   { width: 20%; height: 40vh; }
+}
+
+/* === Tablet Layout === */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .col-player, .col-meta { width: 50%; }
+  .col-pile, .col-draw { width: 50%; }
+  #game { flex-direction: row; }
+}
+
+/* === Mobile Layout === */
+@media (max-width: 768px) {
+  #game { flex-direction: column; }
+
+  .game-column {
+    width: 100%;
+    height: auto;
+  }
+
+  #player-hand {
+    height: 35vh;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 10px;
+  }
+
+  #chat-container {
+    height: 20vh;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  #chat-log {
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 8px;
+  }
+
+  #chat-box, #chat-send {
+    font-size: 16px;
+    padding: 10px;
+  }
+}
+
+/* === Cards === */
+.card {
+  width: 80px;
+  margin: 5px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  transition: transform 0.2s;
   cursor: pointer;
 }
 
-/* Discard + draw pile containers */
-#discard-pile:empty {
-  visibility: hidden;
+.card:hover {
+  transform: scale(1.1);
 }
 
-#discard-pile:not(:empty),
-#draw-pile {
+/* === Player Hand === */
+#player-hand {
+  background-color: #ffffff;
+  border-top: 2px solid #ccc;
+  border-bottom: 2px solid #ccc;
+  height: 40vh;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* === Draw & Discard Pile === */
+#draw-pile, #discard-pile {
   display: flex;
   justify-content: center;
   align-items: center;
+  min-height: 120px;
 }
 
-#discard-pile img,
-#draw-pile img {
-  width: 80px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s;
-}
-
-#draw-pile img:hover {
-  transform: scale(1.05);
-  cursor: pointer;
-}
-
-/* UNO button */
-#uno-btn {
-  background-color: #f44336;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-size: 18px;
-  font-weight: bold;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-  transition: background-color 0.2s, transform 0.2s;
-  display: none;
-  margin-bottom: 15px;
-}
-
-#uno-btn:hover {
-  background-color: #d32f2f;
-  transform: scale(1.05);
-}
-
-#turn-indicator {
-  font-size: 16px;
-  font-weight: bold;
-  margin-top: 10px;
-  display: none;
-}
-
-/* Player hand */
-#player-hand {
-  height: 40vh;
-  width: 100%;
-  background: #fff;
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding: 10px;
-  border-top: 2px solid #ccc;
-  border-bottom: 2px solid #ccc;
-  justify-content: flex-start;
-  align-items: flex-start;
-  gap: 5px;
-}
-
-#player-hand .card {
-  width: 80px;
-  border-radius: 8px;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s;
-  cursor: pointer;
-}
-
-#player-hand .card:hover {
-  transform: scale(1.08);
-}
-
-/* Chat footer */
+/* === Chat === */
 #chat-container {
-  height: 20vh;
-  background: #ddd;
+  background: #fff;
+  border-top: 2px solid #ccc;
   padding: 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  height: 20vh;
   box-sizing: border-box;
 }
 
 #chat-log {
-  flex: 1;
+  max-height: 100%;
   overflow-y: auto;
-  background: white;
-  padding: 8px;
-  border-radius: 5px;
   font-size: 14px;
-}
-
-#chat-controls {
-  margin-top: 8px;
-  display: flex;
-  gap: 5px;
+  text-align: left;
 }
 
 #chat-box {
-  flex: 1;
-  padding: 10px;
-  font-size: 14px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
+  width: 70%;
+  padding: 8px;
 }
 
 #chat-send {
-  padding: 10px 16px;
-  font-size: 14px;
-  background-color: #1976d2;
-  color: white;
+  padding: 8px 12px;
+  font-weight: bold;
+}
+
+/* === Turn Indicator === */
+#turn-indicator {
+  font-weight: bold;
+  margin-bottom: 10px;
+  display: none;
+}
+
+/* === UNO Button === */
+#uno-btn {
+  background: #ff6666;
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: bold;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   cursor: pointer;
+  display: none;
 }
 
-#chat-send:hover {
-  background-color: #135ba1;
+/* === Lobby Header === */
+#lobby-name {
+  font-size: 18px;
+  font-weight: bold;
+  text-decoration: underline;
+  margin-bottom: 10px;
 }
 
-/* Mobile layout */
-@media (max-width: 768px) {
-  #top-area {
-    flex-direction: column;
-    height: auto;
-  }
-
-  #player-column,
-  #pile-column,
-  #meta-column {
-    width: 100%;
-  }
-
-  #player-hand {
-    height: 30vh;
-  }
-
-  #chat-container {
-    height: auto;
-  }
+/* === Leave Lobby Button === */
+#leave-btn {
+  background-color: #ccc;
+  color: #333;
+  padding: 8px 12px;
+  border-radius: 5px;
+  font-size: 14px;
+  margin-top: 12px;
+  cursor: pointer;
 }
