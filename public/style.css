@@ -1,17 +1,17 @@
 body {
   font-family: Arial, sans-serif;
-  background: #e8f1f8;
+  background: #f8f8fc;
   margin: 0;
   padding: 0;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 #lobby-form {
-  margin-top: 80px;
+  margin: auto;
   text-align: center;
+  padding: 2em;
 }
 
 form input, form button {
@@ -26,104 +26,127 @@ form input, form button {
   height: 100%;
 }
 
-#main {
+#main-columns {
   display: flex;
-  flex: 1;
-  height: 80%;
+  flex: 1 1 auto;
+  height: 40vh;
   padding: 10px;
   box-sizing: border-box;
+}
+
+#player-column, #pile-column, #meta-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
 }
 
 #player-column {
-  width: 20%;
-  padding: 10px;
-  box-sizing: border-box;
+  flex: 1;
+  background: #eef2f7;
+  border-right: 1px solid #ccc;
+}
+
+#player-column h3 {
+  text-decoration: underline;
+  margin: 5px;
+}
+
+#player-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+}
+
+#player-list li {
+  margin: 4px 0;
 }
 
 #pile-column {
-  width: 60%;
-  display: flex;
+  flex: 1;
   justify-content: center;
-  align-items: center;
-  gap: 20px;
+}
+
+.pile {
+  margin: 10px;
 }
 
 #meta-column {
-  width: 20%;
-  padding: 10px;
-  box-sizing: border-box;
-  text-align: center;
+  flex: 1;
+  justify-content: center;
+  background: #f4f4f4;
 }
 
-#discard-pile, #draw-pile {
+#turn-indicator {
+  font-weight: bold;
+  margin-bottom: 1em;
+}
+
+#uno-btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  background: red;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#player-hand {
+  height: 40vh;
   display: flex;
-  justify-content: center;
   align-items: center;
+  overflow-x: auto;
+  padding: 10px;
+  border-top: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  background: #fff;
 }
 
 .card {
   width: 80px;
   margin: 5px;
-  border-radius: 10px;
+  transition: transform 0.2s;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  border-radius: 8px;
 }
 
 .card:hover {
   transform: scale(1.1);
 }
 
-#player-hand {
-  height: 20%;
-  padding: 10px;
-  overflow-x: auto;
-  white-space: nowrap;
-  border-top: 2px solid #ccc;
-  background: #f5faff;
-}
-
-#player-hand img {
-  display: inline-block;
-}
-
 #chat {
-  height: 20%;
-  padding: 10px;
-  background: #cde0f0;
+  height: 20vh;
+  background: #eaeef2;
   display: flex;
   flex-direction: column;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 #chat-log {
   flex: 1;
   overflow-y: auto;
+  background: #fff;
+  padding: 10px;
   margin-bottom: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
 }
 
 #chat-controls {
   display: flex;
+  gap: 8px;
 }
 
-#chat-controls input {
+#chat-box {
   flex: 1;
-  padding: 5px;
-  margin-right: 5px;
+  padding: 10px;
+  font-size: 16px;
 }
 
-#chat-controls button {
-  padding: 5px 15px;
-}
-
-@media (max-width: 768px) {
-  #main {
-    flex-direction: column;
-    height: auto;
-  }
-  #player-column, #pile-column, #meta-column {
-    width: 100%;
-  }
-  #pile-column {
-    flex-direction: row;
-    justify-content: center;
-  }
+#chat-send {
+  padding: 10px 15px;
+  font-size: 16px;
 }
