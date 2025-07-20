@@ -1,0 +1,108 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>UNO Admin Panel</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f2f2f2;
+      padding: 2rem;
+    }
+    h1, h2 {
+      margin-bottom: 0.5rem;
+    }
+    .section {
+      margin-bottom: 2rem;
+      background: white;
+      padding: 1rem;
+      border-radius: 5px;
+      box-shadow: 0 0 5px #ccc;
+    }
+    table {
+      width: 100%%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      padding: 0.5rem;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    #scores, #lobbies {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>UNO Admin Panel</h1>
+
+  <div class="section" id="leaderboard-section">
+    <h2>🏆 Leaderboard</h2>
+    <div id="scores">Loading...</div>
+    <button onclick="clearScores()">Clear Scores</button>
+  </div>
+
+  <div class="section" id="lobby-section">
+    <h2>📡 Active Lobbies</h2>
+    <div id="lobbies">Loading...</div>
+  </div>
+
+  <script>
+    function loadScores() {
+      fetch('/scores')
+        .then(res => res.json())
+        .then(data => {
+          const div = document.getElementById("scores");
+          if (!data || Object.keys(data).length === 0) {
+            div.innerHTML = "<p>No scores available.</p>";
+            return;
+          }
+          const rows = Object.entries(data).map(([name, stats]) => 
+            `<tr><td>${name}</td><td>${stats.wins}</td><td>${stats.score}</td></tr>`
+          ).join("");
+          div.innerHTML = \`
+            <table>
+              <thead><tr><th>Player</th><th>Wins</th><th>Score</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>\`;
+        });
+    }
+
+    function clearScores() {
+      if (confirm("Are you sure you want to clear all scores?")) {
+        fetch('/scores', { method: 'DELETE' })
+          .then(() => loadScores());
+      }
+    }
+
+    function loadLobbies() {
+      fetch('/lobbies')
+        .then(res => res.json())
+        .then(data => {
+          const div = document.getElementById("lobbies");
+          if (!data || Object.keys(data).length === 0) {
+            div.innerHTML = "<p>No active lobbies.</p>";
+            return;
+          }
+          const items = Object.entries(data).map(([lobby, players]) => {
+            const list = players.map(p => `<li>${p}</li>`).join("");
+            return \`<div><strong>${lobby}</strong><ul>${list}</ul></div>\`;
+          }).join("<hr>");
+          div.innerHTML = items;
+        });
+    }
+
+    loadScores();
+    loadLobbies();
+    setInterval(loadLobbies, 5000); // Refresh lobbies every 5s
+  </script>
+</body>
+</html>
