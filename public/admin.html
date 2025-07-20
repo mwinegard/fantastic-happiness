@@ -2,171 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Admin Panel</title>
+  <title>UNO Admin</title>
+  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 2em;
-      background: #f9f9f9;
+    .dashboard {
+      max-width: 1000px;
+      margin: auto;
+      padding: 30px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-
-    h1 {
-      margin-top: 0;
-    }
-
-    button {
-      padding: 0.5em 1em;
-      margin: 0.5em 0.5em 1em 0;
-      cursor: pointer;
-    }
-
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 1em;
-      background: #fff;
+      margin-top: 20px;
     }
-
     th, td {
-      border: 1px solid #ccc;
-      padding: 0.5em;
+      padding: 12px 16px;
       text-align: left;
+      border-bottom: 1px solid #eee;
     }
-
     th {
-      background: #eee;
-      cursor: pointer;
-      user-select: none;
+      background: #004e98;
+      color: white;
     }
-
-    th.sorted-asc::after {
-      content: " ↑";
-    }
-
-    th.sorted-desc::after {
-      content: " ↓";
-    }
-
-    #sounds {
-      margin-top: 2em;
-    }
-
-    #sounds button {
-      margin: 0.25em;
+    h2 {
+      color: #004e98;
     }
   </style>
 </head>
 <body>
-  <h1>Admin Panel</h1>
+  <div class="dashboard">
+    <h2>🏆 Leaderboard</h2>
+    <table id="leaderboard-table">
+      <thead>
+        <tr>
+          <th>Player</th>
+          <th>Score</th>
+          <th>Wins</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- filled by JS -->
+      </tbody>
+    </table>
 
-  <section>
-    <button onclick="loadLeaderboard()">🔄 Refresh Leaderboard</button>
-    <button onclick="confirmClear()">🧹 Clear Leaderboard</button>
-    <div id="leaderboard-container"></div>
-  </section>
-
-  <section id="sounds">
-    <h2>🎵 Sound Test</h2>
-    <div id="sound-buttons"></div>
-  </section>
+    <h2>🧑‍🤝‍🧑 Active Lobbies</h2>
+    <ul id="lobbies-list">
+      <!-- Populated by WebSocket -->
+    </ul>
+  </div>
 
   <script>
-    const soundFiles = [
-      'draw.mp3', 'skip.mp3', 'reverse.mp3', 'wild.mp3', 'number.mp3',
-      'win.mp3', 'lose.mp3', 'start.mp3', 'joined.mp3', 'uno.mp3', 'special.mp3'
-    ];
-
-    let leaderboardData = [];
-    let currentSort = { column: null, asc: true };
-
-    function loadLeaderboard() {
-      fetch('/scores')
-        .then(res => res.json())
-        .then(data => {
-          leaderboardData = data;
-          renderLeaderboard();
+    fetch('/scores.json')
+      .then(res => res.json())
+      .then(scores => {
+        const tbody = document.querySelector('#leaderboard-table tbody');
+        Object.entries(scores).forEach(([player, data]) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `<td>${player}</td><td>${data.score}</td><td>${data.wins}</td>`;
+          tbody.appendChild(row);
         });
-    }
-
-    function renderLeaderboard() {
-      const container = document.getElementById("leaderboard-container");
-      if (!leaderboardData.length) {
-        container.innerHTML = "<p>No scores available.</p>";
-        return;
-      }
-
-      const headers = [
-        { key: "name", label: "Name" },
-        { key: "wins", label: "Wins" },
-        { key: "score", label: "Score" }
-      ];
-
-      const headerRow = headers.map(h => {
-        let cls = "";
-        if (currentSort.column === h.key) {
-          cls = currentSort.asc ? "sorted-asc" : "sorted-desc";
-        }
-        return `<th class="${cls}" onclick="sortBy('${h.key}')">${h.label}</th>`;
-      }).join("");
-
-      const rows = leaderboardData.map(score => `
-        <tr>
-          <td>${score.name}</td>
-          <td>${score.wins || 0}</td>
-          <td>${score.score || 0}</td>
-        </tr>
-      `).join("");
-
-      container.innerHTML = `
-        <table>
-          <thead><tr>${headerRow}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      `;
-    }
-
-    function sortBy(column) {
-      if (currentSort.column === column) {
-        currentSort.asc = !currentSort.asc;
-      } else {
-        currentSort.column = column;
-        currentSort.asc = true;
-      }
-
-      leaderboardData.sort((a, b) => {
-        const valA = a[column] || 0;
-        const valB = b[column] || 0;
-        return currentSort.asc ? valA - valB : valB - valA;
       });
 
-      renderLeaderboard();
-    }
-
-    function confirmClear() {
-      if (confirm("Are you sure you want to clear the leaderboard?")) {
-        fetch('/clear-scores', { method: 'POST' })
-          .then(() => {
-            alert("Leaderboard cleared!");
-            loadLeaderboard();
-          });
-      }
-    }
-
-    function loadSoundButtons() {
-      const container = document.getElementById("sound-buttons");
-      soundFiles.forEach(file => {
-        const btn = document.createElement("button");
-        btn.textContent = file.replace(".mp3", "");
-        btn.onclick = () => {
-          const audio = new Audio(`/assets/sounds/${file}`);
-          audio.play().catch(() => alert("Sound not found: " + file));
-        };
-        container.appendChild(btn);
+    const socket = io();
+    socket.on('lobbies', lobbies => {
+      const ul = document.getElementById('lobbies-list');
+      ul.innerHTML = '';
+      Object.keys(lobbies).forEach(lobby => {
+        const li = document.createElement('li');
+        li.textContent = `${lobby} — ${lobbies[lobby].players.length} players`;
+        ul.appendChild(li);
       });
-    }
+    });
 
-    loadLeaderboard();
-    loadSoundButtons();
+    socket.emit('getLobbies');
   </script>
+  <script src="/socket.io/socket.io.js"></script>
 </body>
 </html>
