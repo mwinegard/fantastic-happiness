@@ -1,19 +1,21 @@
 {
   "name": "UNO Multiplayer",
   "short_name": "UNO",
+  "description": "Multiplayer UNO-style card game with custom rules",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#003366",
-  "description": "Multiplayer UNO card game with lobbies and chat",
+  "theme_color": "#004e98",
+  "orientation": "portrait",
+  "lang": "en",
   "icons": [
     {
-      "src": "assets/icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "assets/icon-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
