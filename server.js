@@ -67,14 +67,14 @@ function startGameCountdown(lobbyId) {
     const game = lobbies[lobbyId];
     if (!game || Object.keys(game.players).length < 2) return;
     resetGame(game);
-    io.to(lobbyId).emit("chat", { from: "SUE", message: "🟢 Game started!" });
+    io.to(lobbyId).emit("chat", { from: "SUE", message: "ð¢ Game started!" });
     sendState(lobbyId);
     delete countdowns[lobbyId];
   }, 30000);
 
   io.to(lobbyId).emit("chat", {
     from: "SUE",
-    message: "⏱ Game will start in 30 seconds..."
+    message: "â± Game will start in 30 seconds..."
   });
 }
 
@@ -87,7 +87,7 @@ function startTurnTimer(game) {
     if (game.turnMisses[curId] >= TURN_MISS_LIMIT) {
       io.to(game.id).emit("chat", {
         from: "SUE",
-        message: `⏳ ${game.players[curId].name} missed 3 turns and was removed.`
+        message: `â³ ${game.players[curId].name} missed 3 turns and was removed.`
       });
       removePlayer(game, curId);
     } else {
@@ -123,7 +123,7 @@ function removePlayer(game, playerId) {
     game.players[winnerId].score += 50;
     io.to(game.id).emit("chat", {
       from: "SUE",
-      message: `🏁 ${game.players[winnerId].name} wins by default and earns 50 points.`
+      message: `ð ${game.players[winnerId].name} wins by default and earns 50 points.`
     });
     resetGame(game);
   }
