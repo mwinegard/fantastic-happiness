@@ -1,5 +1,4 @@
-// a. server.js
-
+// server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -9,38 +8,55 @@ const fs = require("fs");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+app.use(express.static(path.join(__dirname, "public")));
 
 const lobbies = {};
 let scores = {};
-
 const SCORES_FILE = path.join(__dirname, "scores.json");
 if (fs.existsSync(SCORES_FILE)) {
   scores = JSON.parse(fs.readFileSync(SCORES_FILE));
 }
 
+const specialCards = [
+  "blue_look", "blue_moon",
+  "green_happy", "green_recycle",
+  "red_it", "red_noc",
+  "yellow_pinkypromise", "yellow_shopping",
+  "wild_boss", "wild_packyourbags", "wild_rainbow", "wild_relax"
+];
+
 function createDeck() {
   const colors = ["red", "blue", "green", "yellow"];
-  const values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "skip", "reverse", "draw"];
+  const values = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "skip", "reverse", "draw2"];
   const wilds = ["wild", "wild_draw4"];
-  const specials = [
-    "blue_look", "blue_moon",
-    "green_happy", "green_recycle",
-    "red_it", "red_noc",
-    "yellow_pinkypromise", "yellow_shopping",
-    "wild_boss", "wild_packyourbags", "wild_rainbow", "wild_relax"
-  ];
+  const deck = [];
 
-  let deck = [];
   for (let color of colors) {
     for (let val of values) {
       deck.push(`${color}_${val}`);
       if (val !== "0") deck.push(`${color}_${val}`);
     }
   }
-  for (let w of wilds) for (let i = 0; i < 4; i++) deck.push(w);
-  for (let s of specials) deck.push(s);
 
-  return deck.sort(() => Math.random() - 0.5);
+  for (let w of wilds) for (let i = 0; i < 4; i++) deck.push(w);
+  specialCards.forEach(c => deck.push(c)); // add specials
+  return deck;
+}
+
+function shuffle(array) {
+  return array.sort(() => Math.random() - 0.5);
+}
+
+function getPlayerOrder(lobby) {
+  return Object.keys(lobby.players);
+}
+
+function saveScores() {
+  fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2));
+}
+
+function sendSystemMessage(lobby, msg) {
+  io.to(lobby.id).emit("chat", { from: "SUE", message: msg });
 }
 
 function emitState(lobby) {
@@ -49,7 +65,7 @@ function emitState(lobby) {
       id: p.id,
       name: p.name,
       score: scores[p.name]?.score || 0,
-      handSize: lobby.hands[p.id]?.length || 0
+      handSize: lobby.hands?.[p.id]?.length || 0
     })),
     hands: lobby.hands,
     discardPile: lobby.discardPile,
@@ -58,91 +74,189 @@ function emitState(lobby) {
   io.to(lobby.id).emit("state", state);
 }
 
-function nextTurn(lobby) {
-  const ids = Object.keys(lobby.players);
-  const currentIdx = ids.indexOf(lobby.currentTurn);
-  lobby.currentTurn = ids[(currentIdx + 1) % ids.length];
-  emitState(lobby);
+function startTurnTimer(lobby) {
+  if (lobby.turnTimeout) clearTimeout(lobby.turnTimeout);
+  lobby.turnTimeout = setTimeout(() => {
+    const pid = lobby.currentTurn;
+    const hand = lobby.hands[pid];
+    if (!hand) return;
+
+    const card = lobby.deck.pop();
+    hand.push(card);
+    sendSystemMessage(lobby, `${lobby.players[pid].name} took too long. Auto-draw.`);
+
+    nextTurn(lobby);
+  }, 60000);
 }
 
-function handleSpecialCard(card, lobby, playerId) {
-  let msg = "";
-  switch (card) {
-    case "green_happy":
-      msg = `🟢 ${lobby.players[playerId].name} played Happy! Rude button enabled.`;
-      break;
-    case "red_noc":
-      const victim = Object.keys(lobby.players)[Math.floor(Math.random() * Object.keys(lobby.players).length)];
-      lobby.hands[victim].push(...lobby.deck.splice(0, 3));
-      msg = `🔴 ${lobby.players[playerId].name} played NOC! ${lobby.players[victim].name} draws 3.`;
-      break;
-    case "wild_relax":
-      msg = `🌈 ${lobby.players[playerId].name} played Relax! Blocks any draw.`;
-      break;
-    default:
-      msg = `${card} effect activated.`;
+function nextTurn(lobby) {
+  const ids = getPlayerOrder(lobby);
+  const currentIdx = ids.indexOf(lobby.currentTurn);
+  lobby.currentTurn = ids[(currentIdx + (lobby.direction || 1) + ids.length) % ids.length];
+  lobby.turnStart = Date.now();
+  emitState(lobby);
+  startTurnTimer(lobby);
+}
+
+function handleSpecialCard(lobby, card, playerId) {
+  const name = lobby.players[playerId].name;
+  if (card === "green_happy") {
+    io.to(lobby.id).emit("specialTrigger", { type: "happy", playerId });
+    sendSystemMessage(lobby, `🌟 ${name} played Happy: Be nice or draw a card!`);
+  } else if (card === "red_noc") {
+    const others = Object.keys(lobby.players).filter(id => id !== playerId);
+    const victim = others[Math.floor(Math.random() * others.length)];
+    lobby.hands[victim].push(...lobby.deck.splice(0, 3));
+    sendSystemMessage(lobby, `📄 ${name} played NOC Notice! ${lobby.players[victim].name} draws 3!`);
+  } else if (card === "wild_relax") {
+    lobby.wildColor = null;
+    sendSystemMessage(lobby, `💆 ${name} played Relax: Skipping draw effect!`);
+  } else {
+    sendSystemMessage(lobby, `✨ ${name} played special: ${card.replace(/_/g, " ")}`);
   }
-  io.to(lobby.id).emit("chat", { from: "SUE", message: msg });
+  io.to(lobby.id).emit("playSound", "special");
+}
+
+function startGame(lobby) {
+  if (Object.keys(lobby.players).length < 2) return;
+
+  lobby.deck = shuffle(createDeck());
+  lobby.hands = {};
+  lobby.discardPile = [];
+
+  let card;
+  do { card = lobby.deck.pop(); } while (card.startsWith("wild"));
+  lobby.discardPile.push(card);
+
+  for (const pid of Object.keys(lobby.players)) {
+    lobby.hands[pid] = lobby.deck.splice(0, 7);
+  }
+
+  lobby.turnMissed = {};
+  lobby.direction = 1;
+  lobby.currentTurn = Object.keys(lobby.players)[0];
+
+  sendSystemMessage(lobby, `Game started!`);
+  emitState(lobby);
+  startTurnTimer(lobby);
 }
 
 io.on("connection", (socket) => {
   socket.on("join", ({ name, lobby }) => {
     if (!name || !lobby) return;
+
     lobby = lobby.toLowerCase();
     socket.join(lobby);
 
     if (!lobbies[lobby]) {
-      lobbies[lobby] = { id: lobby, players: {}, deck: [], discardPile: [], hands: {} };
+      lobbies[lobby] = {
+        id: lobby,
+        players: {},
+        deck: [],
+        discardPile: [],
+        direction: 1,
+        hands: {}
+      };
     }
 
-    const l = lobbies[lobby];
-    l.players[socket.id] = { id: socket.id, name };
-    l.hands[socket.id] = l.deck.splice(0, 7);
-    if (!l.discardPile.length) l.discardPile.push(l.deck.pop());
-    l.currentTurn ||= socket.id;
-    emitState(l);
+    const lobbyObj = lobbies[lobby];
+    lobbyObj.players[socket.id] = { id: socket.id, name };
+    if (!lobbyObj.hands[socket.id]) {
+      lobbyObj.hands[socket.id] = [];
+    }
+
+    sendSystemMessage(lobbyObj, `${name} joined.`);
+    if (Object.keys(lobbyObj.players).length >= 2 && !lobbyObj.started) {
+      lobbyObj.started = true;
+      setTimeout(() => startGame(lobbyObj), 30000);
+    }
+
+    emitState(lobbyObj);
   });
 
   socket.on("playCard", ({ lobby, card, chosenColor }) => {
-    const l = lobbies[lobby];
-    if (!l) return;
+    const lobbyObj = lobbies[lobby];
+    if (!lobbyObj) return;
     const pid = socket.id;
-    const hand = l.hands[pid];
-    if (!hand || l.currentTurn !== pid) return;
+    const hand = lobbyObj.hands[pid];
+    if (!hand || lobbyObj.currentTurn !== pid) return;
 
-    const cardIndex = hand.indexOf(card);
-    if (cardIndex === -1) return;
-    hand.splice(cardIndex, 1);
-    l.discardPile.push(card);
+    const index = hand.indexOf(card);
+    if (index === -1) return;
 
-    if (card.startsWith("wild")) {
-      l.wildColor = chosenColor;
-      io.to(l.id).emit("chat", { from: "SUE", message: `🌈 Wild color chosen: <b style='color:${chosenColor}'>${chosenColor}</b>` });
+    const topCard = lobbyObj.discardPile.at(-1);
+    const [topColor, topValue] = topCard?.split("_") || [];
+    const [cardColor, cardValue] = card.includes("_") ? card.split("_") : [null, card];
+    const isWild = card.startsWith("wild");
+    const isSpecial = specialCards.includes(card);
+    const isValid =
+      isWild || cardColor === topColor || cardValue === topValue || card === lobbyObj.wildColor;
+
+    if (!isValid) return;
+
+    hand.splice(index, 1);
+    lobbyObj.discardPile.push(card);
+
+    if (isWild) {
+      if (!chosenColor || !["red", "blue", "green", "yellow"].includes(chosenColor)) return;
+      lobbyObj.wildColor = chosenColor;
+      io.to(lobby).emit("chat", { from: "SUE", message: `🎨 Wild color chosen: ${chosenColor}` });
+    } else {
+      lobbyObj.wildColor = null;
     }
 
-    if (card.includes("happy") || card.includes("noc") || card.includes("relax")) {
-      handleSpecialCard(card, l, pid);
+    if (isSpecial) {
+      handleSpecialCard(lobbyObj, card, pid);
     }
 
     if (hand.length === 0) {
-      io.to(l.id).emit("chat", { from: "SUE", message: `🎉 ${l.players[pid].name} wins the round!` });
+      sendSystemMessage(lobbyObj, `🎉 ${lobbyObj.players[pid].name} wins!`);
+      scores[lobbyObj.players[pid].name] = scores[lobbyObj.players[pid].name] || { score: 0, wins: 0 };
+      scores[lobbyObj.players[pid].name].wins += 1;
+      saveScores();
+      delete lobbies[lobby];
       return;
     }
 
-    nextTurn(l);
+    nextTurn(lobbyObj);
   });
 
   socket.on("drawCard", ({ lobby }) => {
-    const l = lobbies[lobby];
-    if (!l) return;
+    const lobbyObj = lobbies[lobby];
+    if (!lobbyObj) return;
     const pid = socket.id;
-    if (pid !== l.currentTurn) return;
-    l.hands[pid].push(l.deck.pop());
-    nextTurn(l);
+    if (pid !== lobbyObj.currentTurn) return;
+    const card = lobbyObj.deck.pop();
+    lobbyObj.hands[pid].push(card);
+    nextTurn(lobbyObj);
+  });
+
+  socket.on("chat", (msg) => {
+    const lobby = Object.values(lobbies).find(l => l.players[socket.id]);
+    if (!lobby) return;
+    const name = lobby.players[socket.id].name;
+    io.to(lobby.id).emit("chat", { from: name, message: msg });
+  });
+
+  socket.on("disconnect", () => {
+    for (let lobbyId in lobbies) {
+      const lobby = lobbies[lobbyId];
+      if (lobby.players[socket.id]) {
+        sendSystemMessage(lobby, `${lobby.players[socket.id].name} left.`);
+        delete lobby.players[socket.id];
+        delete lobby.hands[socket.id];
+        if (Object.keys(lobby.players).length < 2) {
+          delete lobbies[lobbyId];
+        } else {
+          emitState(lobby);
+        }
+        break;
+      }
+    }
   });
 });
 
-app.use(express.static(path.join(__dirname, "public")));
-
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`UNO server on http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`UNO server running on http://localhost:${PORT}`);
+});
