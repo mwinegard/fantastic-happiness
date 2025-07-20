@@ -17,7 +17,6 @@ const turnIndicator = document.getElementById("turn-indicator");
 const leaveBtn = document.getElementById("leave-btn");
 
 let currentLobby = "";
-let lastChatSender = "";
 
 const sounds = {
   draw: new Audio("/assets/sounds/draw.mp3"),
@@ -66,23 +65,10 @@ leaveBtn.addEventListener("click", () => {
 });
 
 socket.on("chat", ({ from, message }) => {
-  lastChatSender = from;
   const entry = document.createElement("div");
   entry.innerHTML = `<strong>${from}:</strong> ${message}`;
   chatLog.appendChild(entry);
   chatLog.scrollTop = chatLog.scrollHeight;
-
-  if (window.happyMode && from !== "SUE") {
-    const rudeBtn = document.createElement("button");
-    rudeBtn.innerText = "Rude?";
-    rudeBtn.style.margin = "0.5em";
-    rudeBtn.onclick = () => {
-      socket.emit("rudeReport", { player: lastChatSender, lobby: currentLobby });
-      rudeBtn.remove();
-    };
-    document.getElementById("meta-column").appendChild(rudeBtn);
-    setTimeout(() => rudeBtn.remove(), 5000);
-  }
 });
 
 socket.on("state", (state) => {
@@ -93,7 +79,6 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
-  // Turn indicator
   if (state.currentTurn) {
     turnIndicator.style.display = "block";
     turnIndicator.innerText = state.currentTurn === playerId
@@ -103,25 +88,41 @@ socket.on("state", (state) => {
     turnIndicator.style.display = "none";
   }
 
-  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === playerId ? "👉 " : "";
+    const mark = p.id === socket.id ? "👉 " : "";
     const li = document.createElement("li");
     li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
   });
 
-  // Player hand
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
+
     img.addEventListener("click", () => {
       if (state.currentTurn !== playerId) return;
 
-      if (card.startsWith("wild")) {
+      if (card === "wild_rainbow") {
+        const colorsInHand = hand.reduce((set, c) => {
+          if (c.startsWith("red_")) set.add("red");
+          if (c.startsWith("blue_")) set.add("blue");
+          if (c.startsWith("green_")) set.add("green");
+          if (c.startsWith("yellow_")) set.add("yellow");
+          return set;
+        }, new Set());
+
+        if (colorsInHand.size === 4) {
+          socket.emit("playCard", { lobby: currentLobby, card });
+          playSound("special");
+        } else {
+          alert("You need at least one red, blue, green, and yellow card to play RAINBOW.");
+        }
+      }
+
+      else if (card.startsWith("wild")) {
         wildButtons.style.display = "flex";
         wildButtons.querySelectorAll("button").forEach(btn => {
           btn.onclick = () => {
@@ -131,12 +132,14 @@ socket.on("state", (state) => {
               card,
               chosenColor: btn.dataset.color
             });
-            if (card.startsWith("wild_")) playSound("special");
-            else playSound("wild");
+            playSound("wild");
           };
         });
-      } else {
+      }
+
+      else {
         socket.emit("playCard", { lobby: currentLobby, card });
+
         if (card.includes("draw")) playSound("draw");
         else if (card.includes("skip")) playSound("skip");
         else if (card.includes("reverse")) playSound("reverse");
@@ -144,13 +147,12 @@ socket.on("state", (state) => {
         else playSound("number");
       }
     });
+
     handDiv.appendChild(img);
   });
 
-  // UNO button
   unoButton.style.display = hand.length === 2 ? "block" : "none";
 
-  // Discard pile
   discardPile.innerHTML = "";
   if (state.discardPile?.length) {
     const topCard = state.discardPile[state.discardPile.length - 1];
@@ -160,7 +162,6 @@ socket.on("state", (state) => {
     discardPile.appendChild(topImg);
   }
 
-  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
@@ -172,8 +173,4 @@ socket.on("state", (state) => {
     }
   });
   drawPile.appendChild(drawImg);
-});
-
-socket.on("happyMode", () => {
-  window.happyMode = true;
 });
