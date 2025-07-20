@@ -13,35 +13,17 @@ const chatSend = document.getElementById("chat-send");
 const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
-const lobbyNameDiv = document.getElementById("lobby-name");
 const leaveBtn = document.getElementById("leave-btn");
+const lobbyNameDiv = document.getElementById("lobby-name");
 
-const sounds = {
-  draw: new Audio("assets/sounds/draw.mp3"),
-  skip: new Audio("assets/sounds/skip.mp3"),
-  reverse: new Audio("assets/sounds/reverse.mp3"),
-  wild: new Audio("assets/sounds/wild.mp3"),
-  number: new Audio("assets/sounds/number.mp3"),
-  win: new Audio("assets/sounds/win.mp3"),
-  lose: new Audio("assets/sounds/lose.mp3"),
-  start: new Audio("assets/sounds/start.mp3"),
-  joined: new Audio("assets/sounds/joined.mp3"),
-  uno: new Audio("assets/sounds/uno.mp3")
-};
-
-function playSound(name) {
-  const sound = sounds[name];
-  if (sound) {
-    sound.currentTime = 0;
-    sound.play().catch(() => {});
-  }
-}
+let currentLobby = "";
 
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = nameInput.value.trim();
   const lobby = lobbyInput.value.trim().toLowerCase();
   if (name && lobby) {
+    currentLobby = lobby;
     socket.emit("join", { name, lobby });
     lobbyNameDiv.innerText = `Lobby: ${lobby}`;
   }
@@ -60,6 +42,15 @@ function sendMessage() {
   }
 }
 
+leaveBtn.addEventListener("click", () => {
+  location.reload(); // simple way to leave lobby
+});
+
+unoButton.addEventListener("click", () => {
+  const audio = new Audio("/assets/sounds/uno.mp3");
+  audio.play().catch(() => {});
+});
+
 socket.on("chat", ({ from, message }) => {
   const entry = document.createElement("div");
   entry.innerHTML = `<strong>${from}:</strong> ${message}`;
@@ -69,20 +60,18 @@ socket.on("chat", ({ from, message }) => {
 
 socket.on("state", (state) => {
   document.getElementById("lobby-form").style.display = "none";
-  gameDiv.style.display = "block";
-
+  gameDiv.style.display = "flex";
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
   turnIndicator.style.display = "block";
-  turnIndicator.innerText =
-    state.currentTurn === playerId
-      ? "It is your turn."
-      : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
+  turnIndicator.innerText = state.currentTurn === playerId
+    ? "It is your turn."
+    : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
 
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === playerId ? "👉 " : "";
+    const mark = p.id === socket.id ? "👉 " : "";
     const li = document.createElement("li");
     li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
@@ -95,26 +84,18 @@ socket.on("state", (state) => {
     img.className = "card";
     img.addEventListener("click", () => {
       if (state.currentTurn !== playerId) return;
-
       if (card.startsWith("wild")) {
         const color = prompt("Choose a color (red, green, blue, yellow):");
-        if (!["red", "blue", "green", "yellow"].includes(color)) return;
-        playSound("wild");
-        socket.emit("playCard", { lobby: state.players[0].id, card, chosenColor: color });
+        if (!["red", "green", "blue", "yellow"].includes(color)) return;
+        socket.emit("playCard", { lobby: currentLobby, card, chosenColor: color });
       } else {
-        playSound(card.includes("draw") ? "draw" : (card.includes("skip") ? "skip" :
-                  (card.includes("reverse") ? "reverse" : "number")));
-        socket.emit("playCard", { lobby: state.players[0].id, card });
+        socket.emit("playCard", { lobby: currentLobby, card });
       }
     });
     handDiv.appendChild(img);
   });
 
-  if (hand.length === 2) {
-    unoButton.style.display = "block";
-  } else {
-    unoButton.style.display = "none";
-  }
+  unoButton.style.display = hand.length === 2 ? "block" : "none";
 
   discardPile.innerHTML = "";
   if (state.discardPile.length > 0) {
@@ -131,18 +112,8 @@ socket.on("state", (state) => {
   drawImg.className = "card stack";
   drawImg.addEventListener("click", () => {
     if (state.currentTurn === playerId) {
-      playSound("draw");
-      socket.emit("drawCard", { lobby: state.players[0].id });
+      socket.emit("drawCard", { lobby: currentLobby });
     }
   });
   drawPile.appendChild(drawImg);
-});
-
-unoButton.addEventListener("click", () => {
-  playSound("uno");
-  socket.emit("chat", { message: "UNO!" });
-});
-
-leaveBtn.addEventListener("click", () => {
-  location.reload();
 });
