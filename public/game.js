@@ -1,176 +1,277 @@
-const socket = io();
+// server.js
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const { specialCardLogic } = require("./public/specialCards");
 
-const joinForm = document.getElementById("join-form");
-const nameInput = document.getElementById("name");
-const lobbyInput = document.getElementById("lobby");
-const gameDiv = document.getElementById("game");
-const handDiv = document.getElementById("player-hand");
-const drawPile = document.getElementById("draw-pile");
-const discardPile = document.getElementById("discard-pile");
-const unoButton = document.getElementById("uno-btn");
-const wildButtons = document.getElementById("wild-buttons");
-const chatBox = document.getElementById("chat-box");
-const chatSend = document.getElementById("chat-send");
-const chatLog = document.getElementById("chat-log");
-const playerList = document.getElementById("player-list");
-const turnIndicator = document.getElementById("turn-indicator");
-const leaveBtn = document.getElementById("leave-btn");
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+app.use(express.static("public"));
 
-let currentLobby = "";
+const lobbies = {};
+const MAX_PLAYERS = 10;
+const TURN_TIMEOUT = 60000;
+const MAX_MISSES = 3;
 
-const sounds = {
-  draw: new Audio("/assets/sounds/draw.mp3"),
-  skip: new Audio("/assets/sounds/skip.mp3"),
-  reverse: new Audio("/assets/sounds/reverse.mp3"),
-  wild: new Audio("/assets/sounds/wild.mp3"),
-  number: new Audio("/assets/sounds/number.mp3"),
-  win: new Audio("/assets/sounds/win.mp3"),
-  lose: new Audio("/assets/sounds/lose.mp3"),
-  start: new Audio("/assets/sounds/start.mp3"),
-  joined: new Audio("/assets/sounds/joined.mp3"),
-  uno: new Audio("/assets/sounds/uno.mp3"),
-  special: new Audio("/assets/sounds/special.mp3")
-};
-
-function playSound(name) {
-  const sound = sounds[name];
-  if (sound) sound.play().catch(() => {});
+function createDeck() {
+  const colors = ["red", "blue", "green", "yellow"];
+  const numbers = [...Array(10).keys()].map(n => n.toString());
+  const specials = ["draw", "skip", "reverse"];
+  const wilds = [
+    "wild", "wild_draw4", "wild_boss",
+    "wild_packyourbags", "wild_rainbow", "wild_relax"
+  ];
+  const extras = {
+    red: ["red_it", "red_noc"],
+    blue: ["blue_look", "blue_moon"],
+    green: ["green_happy", "green_recycle"],
+    yellow: ["yellow_pinkypromise", "yellow_shopping"]
+  };
+  let deck = [];
+  colors.forEach(color => {
+    numbers.forEach(n => deck.push(`${color}_${n}`));
+    specials.forEach(s => deck.push(`${color}_${s}`));
+    extras[color].forEach(x => deck.push(x));
+  });
+  return shuffle([...deck, ...deck, ...wilds]);
 }
 
-joinForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const name = nameInput.value.trim();
-  const lobby = lobbyInput.value.trim().toLowerCase();
-  if (name && lobby) {
-    currentLobby = lobby;
-    socket.emit("join", { name, lobby });
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-});
-
-chatSend.addEventListener("click", sendMessage);
-chatBox.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") sendMessage();
-});
-
-function sendMessage() {
-  const msg = chatBox.value.trim();
-  if (msg) {
-    socket.emit("chat", { message: msg });
-    chatBox.value = "";
-  }
+  return arr;
 }
 
-leaveBtn.addEventListener("click", () => {
-  location.reload();
-});
+function advanceTurn(game) {
+  const idx = game.order.indexOf(game.currentTurn);
+  const nextIdx = (idx + game.direction + game.order.length) % game.order.length;
+  game.currentTurn = game.order[nextIdx];
+  clearTimeout(game.turnTimer);
+  startTurnTimer(game);
+}
 
-socket.on("chat", ({ from, message }) => {
-  const entry = document.createElement("div");
-  entry.innerHTML = `<strong>${from}:</strong> ${message}`;
-  chatLog.appendChild(entry);
-  chatLog.scrollTop = chatLog.scrollHeight;
-});
-
-socket.on("state", (state) => {
-  document.getElementById("lobby-form").style.display = "none";
-  gameDiv.style.display = "flex";
-  document.getElementById("lobby-name-display").innerText = currentLobby;
-
-  const playerId = socket.id;
-  const hand = state.hands[playerId] || [];
-
-  if (state.currentTurn) {
-    turnIndicator.style.display = "block";
-    turnIndicator.innerText = state.currentTurn === playerId
-      ? "It is your turn."
-      : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
-  } else {
-    turnIndicator.style.display = "none";
-  }
-
-  playerList.innerHTML = "";
-  state.players.forEach(p => {
-    const mark = p.id === socket.id ? "👉 " : "";
-    const li = document.createElement("li");
-    li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
-    playerList.appendChild(li);
-  });
-
-  handDiv.innerHTML = "";
-  hand.forEach(card => {
-    const img = document.createElement("img");
-    img.src = `/assets/cards/${card}.png`;
-    img.className = "card";
-
-    img.addEventListener("click", () => {
-      if (state.currentTurn !== playerId) return;
-
-      if (card === "wild_rainbow") {
-        const colorsInHand = hand.reduce((set, c) => {
-          if (c.startsWith("red_")) set.add("red");
-          if (c.startsWith("blue_")) set.add("blue");
-          if (c.startsWith("green_")) set.add("green");
-          if (c.startsWith("yellow_")) set.add("yellow");
-          return set;
-        }, new Set());
-
-        if (colorsInHand.size === 4) {
-          socket.emit("playCard", { lobby: currentLobby, card });
-          playSound("special");
-        } else {
-          alert("You need at least one red, blue, green, and yellow card to play RAINBOW.");
-        }
-      }
-
-      else if (card.startsWith("wild")) {
-        wildButtons.style.display = "flex";
-        wildButtons.querySelectorAll("button").forEach(btn => {
-          btn.onclick = () => {
-            wildButtons.style.display = "none";
-            socket.emit("playCard", {
-              lobby: currentLobby,
-              card,
-              chosenColor: btn.dataset.color
-            });
-            playSound("wild");
-          };
-        });
-      }
-
-      else {
-        socket.emit("playCard", { lobby: currentLobby, card });
-
-        if (card.includes("draw")) playSound("draw");
-        else if (card.includes("skip")) playSound("skip");
-        else if (card.includes("reverse")) playSound("reverse");
-        else if (card.startsWith("wild_")) playSound("special");
-        else playSound("number");
-      }
-    });
-
-    handDiv.appendChild(img);
-  });
-
-  unoButton.style.display = hand.length === 2 ? "block" : "none";
-
-  discardPile.innerHTML = "";
-  if (state.discardPile?.length) {
-    const topCard = state.discardPile[state.discardPile.length - 1];
-    const topImg = document.createElement("img");
-    topImg.src = `/assets/cards/${topCard}.png`;
-    topImg.className = "card";
-    discardPile.appendChild(topImg);
-  }
-
-  drawPile.innerHTML = "";
-  const drawImg = document.createElement("img");
-  drawImg.src = "/assets/cards/back.png";
-  drawImg.className = "card stack";
-  drawImg.addEventListener("click", () => {
-    if (state.currentTurn === playerId) {
-      socket.emit("drawCard", { lobby: currentLobby });
-      playSound("draw");
+function startTurnTimer(game) {
+  game.misses[game.currentTurn] = (game.misses[game.currentTurn] || 0);
+  game.turnTimer = setTimeout(() => {
+    game.misses[game.currentTurn]++;
+    if (game.misses[game.currentTurn] >= MAX_MISSES) {
+      bootPlayer(game, game.currentTurn);
+    } else {
+      advanceTurn(game);
+      sendState(game.id);
     }
+  }, TURN_TIMEOUT);
+}
+
+function bootPlayer(game, playerId) {
+  const idx = game.order.indexOf(playerId);
+  const hand = game.hands[playerId] || [];
+  const others = game.order.filter(id => id !== playerId);
+  hand.forEach((card, i) => {
+    const target = others[i % others.length];
+    game.hands[target].push(card);
   });
-  drawPile.appendChild(drawImg);
+
+  delete game.players[playerId];
+  delete game.hands[playerId];
+  delete game.misses[playerId];
+  game.order = game.order.filter(id => id !== playerId);
+  io.to(game.id).emit("chat", { from: "SUE", message: `⚠️ A player was removed for inactivity.` });
+
+  if (game.order.length === 1) {
+    const winnerId = game.order[0];
+    game.players[winnerId].score += 50;
+    io.to(game.id).emit("chat", {
+      from: "SUE",
+      message: `🏆 ${game.players[winnerId].name} wins by default and earns 50 points!`
+    });
+    resetGame(game);
+  } else {
+    advanceTurn(game);
+  }
+
+  sendState(game.id);
+}
+
+function getNextPlayer(game) {
+  const idx = game.order.indexOf(game.currentTurn);
+  return game.order[(idx + game.direction + game.order.length) % game.order.length];
+}
+
+function resetGame(game) {
+  game.deck = createDeck();
+  game.discardPile = [game.deck.pop()];
+  game.hands = {};
+  game.misses = {};
+  game.currentTurn = game.order[0];
+  game.order.forEach(id => {
+    game.hands[id] = game.deck.splice(0, 7);
+  });
+  startTurnTimer(game);
+}
+
+function sendState(lobbyId) {
+  const game = lobbies[lobbyId];
+  io.to(lobbyId).emit("state", {
+    players: Object.values(game.players),
+    hands: game.hands,
+    discardPile: game.discardPile,
+    currentTurn: game.currentTurn
+  });
+}
+
+io.on("connection", (socket) => {
+  socket.on("join", ({ name, lobby }) => {
+    if (!lobbies[lobby]) {
+      lobbies[lobby] = {
+        id: lobby,
+        players: {},
+        hands: {},
+        order: [],
+        deck: createDeck(),
+        discardPile: [],
+        direction: 1,
+        currentTurn: null,
+        misses: {},
+        happyActive: false
+      };
+    }
+
+    const game = lobbies[lobby];
+    if (Object.keys(game.players).length >= MAX_PLAYERS) {
+      socket.emit("chat", { from: "SUE", message: "Lobby is full." });
+      return;
+    }
+
+    if (!game.players[socket.id]) {
+      game.players[socket.id] = { id: socket.id, name, score: 0 };
+      game.order.push(socket.id);
+      game.hands[socket.id] = game.deck.splice(0, 7);
+    }
+
+    socket.join(lobby);
+
+    if (game.order.length === 2 && !game.timerStarted) {
+      game.timerStarted = true;
+      io.to(lobby).emit("chat", { from: "SUE", message: "⏳ Game starts in 30 seconds..." });
+      setTimeout(() => {
+        if (!game.currentTurn) {
+          game.currentTurn = game.order[0];
+          game.discardPile.push(game.deck.pop());
+          startTurnTimer(game);
+          sendState(lobby);
+        }
+      }, 30000);
+    }
+
+    sendState(lobby);
+  });
+
+  socket.on("playCard", ({ lobby, card, chosenColor }) => {
+    const game = lobbies[lobby];
+    if (!game || game.currentTurn !== socket.id) return;
+
+    const hand = game.hands[socket.id];
+    const cardIndex = hand.indexOf(card);
+    if (cardIndex === -1) return;
+
+    const topCard = game.discardPile[game.discardPile.length - 1];
+    const topColor = topCard.split("_")[0];
+    const cardColor = card.split("_")[0];
+
+    if (card === "wild_rainbow") {
+      const handColors = hand.map(c => c.split("_")[0]);
+      const valid = ["red", "blue", "green", "yellow"].every(col => handColors.includes(col));
+      if (!valid) {
+        game.hands[socket.id].push(game.deck.pop());
+        advanceTurn(game);
+        sendState(lobby);
+        return;
+      }
+    }
+
+    if (cardColor !== "wild" && topColor !== cardColor && !topCard.startsWith(cardColor)) return;
+
+    game.discardPile.push(hand.splice(cardIndex, 1)[0]);
+
+    if (specialCardLogic[card]) {
+      specialCardLogic[card](game, socket.id, io);
+    }
+
+    if (card === "wild_rainbow") {
+      const reqColors = ["red", "blue", "green", "yellow"];
+      const discards = [];
+      reqColors.forEach(color => {
+        const match = hand.find(c => c.startsWith(color));
+        if (match) {
+          hand.splice(hand.indexOf(match), 1);
+          game.discardPile.push(match);
+          discards.push(match);
+        }
+      });
+      const last = discards[discards.length - 1];
+      const newColor = last.split("_")[0];
+      game.lastColor = newColor;
+
+      if (last.includes("draw")) {
+        const next = getNextPlayer(game);
+        game.hands[next].push(...game.deck.splice(0, 2));
+      } else if (last.includes("skip")) {
+        advanceTurn(game);
+      } else if (last.includes("reverse")) {
+        if (game.order.length === 2) advanceTurn(game);
+        else game.direction *= -1;
+      }
+    }
+
+    if (game.hands[socket.id].length === 0) {
+      game.players[socket.id].score += 1;
+      io.to(lobby).emit("chat", {
+        from: "SUE",
+        message: `🎉 ${game.players[socket.id].name} has won the round!`
+      });
+      resetGame(game);
+    } else {
+      advanceTurn(game);
+    }
+
+    sendState(lobby);
+  });
+
+  socket.on("drawCard", ({ lobby }) => {
+    const game = lobbies[lobby];
+    if (!game || game.currentTurn !== socket.id) return;
+    game.hands[socket.id].push(game.deck.pop());
+    advanceTurn(game);
+    sendState(lobby);
+  });
+
+  socket.on("chat", ({ message }) => {
+    const lobby = Object.keys(lobbies).find(l => lobbies[l].players[socket.id]);
+    if (!lobby) return;
+    const game = lobbies[lobby];
+    const from = game.players[socket.id]?.name || "Unknown";
+    io.to(lobby).emit("chat", { from, message });
+  });
+
+  socket.on("disconnect", () => {
+    const lobby = Object.values(lobbies).find(l => l.players[socket.id]);
+    if (!lobby) return;
+
+    if (!lobby.disconnected) lobby.disconnected = {};
+    lobby.disconnected[socket.id] = Date.now();
+
+    setTimeout(() => {
+      const stillGone = Date.now() - (lobby.disconnected[socket.id] || 0) > 60000;
+      if (stillGone && lobby.players[socket.id]) {
+        bootPlayer(lobby, socket.id);
+      }
+    }, 60000);
+  });
 });
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
