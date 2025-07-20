@@ -1,7 +1,7 @@
 // public/specialCards.js
 
 export const specialCardLogic = {
-  // Wild Cards
+  // Wild Specials (Handled in server.js where required)
   "wild_boss": (lobby, currentPlayerId, io) => {
     const message = `🎁 THE BOSS: ${lobby.players[currentPlayerId].name} receives a card from each player!`;
     io.to(lobby.id).emit("chat", { from: "SUE", message });
@@ -24,38 +24,35 @@ export const specialCardLogic = {
     });
   },
 
-  "wild_rainbow": (lobby, currentPlayerId, io) => {
-    const message = `🌈 RAINBOW: ${lobby.players[currentPlayerId].name} must discard one of each color or draw until they can!`;
-    io.to(lobby.id).emit("chat", { from: "SUE", message });
-    // Implement real discard logic later
-  },
+  // wild_rainbow handled in server.js logic directly
 
   "wild_relax": (lobby, currentPlayerId, io) => {
     const message = `🛀 RELAX: Draw card was blocked. Continue play.`;
     io.to(lobby.id).emit("chat", { from: "SUE", message });
-    // Should be handled at draw prevention time
   },
 
-  // Color-based Cards
   "blue_look": (lobby, currentPlayerId, io) => {
     const topFour = lobby.deck.splice(-4);
     io.to(lobby.id).emit("chat", {
       from: "SUE",
       message: `👁️ LOOK: Top 4 draw cards rearranged by ${lobby.players[currentPlayerId].name}`
     });
-    // Add a prompt for ordering if UI needed
-    lobby.deck.push(...topFour); // Put back for now
+    lobby.deck.push(...topFour); // return in original order for now
   },
 
   "blue_moon": (lobby, currentPlayerId, io) => {
-    const message = `🌙 TO THE MOON: Card tossed to closest player. (Manual in physical game)`;
-    io.to(lobby.id).emit("chat", { from: "SUE", message });
+    io.to(lobby.id).emit("chat", {
+      from: "SUE",
+      message: `🌙 TO THE MOON: Card tossed closest player. Manual IRL effect.`
+    });
   },
 
   "green_happy": (lobby, currentPlayerId, io) => {
-    const message = `😊 HAPPY activated: Chat monitored for rude words. Rude? button available!`;
     lobby.happyActive = true;
-    io.to(lobby.id).emit("chat", { from: "SUE", message });
+    io.to(lobby.id).emit("chat", {
+      from: "SUE",
+      message: `😊 HAPPY activated: Chat monitored for rude words. Rude? button enabled.`
+    });
   },
 
   "green_recycle": (lobby, currentPlayerId, io) => {
@@ -109,6 +106,5 @@ export const specialCardLogic = {
     const target = pids[Math.floor(Math.random() * pids.length)];
     const message = `🛍️ SHOPPING: ${lobby.players[currentPlayerId].name} browsed ${lobby.players[target].name}'s hand.`;
     io.to(lobby.id).emit("chat", { from: "SUE", message });
-    // Real UI swap logic would go here
   }
 };
