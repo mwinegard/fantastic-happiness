@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>UNO Game</title>
+  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <div id="lobby-form">
+    <form id="join-form">
+      <input id="name" placeholder="Your Name" maxlength="20" required />
+      <input id="lobby" placeholder="Lobby Name" maxlength="20" required />
+      <button type="submit">Join</button>
+    </form>
+    <br>
+    <button id="leaderboard-toggle">🏆 Leaderboard</button>
+  </div>
+
+  <div id="game" style="display:none;">
+    <div class="main-container">
+      <div id="player-column">
+        <h3 id="lobby-title">Lobby: <span id="lobby-name-display"></span></h3>
+        <ul id="player-list"></ul>
+        <button id="leave-btn">Leave Lobby</button>
+        <button id="leaderboard-toggle">🏆 Leaderboard</button>
+      </div>
+
+      <div id="pile-column">
+        <div id="discard-pile"></div>
+        <div id="draw-pile"></div>
+      </div>
+
+      <div id="meta-column">
+        <div id="turn-indicator" style="display:none;"></div>
+        <br>
+        <button id="mute-toggle">🔊 Sound On</button>
+        <br>
+        <button id="uno-btn" style="display:none;">UNO!</button>
+        <br>
+        <div id="wild-buttons" style="display:none;">
+          <button data-color="red" class="wild-choice red">Red</button>
+          <button data-color="blue" class="wild-choice blue">Blue</button>
+          <button data-color="green" class="wild-choice green">Green</button>
+          <button data-color="yellow" class="wild-choice yellow">Yellow</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="hand-section">
+      <div id="player-hand"></div>
+    </div>
+
+    <footer id="chat-footer">
+      <div id="chat-log"></div>
+      <div id="chat-controls">
+        <input type="text" id="chat-box" placeholder="Say something..." />
+        <button id="chat-send">📨</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="special-cards.js"></script>
+  <script src="game.js"></script>
+  <!-- Leaderboard Modal -->
+<div id="leaderboard-modal" class="modal">
+  <div class="modal-content">
+    <span id="leaderboard-close">&times;</span>
+    <h2>🏆 Leaderboard</h2>
+    <div id="leaderboard-container"></div>
+  </div>
+</div>
+</body>
+</html>
