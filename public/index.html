@@ -18,22 +18,23 @@
   <div id="game" style="display: none;">
     <div id="top-area">
       <div class="column" id="player-column">
-        <div id="lobby-header">Lobby</div>
+        <div id="lobby-header">Lobby: <span id="lobby-name"></span></div>
         <ul id="player-list"></ul>
+        <button id="leave-lobby">Leave Lobby</button>
       </div>
 
       <div class="column" id="pile-column">
-        <div id="discard-pile"></div>
-        <div id="draw-pile"></div>
+        <div id="discard-container">
+          <div id="discard-pile"></div>
+        </div>
+        <div id="draw-container">
+          <div id="draw-pile"></div>
+        </div>
       </div>
 
       <div class="column" id="meta-column">
         <button id="uno-btn">UNO!</button>
         <div id="turn-indicator">Waiting...</div>
-      </div>
-
-      <div class="column" id="right-column">
-        <!-- Reserved for future features -->
       </div>
     </div>
 
