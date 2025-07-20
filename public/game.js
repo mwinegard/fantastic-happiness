@@ -13,24 +13,46 @@ const chatSend = document.getElementById("chat-send");
 const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
-const leaveBtn = document.getElementById("leave-lobby");
-const lobbyHeader = document.getElementById("lobby-header");
+const leaveBtn = document.getElementById("leave-btn");
+const lobbyNameDiv = document.getElementById("lobby-name");
 
-let currentLobby = "";
+// Sound effects
+const sounds = {
+  draw: new Audio("/sounds/draw.mp3"),
+  skip: new Audio("/sounds/skip.mp3"),
+  reverse: new Audio("/sounds/reverse.mp3"),
+  wild: new Audio("/sounds/wild.mp3"),
+  number: new Audio("/sounds/number.mp3"),
+  win: new Audio("/sounds/win.mp3"),
+  lose: new Audio("/sounds/lose.mp3"),
+  start: new Audio("/sounds/start.mp3"),
+  joined: new Audio("/sounds/joined.mp3"),
+  uno: new Audio("/sounds/uno.mp3")
+};
+
+function playSound(type) {
+  if (sounds[type]) {
+    try { sounds[type].play(); } catch (e) {}
+  }
+}
 
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = nameInput.value.trim();
   const lobby = lobbyInput.value.trim().toLowerCase();
   if (name && lobby) {
-    currentLobby = lobby;
     socket.emit("join", { name, lobby });
+    lobbyNameDiv.innerText = `Lobby: ${lobby}`;
   }
 });
 
 chatSend.addEventListener("click", sendMessage);
 chatBox.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
+});
+
+leaveBtn.addEventListener("click", () => {
+  location.reload(); // Basic reset
 });
 
 function sendMessage() {
@@ -48,15 +70,6 @@ socket.on("chat", ({ from, message }) => {
   chatLog.scrollTop = chatLog.scrollHeight;
 });
 
-leaveBtn.addEventListener("click", () => {
-  location.reload(); // simple hard reset
-});
-
-unoButton.addEventListener("click", () => {
-  const audio = new Audio("/assets/sounds/uno.mp3");
-  audio.play().catch(() => {});
-});
-
 socket.on("state", (state) => {
   document.getElementById("lobby-form").style.display = "none";
   gameDiv.style.display = "flex";
@@ -65,17 +78,11 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
-  const isYourTurn = state.currentTurn === playerId;
-  const currentName = state.players.find(p => p.id === state.currentTurn)?.name || "";
-
-  turnIndicator.innerText = isYourTurn
+  turnIndicator.innerText = state.currentTurn === playerId
     ? "It is your turn."
-    : `It is ${currentName}'s turn.`;
+    : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
 
-  // Update lobby name
-  lobbyHeader.innerText = `Lobby: ${currentLobby}`;
-
-  // Update player list
+  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
     const mark = p.id === socket.id ? "👉 " : "";
@@ -84,39 +91,42 @@ socket.on("state", (state) => {
     playerList.appendChild(li);
   });
 
-  // Update hand
+  // Hand
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
     img.addEventListener("click", () => {
-      if (!isYourTurn) return;
+      if (state.currentTurn !== playerId) return;
+
       if (card.startsWith("wild")) {
         const color = prompt("Choose a color (red, green, blue, yellow):");
         if (!["red", "blue", "green", "yellow"].includes(color)) return;
-        socket.emit("playCard", { lobby: currentLobby, card, chosenColor: color });
+        socket.emit("playCard", { lobby: state.players[0].id, card, chosenColor: color });
+        playSound("wild");
       } else {
-        socket.emit("playCard", { lobby: currentLobby, card });
+        socket.emit("playCard", { lobby: state.players[0].id, card });
+        if (card.includes("skip")) playSound("skip");
+        else if (card.includes("reverse")) playSound("reverse");
+        else if (card.includes("draw")) playSound("draw");
+        else playSound("number");
       }
     });
     handDiv.appendChild(img);
   });
 
-  // Show UNO button if 2 cards
+  // UNO button
   unoButton.style.display = hand.length === 2 ? "block" : "none";
 
   // Discard pile
   discardPile.innerHTML = "";
-  if (state.discardPile && state.discardPile.length > 0) {
-    const topCard = state.discardPile[state.discardPile.length - 1];
+  const topCard = state.discardPile[state.discardPile.length - 1];
+  if (topCard) {
     const topImg = document.createElement("img");
     topImg.src = `/assets/cards/${topCard}.png`;
     topImg.className = "card";
     discardPile.appendChild(topImg);
-    discardPile.style.visibility = "visible";
-  } else {
-    discardPile.style.visibility = "hidden";
   }
 
   // Draw pile
@@ -125,8 +135,9 @@ socket.on("state", (state) => {
   drawImg.src = "/assets/cards/back.png";
   drawImg.className = "card stack";
   drawImg.addEventListener("click", () => {
-    if (isYourTurn) {
-      socket.emit("drawCard", { lobby: currentLobby });
+    if (state.currentTurn === playerId) {
+      socket.emit("drawCard", { lobby: state.players[0].id });
+      playSound("draw");
     }
   });
   drawPile.appendChild(drawImg);
