@@ -76,6 +76,11 @@ leaveBtn.addEventListener("click", () => {
   location.reload();
 });
 
+unoButton.addEventListener("click", () => {
+  socket.emit("uno", { lobby: currentLobby });
+  playSound("uno");
+});
+
 socket.on("chat", ({ from, message }) => {
   const entry = document.createElement("div");
   entry.innerHTML = `<strong>${from}:</strong> ${message}`;
@@ -91,7 +96,6 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
-  // Turn indicator
   if (state.currentTurn) {
     turnIndicator.style.display = "block";
     turnIndicator.innerText = state.currentTurn === playerId
@@ -101,7 +105,6 @@ socket.on("state", (state) => {
     turnIndicator.style.display = "none";
   }
 
-  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
     const mark = p.id === socket.id ? "👉 " : "";
@@ -110,7 +113,6 @@ socket.on("state", (state) => {
     playerList.appendChild(li);
   });
 
-  // Player hand
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
@@ -157,10 +159,8 @@ socket.on("state", (state) => {
     handDiv.appendChild(img);
   });
 
-  // UNO button
   unoButton.style.display = hand.length === 2 ? "block" : "none";
 
-  // Discard pile
   discardPile.innerHTML = "";
   if (state.discardPile?.length) {
     const topCard = state.discardPile[state.discardPile.length - 1];
@@ -170,7 +170,6 @@ socket.on("state", (state) => {
     discardPile.appendChild(topImg);
   }
 
-  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
