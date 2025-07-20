@@ -1,4 +1,5 @@
 const socket = io();
+let currentLobby = "";
 
 const joinForm = document.getElementById("join-form");
 const nameInput = document.getElementById("name");
@@ -13,17 +14,22 @@ const chatSend = document.getElementById("chat-send");
 const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
-const colorSelector = document.getElementById("color-selector");
 
-let pendingWildCard = null;
+let unoPressed = false;
 
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const name = nameInput.value.trim();
   const lobby = lobbyInput.value.trim().toLowerCase();
   if (name && lobby) {
+    currentLobby = lobby;
     socket.emit("join", { name, lobby });
   }
+});
+
+unoButton.addEventListener("click", () => {
+  unoPressed = true;
+  socket.emit("chat", { message: "UNO!" });
 });
 
 chatSend.addEventListener("click", sendMessage);
@@ -53,11 +59,15 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
-  turnIndicator.innerText = state.currentTurn === playerId
-    ? "It is your turn."
-    : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
+  if (state.currentTurn) {
+    turnIndicator.style.display = "block";
+    turnIndicator.innerText = state.currentTurn === playerId
+      ? "It is your turn."
+      : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
+  } else {
+    turnIndicator.style.display = "none";
+  }
 
-  // Update player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
     const mark = p.id === socket.id ? "👉 " : "";
@@ -66,30 +76,31 @@ socket.on("state", (state) => {
     playerList.appendChild(li);
   });
 
-  // Update hand
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
-    if (state.currentTurn === playerId) img.classList.add("clickable");
     img.addEventListener("click", () => {
       if (state.currentTurn !== playerId) return;
 
       if (card.startsWith("wild")) {
-        pendingWildCard = { card, lobby: state.players[0].id };
-        colorSelector.style.display = "block";
+        const color = prompt("Choose a color (red, green, blue, yellow):");
+        if (!["red", "blue", "green", "yellow"].includes(color)) return;
+        socket.emit("playCard", { lobby: currentLobby, card, chosenColor: color });
       } else {
-        socket.emit("playCard", { lobby: state.players[0].id, card });
+        socket.emit("playCard", { lobby: currentLobby, card });
       }
     });
     handDiv.appendChild(img);
   });
 
-  // Show/hide UNO button
-  unoButton.style.display = hand.length === 2 ? "block" : "none";
+  if (hand.length === 2 && state.currentTurn === playerId) {
+    unoButton.style.display = "block";
+  } else {
+    unoButton.style.display = "none";
+  }
 
-  // Discard pile
   discardPile.innerHTML = "";
   const topCard = state.discardPile[state.discardPile.length - 1];
   const topImg = document.createElement("img");
@@ -97,30 +108,14 @@ socket.on("state", (state) => {
   topImg.className = "card";
   discardPile.appendChild(topImg);
 
-  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
   drawImg.className = "card stack";
   drawImg.addEventListener("click", () => {
     if (state.currentTurn === playerId) {
-      socket.emit("drawCard", { lobby: state.players[0].id });
+      socket.emit("drawCard", { lobby: currentLobby });
     }
   });
   drawPile.appendChild(drawImg);
-});
-
-// Handle color selection for wild cards
-document.querySelectorAll(".color-selector button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    if (!pendingWildCard) return;
-    const color = btn.dataset.color;
-    socket.emit("playCard", {
-      lobby: pendingWildCard.lobby,
-      card: pendingWildCard.card,
-      chosenColor: color
-    });
-    colorSelector.style.display = "none";
-    pendingWildCard = null;
-  });
 });
