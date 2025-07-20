@@ -158,3 +158,89 @@ socket.on("state", (state) => {
   });
   drawPile.appendChild(drawImg);
 });
+
+// Leaderboard modal logic
+const leaderboardModal = document.getElementById("leaderboard-modal");
+const leaderboardToggle = document.getElementById("leaderboard-toggle");
+const leaderboardClose = document.getElementById("leaderboard-close");
+const leaderboardContainer = document.getElementById("leaderboard-container");
+
+let leaderboardData = [];
+let currentSort = { column: null, asc: true };
+
+leaderboardToggle.onclick = () => {
+  leaderboardModal.style.display = "flex";
+  loadLeaderboard();
+};
+
+leaderboardClose.onclick = () => {
+  leaderboardModal.style.display = "none";
+};
+
+window.onclick = (e) => {
+  if (e.target === leaderboardModal) {
+    leaderboardModal.style.display = "none";
+  }
+};
+
+function loadLeaderboard() {
+  fetch('/scores')
+    .then(res => res.json())
+    .then(data => {
+      leaderboardData = data;
+      renderLeaderboard();
+    });
+}
+
+function renderLeaderboard() {
+  if (!leaderboardData.length) {
+    leaderboardContainer.innerHTML = "<p>No scores yet.</p>";
+    return;
+  }
+
+  const headers = [
+    { key: "name", label: "Name" },
+    { key: "wins", label: "Wins" },
+    { key: "score", label: "Score" }
+  ];
+
+  const headerRow = headers.map(h => {
+    let cls = "";
+    if (currentSort.column === h.key) {
+      cls = currentSort.asc ? "sorted-asc" : "sorted-desc";
+    }
+    return `<th class="${cls}" onclick="sortByLeaderboard('${h.key}')">${h.label}</th>`;
+  }).join("");
+
+  const rows = leaderboardData.map(score => `
+    <tr>
+      <td>${score.name}</td>
+      <td>${score.wins || 0}</td>
+      <td>${score.score || 0}</td>
+    </tr>
+  `).join("");
+
+  leaderboardContainer.innerHTML = `
+    <table>
+      <thead><tr>${headerRow}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+window.sortByLeaderboard = function (column) {
+  if (currentSort.column === column) {
+    currentSort.asc = !currentSort.asc;
+  } else {
+    currentSort.column = column;
+    currentSort.asc = true;
+  }
+
+  leaderboardData.sort((a, b) => {
+    const valA = a[column] || 0;
+    const valB = b[column] || 0;
+    return currentSort.asc ? valA - valB : valB - valA;
+  });
+
+  renderLeaderboard();
+};
