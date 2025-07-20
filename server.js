@@ -179,6 +179,49 @@ io.on("connection", (socket) => {
     sendState(lobby);
   });
 
+  socket.on("playCard", ({ lobby, card, chosenColor }) => {
+    const game = lobbies[lobby];
+    if (!game || socket.id !== game.currentTurn) return;
+
+    const hand = game.hands[socket.id];
+    const idx = hand.indexOf(card);
+    if (idx === -1) return;
+
+    hand.splice(idx, 1);
+    game.discardPile.push(card);
+
+    if (specialCardLogic[card]) {
+      specialCardLogic[card](game, socket.id, io);
+    }
+
+    advanceTurn(game);
+    sendState(lobby);
+  });
+
+  socket.on("drawCard", ({ lobby }) => {
+    const game = lobbies[lobby];
+    if (!game || socket.id !== game.currentTurn) return;
+
+    game.hands[socket.id].push(game.deck.pop());
+    advanceTurn(game);
+    sendState(lobby);
+  });
+
+  socket.on("chat", ({ message }) => {
+    const name = Object.values(lobbies)
+      .flatMap(g => Object.values(g.players))
+      .find(p => p.id === socket.id)?.name || "Unknown";
+
+    io.emit("chat", { from: name, message });
+  });
+
+  socket.on("uno", ({ lobby }) => {
+    io.to(lobby).emit("chat", {
+      from: "SUE",
+      message: `🚨 ${lobbies[lobby].players[socket.id].name} called UNO!`
+    });
+  });
+
   socket.on("disconnect", () => {
     for (const game of Object.values(lobbies)) {
       if (game.players[socket.id]) {
