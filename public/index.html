@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>UNO Game</title>
-  <link rel="stylesheet" href="style.css" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="lobby-form">
@@ -15,40 +15,37 @@
     </form>
   </div>
 
-  <div id="game" style="display:none;">
-    <div id="game-body">
-      <div id="player-column">
+  <div id="game" style="display: none;">
+    <div id="top-area">
+      <div class="column" id="player-column">
+        <div id="lobby-header">Lobby</div>
         <ul id="player-list"></ul>
       </div>
 
-      <div id="center-column">
+      <div class="column" id="pile-column">
         <div id="discard-pile"></div>
         <div id="draw-pile"></div>
       </div>
 
-      <div id="sidebar-column">
-        <div id="turn-indicator"></div>
-        <button id="uno-btn" style="display:none;">UNO!</button>
+      <div class="column" id="meta-column">
+        <button id="uno-btn">UNO!</button>
+        <div id="turn-indicator">Waiting...</div>
+      </div>
+
+      <div class="column" id="right-column">
+        <!-- Reserved for future features -->
       </div>
     </div>
 
     <div id="player-hand"></div>
 
-    <div id="chat-footer">
+    <div id="chat-container">
       <div id="chat-log"></div>
-      <div id="chat-input">
-        <input id="chat-box" placeholder="Say something..." />
+      <div id="chat-controls">
+        <input id="chat-box" placeholder="Type a message..." />
         <button id="chat-send">Send</button>
       </div>
     </div>
-  </div>
-
-  <div class="color-selector" id="color-selector" style="display: none;">
-    <p>Select a color:</p>
-    <button style="background:red" data-color="red">Red</button>
-    <button style="background:blue" data-color="blue">Blue</button>
-    <button style="background:green" data-color="green">Green</button>
-    <button style="background:gold" data-color="yellow">Yellow</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
