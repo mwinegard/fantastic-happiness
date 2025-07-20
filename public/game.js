@@ -9,6 +9,7 @@ const handDiv = document.getElementById("player-hand");
 const drawPile = document.getElementById("draw-pile");
 const discardPile = document.getElementById("discard-pile");
 const playerList = document.getElementById("player-list");
+const turnIndicator = document.getElementById("turn-indicator");
 
 const chatLog = document.getElementById("chat-log");
 const chatBox = document.getElementById("chat-box");
@@ -25,7 +26,7 @@ const audio = {};
 for (let key of sounds) {
   const path = `/assets/audio/${key}.mp3`;
   const el = new Audio(path);
-  el.onerror = () => {}; // prevent crash if file missing
+  el.onerror = () => {};
   audio[key] = el;
 }
 
@@ -86,6 +87,13 @@ socket.on("state", (state) => {
   const playerId = socket.id;
   const hand = state.hands[playerId];
   const currentPlayerId = state.currentTurn;
+
+  // Turn indicator
+  const turnPlayer = state.players.find(p => p.id === currentPlayerId);
+  if (turnPlayer) {
+    const msg = currentPlayerId === playerId ? "It is your turn." : `It is ${turnPlayer.name}'s turn.`;
+    turnIndicator.innerText = msg;
+  }
 
   // Update player list
   playerList.innerHTML = "";
