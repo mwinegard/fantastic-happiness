@@ -14,7 +14,7 @@ const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
 const leaveBtn = document.getElementById("leave-btn");
-const lobbyNameDiv = document.getElementById("lobby-name");
+const lobbyNameHeader = document.getElementById("lobby-name");
 
 let currentLobby = "";
 
@@ -25,8 +25,11 @@ joinForm.addEventListener("submit", (e) => {
   if (name && lobby) {
     currentLobby = lobby;
     socket.emit("join", { name, lobby });
-    lobbyNameDiv.innerText = `Lobby: ${lobby}`;
   }
+});
+
+leaveBtn.addEventListener("click", () => {
+  location.reload(); // resets to join screen
 });
 
 chatSend.addEventListener("click", sendMessage);
@@ -42,15 +45,6 @@ function sendMessage() {
   }
 }
 
-leaveBtn.addEventListener("click", () => {
-  location.reload(); // simple way to leave lobby
-});
-
-unoButton.addEventListener("click", () => {
-  const audio = new Audio("/assets/sounds/uno.mp3");
-  audio.play().catch(() => {});
-});
-
 socket.on("chat", ({ from, message }) => {
   const entry = document.createElement("div");
   entry.innerHTML = `<strong>${from}:</strong> ${message}`;
@@ -60,23 +54,30 @@ socket.on("chat", ({ from, message }) => {
 
 socket.on("state", (state) => {
   document.getElementById("lobby-form").style.display = "none";
-  gameDiv.style.display = "flex";
+  gameDiv.style.display = "block";
+
   const playerId = socket.id;
   const hand = state.hands[playerId] || [];
 
-  turnIndicator.style.display = "block";
+  // Lobby name
+  lobbyNameHeader.innerText = `Lobby: ${currentLobby}`;
+
+  // Show turn info only after game starts
+  turnIndicator.style.display = state.currentTurn ? "block" : "none";
   turnIndicator.innerText = state.currentTurn === playerId
     ? "It is your turn."
     : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
 
+  // Player list
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const mark = p.id === socket.id ? "👉 " : "";
+    const mark = p.id === playerId ? "👉 " : "";
     const li = document.createElement("li");
     li.innerText = `${mark}${p.name} 🃏 ${p.handSize} (${p.score})`;
     playerList.appendChild(li);
   });
 
+  // Player hand
   handDiv.innerHTML = "";
   hand.forEach(card => {
     const img = document.createElement("img");
@@ -84,9 +85,10 @@ socket.on("state", (state) => {
     img.className = "card";
     img.addEventListener("click", () => {
       if (state.currentTurn !== playerId) return;
+
       if (card.startsWith("wild")) {
         const color = prompt("Choose a color (red, green, blue, yellow):");
-        if (!["red", "green", "blue", "yellow"].includes(color)) return;
+        if (!["red", "blue", "green", "yellow"].includes(color)) return;
         socket.emit("playCard", { lobby: currentLobby, card, chosenColor: color });
       } else {
         socket.emit("playCard", { lobby: currentLobby, card });
@@ -95,8 +97,10 @@ socket.on("state", (state) => {
     handDiv.appendChild(img);
   });
 
+  // Show UNO button if needed
   unoButton.style.display = hand.length === 2 ? "block" : "none";
 
+  // Discard pile
   discardPile.innerHTML = "";
   if (state.discardPile.length > 0) {
     const topCard = state.discardPile[state.discardPile.length - 1];
@@ -106,6 +110,7 @@ socket.on("state", (state) => {
     discardPile.appendChild(topImg);
   }
 
+  // Draw pile
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
   drawImg.src = "/assets/cards/back.png";
