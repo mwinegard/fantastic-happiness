@@ -1,4 +1,4 @@
-// public/special_cards.js
+// public/specialCards.js
 
 export const specialCardLogic = {
   // Wild Cards
