@@ -1,5 +1,6 @@
 const socket = io();
 
+// DOM elements
 const joinForm = document.getElementById("join-form");
 const nameInput = document.getElementById("name");
 const lobbyInput = document.getElementById("lobby");
@@ -13,7 +14,6 @@ const chatSend = document.getElementById("chat-send");
 const chatLog = document.getElementById("chat-log");
 const playerList = document.getElementById("player-list");
 const turnIndicator = document.getElementById("turn-indicator");
-const colorPicker = document.getElementById("color-picker");
 
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -44,8 +44,6 @@ socket.on("chat", ({ from, message }) => {
   chatLog.scrollTop = chatLog.scrollHeight;
 });
 
-let waitingForColor = false;
-
 socket.on("state", (state) => {
   document.getElementById("lobby-form").style.display = "none";
   gameDiv.style.display = "block";
@@ -56,7 +54,6 @@ socket.on("state", (state) => {
   turnIndicator.innerText = state.currentTurn === playerId
     ? "It is your turn."
     : `It is ${state.players.find(p => p.id === state.currentTurn)?.name}'s turn.`;
-  turnIndicator.style.display = "block";
 
   playerList.innerHTML = "";
   state.players.forEach(p => {
@@ -71,43 +68,39 @@ socket.on("state", (state) => {
     const img = document.createElement("img");
     img.src = `/assets/cards/${card}.png`;
     img.className = "card";
+
     img.addEventListener("click", () => {
-      if (state.currentTurn !== playerId || waitingForColor) return;
+      if (state.currentTurn !== playerId) return;
+
+      const specialPattern = /(happy|noc|relax|boss|packyourbags|rainbow|moon|look|it|pinkypromise|shopping)/i;
+      if (specialPattern.test(card)) {
+        new Audio("special.mp3").play();
+      }
 
       if (card.startsWith("wild")) {
-        waitingForColor = true;
-        colorPicker.style.display = "flex";
-        colorPicker.onclick = null;
-
-        colorPicker.querySelectorAll("button").forEach(btn => {
-          btn.onclick = () => {
-            const chosenColor = btn.dataset.color;
-            socket.emit("playCard", {
-              lobby: state.players[0].id,
-              card,
-              chosenColor
-            });
-            colorPicker.style.display = "none";
-            waitingForColor = false;
-          };
-        });
+        const color = prompt("Choose a color (red, green, blue, yellow):");
+        if (!["red", "blue", "green", "yellow"].includes(color)) return;
+        socket.emit("playCard", { lobby: state.players[0].id, card, chosenColor: color });
       } else {
         socket.emit("playCard", { lobby: state.players[0].id, card });
       }
     });
+
     handDiv.appendChild(img);
   });
 
-  unoButton.style.display = hand.length === 2 ? "block" : "none";
+  if (hand.length === 2) {
+    unoButton.style.display = "block";
+  } else {
+    unoButton.style.display = "none";
+  }
 
   discardPile.innerHTML = "";
-  if (state.discardPile.length > 0) {
-    const topCard = state.discardPile[state.discardPile.length - 1];
-    const topImg = document.createElement("img");
-    topImg.src = `/assets/cards/${topCard}.png`;
-    topImg.className = "card";
-    discardPile.appendChild(topImg);
-  }
+  const topCard = state.discardPile[state.discardPile.length - 1];
+  const topImg = document.createElement("img");
+  topImg.src = `/assets/cards/${topCard}.png`;
+  topImg.className = "card";
+  discardPile.appendChild(topImg);
 
   drawPile.innerHTML = "";
   const drawImg = document.createElement("img");
