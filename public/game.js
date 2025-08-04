@@ -1,6 +1,5 @@
 const socket = io();
 let myId = null;
-let myName = "";
 let isMyTurn = false;
 let muted = false;
 
@@ -12,25 +11,20 @@ const chatLog = document.getElementById("chat-log");
 const chatInput = document.getElementById("chat-input");
 const chatSend = document.getElementById("chat-send");
 const joinForm = document.getElementById("join-form");
-const nameInput = document.getElementById("name");
 const gameScreen = document.getElementById("game-screen");
-const joinScreen = document.getElementById("join-screen");
-const unoBtn = document.getElementById("uno-btn");
+const nameInput = document.getElementById("name");
+const unoButton = document.getElementById("uno-btn");
 const muteBtn = document.getElementById("mute-toggle");
 
-const sounds = {
-  draw: new Audio("/assets/sounds/draw.mp3"),
-  skip: new Audio("/assets/sounds/skip.mp3"),
-  reverse: new Audio("/assets/sounds/reverse.mp3"),
-  wild: new Audio("/assets/sounds/wild.mp3"),
-  special: new Audio("/assets/sounds/special.mp3"),
-  number: new Audio("/assets/sounds/number.mp3"),
-  win: new Audio("/assets/sounds/win.mp3"),
-  lose: new Audio("/assets/sounds/lose.mp3"),
-  start: new Audio("/assets/sounds/start.mp3"),
-  joined: new Audio("/assets/sounds/joined.mp3"),
-  uno: new Audio("/assets/sounds/uno.mp3"),
-};
+const sounds = {};
+[
+  "draw", "skip", "reverse", "wild", "special", "number",
+  "win", "lose", "start", "joined", "uno"
+].forEach(name => {
+  const audio = new Audio(`/assets/sounds/${name}.mp3`);
+  audio.volume = 0.6;
+  sounds[name] = audio;
+});
 
 function playSound(name) {
   if (muted) return;
@@ -47,51 +41,59 @@ joinForm.addEventListener("submit", e => {
   e.preventDefault();
   const name = nameInput.value.trim();
   if (name) {
-    socket.emit("join", name);
-    myName = name;
+    socket.emit("join", { name });
   }
 });
 
 socket.on("joinDenied", msg => {
-  alert(msg || "Name already in use.");
+  alert(msg || "You can't join right now.");
 });
 
-socket.on("joined", ({ id, name }) => {
+socket.on("joined", id => {
   myId = id;
-  joinScreen.style.display = "none";
+  joinForm.style.display = "none";
   gameScreen.style.display = "block";
 });
 
 socket.on("state", state => {
+  if (!myId) return;
   const me = state.players.find(p => p.id === myId);
   isMyTurn = state.turn === myId;
 
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const li = document.createElement("li");
-    li.textContent = `${p.name} - ${p.handSize} cards${p.id === state.turn ? " 🎯" : ""}`;
+    const li = document.createElement("div");
+    li.textContent = `${p.name} - ${p.handSize} cards - ${p.score || 0} pts${p.id === state.turn ? " 🔁" : ""}`;
     playerList.appendChild(li);
   });
 
   discardPile.innerHTML = "";
   if (state.discardTop) {
-    const topCard = document.createElement("img");
-    const imgName = state.discardTop.replace(/^.*?_/, "");
-    topCard.src = `/assets/cards/${imgName}.png`;
-    topCard.classList.add("card");
-    discardPile.appendChild(topCard);
+    const cardImg = document.createElement("img");
+    let imgName = state.discardTop;
+    if (imgName.includes("wild")) {
+      const parts = imgName.split("_");
+      if (parts.length > 2) imgName = `${parts[1]}_${parts[2]}`;
+    }
+    cardImg.src = `/assets/cards/${imgName}.png`;
+    cardImg.className = "pile";
+    discardPile.appendChild(cardImg);
+  }
+
+  handDiv.innerHTML = "";
+  if (me && me.hand && me.hand.length > 0) {
+    me.hand.forEach(card => {
+      const img = document.createElement("img");
+      img.src = `/assets/cards/${card}.png`;
+      img.className = "card";
+      img.onclick = () => tryPlayCard(card);
+      handDiv.appendChild(img);
+    });
   }
 });
 
-socket.on("chat", msg => {
-  const div = document.createElement("div");
-  div.textContent = `[${msg.from}]: ${msg.message}`;
-  chatLog.appendChild(div);
-  chatLog.scrollTop = chatLog.scrollHeight;
-});
-
-socket.on("sound", name => {
-  playSound(name);
+drawPile.addEventListener("click", () => {
+  if (isMyTurn) socket.emit("drawCard");
 });
 
 chatSend.addEventListener("click", () => {
@@ -102,25 +104,26 @@ chatSend.addEventListener("click", () => {
   }
 });
 
-unoBtn.addEventListener("click", () => {
-  socket.emit("uno");
+chatInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") chatSend.click();
 });
 
-function renderHand(cards) {
-  handDiv.innerHTML = "";
-  cards.forEach(card => {
-    const img = document.createElement("img");
-    const base = card.includes("wild") && card.split("_").length > 2
-      ? `${card.split("_")[1]}_${card.split("_")[2]}`
-      : card;
-    img.src = `/assets/cards/${base}.png`;
-    img.classList.add("card");
-    img.addEventListener("click", () => playCard(card));
-    if (isMyTurn) handDiv.appendChild(img);
-  });
-}
+socket.on("chat", ({ from, message }) => {
+  const div = document.createElement("div");
+  div.textContent = `[${from}]: ${message}`;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+});
 
-function playCard(card) {
+unoButton.addEventListener("click", () => {
+  socket.emit("callUNO");
+});
+
+socket.on("playSound", name => {
+  playSound(name);
+});
+
+function tryPlayCard(card) {
   if (!isMyTurn) return;
   if (card.startsWith("wild")) {
     const chosenColor = prompt("Choose a color: red, blue, green, yellow");
@@ -133,11 +136,3 @@ function playCard(card) {
     socket.emit("playCard", { card });
   }
 }
-
-drawPile.addEventListener("click", () => {
-  if (isMyTurn) socket.emit("drawCard");
-});
-
-socket.on("hand", cards => {
-  renderHand(cards);
-});
