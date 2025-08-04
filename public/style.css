@@ -1,146 +1,143 @@
 body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: #f5f7fa;
-  color: #333;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #fef6f9;
   margin: 0;
   padding: 0;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  color: #333;
 }
 
-h1, h2 {
-  text-align: center;
-  color: #2b3e50;
+#join-screen,
+#game-screen {
+  width: 100%;
+  max-width: 800px;
+  padding: 20px;
 }
 
-form, #chat-box, #player-list {
-  max-width: 600px;
-  margin: 20px auto;
-  padding: 15px;
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   background: white;
+  padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 0 12px rgba(0,0,0,0.1);
 }
 
 input, button {
   padding: 10px;
-  margin: 5px 0;
-  width: 100%;
-  border: 1px solid #ccc;
+  font-size: 1rem;
   border-radius: 8px;
-  box-sizing: border-box;
+  border: 1px solid #ccc;
 }
 
 button {
-  background: #4caf50;
-  color: white;
   cursor: pointer;
+  background: #e90000;
+  color: white;
   border: none;
-  transition: background 0.3s ease;
+  font-weight: bold;
+  transition: background 0.2s ease-in-out;
 }
 
 button:hover {
-  background: #43a047;
+  background: #c70000;
 }
 
-#game-area {
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+#player-list {
+  margin-bottom: 10px;
+  background: #fff3f6;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.05);
+}
+
+#game-board {
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 30px;
   margin: 20px 0;
-  gap: 40px;
 }
 
-#draw-pile-container,
-#discard-pile {
+.pile {
   width: 100px;
   height: 150px;
-  position: relative;
-}
-
-#draw-button,
-#discard-pile img {
-  width: 100%;
-  height: auto;
   border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  cursor: pointer;
-}
-
-#player-hand {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  padding: 10px;
-  margin: 0 auto 20px auto;
-  max-width: 90%;
-  gap: 10px;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
 }
 
 .card {
   width: 80px;
-  height: auto;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  transition: transform 0.2s ease;
+  height: 120px;
+  margin: 5px;
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
 .card:hover {
-  transform: scale(1.05);
+  transform: translateY(-5px);
+}
+
+#player-hand {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 20px;
 }
 
 #chat-box {
   display: flex;
   flex-direction: column;
+  background: white;
+  padding: 10px;
+  border-radius: 8px;
+  max-height: 250px;
+  overflow: hidden;
+  box-shadow: 0 0 6px rgba(0,0,0,0.1);
 }
 
 #chat-log {
-  height: 150px;
+  flex: 1;
   overflow-y: auto;
-  background: #eef1f5;
-  padding: 10px;
-  border-radius: 8px;
+  border: 1px solid #eee;
+  padding: 8px;
+  height: 150px;
   margin-bottom: 10px;
-  font-size: 0.9em;
+  background: #fafafa;
+  font-size: 0.9rem;
 }
 
-#chat-log div {
-  margin: 4px 0;
+#chat-input {
+  flex: 1;
+  margin-bottom: 5px;
 }
 
-@media (max-width: 600px) {
-  #player-hand .card {
-    width: 60px;
-  }
-
-  #draw-pile-container,
-  #discard-pile {
-    width: 70px;
-    height: 105px;
-  }
-
-  #game-area {
-    gap: 20px;
-  }
+#mute-toggle,
+#uno-btn {
+  background: #ffd800;
+  color: #222;
+  padding: 6px 12px;
+  border: none;
+  font-weight: bold;
+  border-radius: 8px;
+  font-size: 0.9rem;
 }
 
-/* LEADERBOARD STYLING */
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 1rem;
-  margin-top: 20px;
+#uno-btn:hover {
+  background: #ffa600;
 }
 
-th, td {
-  border-bottom: 1px solid #ddd;
-  padding: 12px;
-  text-align: left;
-}
-
-tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-
-th {
-  background-color: #4caf50;
-  color: white;
+#mute-toggle:hover {
+  background: #ddd600;
 }
