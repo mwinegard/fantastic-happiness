@@ -2,66 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>UNO Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fantastic Happiness UNO</title>
   <link rel="stylesheet" href="style.css" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body>
-  <div id="lobby-form">
+  <div id="join-screen">
     <form id="join-form">
-      <input id="name" placeholder="Your Name" maxlength="20" required />
-      <input id="lobby" placeholder="Lobby Name" maxlength="20" required />
-      <button id="join">Join</button>
+      <h1>Join Game</h1>
+      <input id="name" placeholder="Your name" required />
+      <input id="lobby" placeholder="Lobby name" required />
+      <button type="submit">Join</button>
     </form>
   </div>
 
-  <div id="game" style="display:none;">
-    <div class="main-container">
-      <div id="player-column">
-        <h3 id="lobby-title">Lobby: <span id="lobby-name-display"></span></h3>
-        <ul id="player-list"></ul>
-        <button id="leave-btn">Leave Lobby</button>
-      </div>
+  <div id="game-screen" style="display: none;">
+    <h2>Fantastic Happiness UNO</h2>
+    <div id="player-list"></div>
+    <div id="discard-pile" class="pile"></div>
+    <button id="draw-button">Draw Card</button>
+    <div id="player-hand"></div>
 
-      <div id="pile-column">
-        <div id="discard-pile"></div>
-        <div id="draw-pile"></div>
-      </div>
-
-      <div id="meta-column">
-        <div id="turn-indicator" style="display:none;"></div>
-        <div id="timer" style="display:none;">
-          ⏱ Time left: <span id="countdown">30</span>s
-        </div>
-        <br>
-        <button id="mute-toggle">🔊 Sound On</button>
-        <br>
-        <button id="uno-btn" style="display:none;">UNO!</button>
-        <br>
-        <div id="wild-buttons" style="display:none;">
-          <button data-color="red" class="wild-choice red">Red</button>
-          <button data-color="blue" class="wild-choice blue">Blue</button>
-          <button data-color="green" class="wild-choice green">Green</button>
-          <button data-color="yellow" class="wild-choice yellow">Yellow</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="hand-section">
-      <div id="player-hand"></div>
-    </div>
-
-    <footer id="chat-footer">
+    <div id="chat-box">
       <div id="chat-log"></div>
-      <div id="chat-controls">
-        <input type="text" id="chat-box" placeholder="Say something..." />
-        <button id="chat-send">📨</button>
-      </div>
-    </footer>
+      <input id="chat-input" placeholder="Say something..." />
+      <button id="chat-send">Send</button>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="special-cards.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
