@@ -3,24 +3,24 @@ const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 const fs = require("fs");
-const path = require("path");
 
 const PORT = process.env.PORT || 3000;
-
 app.use(express.static("public"));
 
 let lobbies = {};
 let scores = {};
 
+// Load scores
 try {
   scores = JSON.parse(fs.readFileSync("scores.json", "utf8"));
 } catch {
   scores = {};
 }
 
+// Special card effects
 const specialCardLogic = {
   wild_boss: (game, currentPlayerId) => {
-    let bossIndex = game.players.findIndex(p => p.id === currentPlayerId);
+    const bossIndex = game.players.findIndex(p => p.id === currentPlayerId);
     if (bossIndex === -1) return;
     game.players.forEach(p => {
       if (p.id !== currentPlayerId && game.hands[p.id]?.length) {
@@ -40,9 +40,9 @@ const specialCardLogic = {
       game.hands[pid] = [];
     });
     shuffle(allCards);
-    const count = Object.keys(game.hands).length;
+    const playerIds = Object.keys(game.hands);
     allCards.forEach((card, i) => {
-      const pid = Object.keys(game.hands)[i % count];
+      const pid = playerIds[i % playerIds.length];
       game.hands[pid].push(card);
     });
     io.to(game.lobby).emit("chat", {
@@ -52,10 +52,10 @@ const specialCardLogic = {
   }
 };
 
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
 
@@ -69,17 +69,15 @@ function generateDeck() {
       if (i !== 0) deck.push(`${color}_${i}`);
     }
     ["skip", "reverse", "draw2"].forEach(action => {
-      deck.push(`${color}_${action}`);
-      deck.push(`${color}_${action}`);
+      deck.push(`${color}_${action}`, `${color}_${action}`);
     });
   });
 
   for (let i = 0; i < 4; i++) {
-    deck.push("wild");
-    deck.push("wild_draw4");
+    deck.push("wild", "wild_draw4");
   }
 
-  deck.push("wild_boss", "green_recycle"); // Add more custom cards as needed
+  deck.push("wild_boss", "green_recycle"); // Add more custom cards here
   shuffle(deck);
   return deck;
 }
@@ -107,6 +105,7 @@ function emitState(lobby) {
 function updateScores(winnerId, game) {
   if (!scores[winnerId]) scores[winnerId] = { wins: 0, points: 0 };
   scores[winnerId].wins++;
+
   let points = 0;
   Object.entries(game.hands).forEach(([pid, hand]) => {
     if (pid !== winnerId) {
@@ -117,12 +116,39 @@ function updateScores(winnerId, game) {
       });
     }
   });
+
   scores[winnerId].points += points;
   fs.writeFileSync("scores.json", JSON.stringify(scores, null, 2));
 }
 
+function startGameIfReady(game, lobby) {
+  if (!game.started && game.players.length >= 2) {
+    console.log(`✅ Starting game in lobby '${lobby}' with ${game.players.length} players`);
+    game.started = true;
+    game.deck = generateDeck();
+    game.hands = {};
+    game.players.forEach(p => {
+      game.hands[p.id] = [];
+      for (let i = 0; i < 7; i++) {
+        game.hands[p.id].push(game.deck.pop());
+      }
+    });
+    game.turnIndex = 0;
+    game.turn = game.players[0].id;
+    game.discardPile = [game.deck.pop()];
+    emitState(lobby);
+    io.to(lobby).emit("chat", { from: "SUE", message: "🃏 Game started!" });
+  } else {
+    console.log(`Waiting for more players in lobby '${lobby}' (${game.players.length}/2)`);
+  }
+}
+
+// ───────────────────────────────────────────────────────────────
+
 io.on("connection", socket => {
   socket.on("join", ({ name, lobby }) => {
+    console.log(`🔌 ${name} joined lobby: ${lobby}`);
+
     if (!lobbies[lobby]) {
       lobbies[lobby] = {
         players: [],
@@ -140,27 +166,16 @@ io.on("connection", socket => {
 
     if (game.started) {
       socket.emit("joinDenied", "Game already in progress.");
+      console.log(`❌ ${name} was denied join (game in progress)`);
       return;
     }
 
     socket.join(lobby);
     game.players.push({ id: socket.id, name });
+
     io.to(lobby).emit("chat", { from: "SUE", message: `${name} joined.` });
 
-    if (game.players.length >= 2 && !game.started) {
-      game.started = true;
-      game.deck = generateDeck();
-      game.players.forEach(p => {
-        game.hands[p.id] = [];
-        for (let i = 0; i < 7; i++) {
-          game.hands[p.id].push(game.deck.pop());
-        }
-      });
-      game.turnIndex = 0;
-      game.turn = game.players[0].id;
-      game.discardPile.push(game.deck.pop());
-      emitState(lobby);
-    }
+    startGameIfReady(game, lobby);
   });
 
   socket.on("playCard", ({ card, chosenColor }) => {
@@ -175,7 +190,7 @@ io.on("connection", socket => {
       const baseCard = card.includes("wild") && chosenColor ? `${chosenColor}_${card}` : card;
       game.discardPile.push(baseCard);
 
-      // Special card effects
+      // Handle card effects
       if (card.includes("skip")) getNextPlayer(game, 2);
       else if (card.includes("reverse")) {
         game.players.reverse();
@@ -192,7 +207,9 @@ io.on("connection", socket => {
       } else if (specialCardLogic[card]) {
         specialCardLogic[card](game, socket.id);
         getNextPlayer(game, 1);
-      } else getNextPlayer(game, 1);
+      } else {
+        getNextPlayer(game, 1);
+      }
 
       if (hand.length === 0) {
         updateScores(socket.id, game);
@@ -208,11 +225,13 @@ io.on("connection", socket => {
   socket.on("drawCard", () => {
     for (const [lobbyId, game] of Object.entries(lobbies)) {
       if (!game.started || socket.id !== game.turn) continue;
-      const card = game.deck.pop();
-      if (!card) {
+
+      if (game.deck.length === 0) {
         game.deck = [...game.discardPile.splice(0, game.discardPile.length - 1)];
         shuffle(game.deck);
       }
+
+      const card = game.deck.pop();
       game.hands[socket.id].push(card);
       emitState(lobbyId);
     }
@@ -223,9 +242,11 @@ io.on("connection", socket => {
       const index = game.players.findIndex(p => p.id === socket.id);
       if (index !== -1) {
         const name = game.players[index].name;
+        console.log(`⚠️ ${name} disconnected from lobby ${lobbyId}`);
         game.players.splice(index, 1);
         delete game.hands[socket.id];
 
+        // Auto-win if only one player remains
         if (game.players.length === 1 && game.started) {
           const winner = game.players[0].id;
           updateScores(winner, game);
@@ -233,6 +254,17 @@ io.on("connection", socket => {
           game.started = false;
         }
 
+        // Reset game if not enough players remain
+        if (game.players.length < 2) {
+          console.log(`⛔ Resetting lobby '${lobbyId}' due to low player count.`);
+          game.started = false;
+          game.deck = [];
+          game.discardPile = [];
+          game.hands = {};
+          game.turn = null;
+        }
+
+        // Adjust turn index
         if (index < game.turnIndex) game.turnIndex--;
         if (game.players.length > 0) {
           game.turnIndex %= game.players.length;
@@ -251,5 +283,5 @@ app.get("/scores", (req, res) => {
 });
 
 http.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
