@@ -12,13 +12,19 @@ const chatInput = document.getElementById("chat-input");
 const chatSend = document.getElementById("chat-send");
 const joinForm = document.getElementById("join-form");
 const gameScreen = document.getElementById("game-screen");
+const joinScreen = document.getElementById("join-screen");
 
 joinForm.addEventListener("submit", e => {
   e.preventDefault();
   const name = document.getElementById("name").value.trim();
   const lobby = document.getElementById("lobby").value.trim();
   if (name && lobby) {
+    console.log("Attempting to join lobby:", lobby);
     socket.emit("join", { name, lobby });
+
+    // 👇 FIX: Switch to game screen after joining
+    joinScreen.style.display = "none";
+    gameScreen.style.display = "block";
   }
 });
 
