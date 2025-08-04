@@ -18,8 +18,32 @@
     </thead>
     <tbody></tbody>
   </table>
+  <section id="sound-test">
+    <h2>Test Sounds (Push to All Players)</h2>
+    <button data-sound="start">Game Start</button>
+    <button data-sound="joined">Player Joined</button>
+    <button data-sound="draw">Draw Card</button>
+    <button data-sound="number">Number Card</button>
+    <button data-sound="skip">Skip Card</button>
+    <button data-sound="reverse">Reverse Card</button>
+    <button data-sound="wild">Wild / Draw Four</button>
+    <button data-sound="special">Wild Special</button>
+    <button data-sound="win">Win</button>
+    <button data-sound="lose">Lose</button>
+    <button data-sound="uno">UNO Declared</button>
+  </section>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script>
+    const socket = io();
+
+    document.querySelectorAll('#sound-test button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sound = btn.getAttribute('data-sound');
+        socket.emit('adminPlaySound', sound);
+      });
+    });
+  
     fetch('/scores')
       .then(res => res.json())
       .then(data => {
