@@ -3,57 +3,21 @@ const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 const fs = require("fs");
-const path = require("path");
 
 const PORT = process.env.PORT || 3000;
-
 app.use(express.static("public"));
 
-let game = {
-  players: [],
-  spectators: [],
-  hands: {},
-  discardPile: [],
-  deck: [],
-  started: false,
-  turnIndex: 0,
-  turn: null,
-  direction: 1,
-  unoCalled: {},
-  missedTurns: {}
-};
-
 let scores = {};
+let players = [];
+let game = null;
+let countdownTimer = null;
+let turnTimer = null;
+
 try {
   scores = JSON.parse(fs.readFileSync("scores.json", "utf8"));
 } catch {
   scores = {};
 }
-
-const specialCardLogic = {
-  wild_boss: (currentPlayerId) => {
-    game.players.forEach(p => {
-      if (p.id !== currentPlayerId && game.hands[p.id]?.length) {
-        const card = game.hands[p.id].pop();
-        game.hands[currentPlayerId].push(card);
-      }
-    });
-    sendToAll("chat", { from: "SUE", message: `🎁 THE BOSS: ${getPlayer(currentPlayerId).name} steals 1 card from each player.` });
-  },
-  green_recycle: () => {
-    const allCards = [];
-    Object.keys(game.hands).forEach(pid => {
-      allCards.push(...game.hands[pid]);
-      game.hands[pid] = [];
-    });
-    shuffle(allCards);
-    const pids = Object.keys(game.hands);
-    allCards.forEach((card, i) => {
-      game.hands[pids[i % pids.length]].push(card);
-    });
-    sendToAll("chat", { from: "SUE", message: "♻️ RECYCLING: Hands shuffled and redistributed!" });
-  }
-};
 
 function shuffle(array) {
   for (let i = array.length - 1; i > 0; i--) {
@@ -65,65 +29,79 @@ function shuffle(array) {
 function generateDeck() {
   const colors = ["red", "blue", "green", "yellow"];
   const deck = [];
+
   colors.forEach(color => {
     for (let i = 0; i <= 9; i++) {
       deck.push(`${color}_${i}`);
       if (i !== 0) deck.push(`${color}_${i}`);
     }
     ["skip", "reverse", "draw2"].forEach(action => {
-      deck.push(`${color}_${action}`);
-      deck.push(`${color}_${action}`);
+      deck.push(`${color}_${action}`, `${color}_${action}`);
     });
   });
+
   for (let i = 0; i < 4; i++) {
     deck.push("wild", "wild_draw4");
   }
+
   deck.push("wild_boss", "green_recycle");
   shuffle(deck);
   return deck;
 }
 
-function getPlayer(id) {
-  return game.players.find(p => p.id === id);
-}
-
-function sendToAll(event, payload) {
-  game.players.concat(game.spectators).forEach(p => io.to(p.id).emit(event, payload));
-}
-
 function emitGameState() {
-  const state = {
-    players: game.players.map(p => ({
+  if (!game) return;
+  io.emit("state", {
+    players: players.map(p => ({
       id: p.id,
       name: p.name,
-      handSize: game.hands[p.id].length,
+      handSize: game.hands[p.id] ? game.hands[p.id].length : 0,
       score: scores[p.name]?.points || 0,
-      wins: scores[p.name]?.wins || 0,
-      isTurn: p.id === game.turn
+      isSpectator: p.spectator
     })),
-    spectators: game.spectators.map(p => p.name),
     discardTop: game.discardPile.at(-1),
-    drawPileSize: game.deck.length
-  };
-
-  sendToAll("state", state);
-
-  game.players.forEach(p => {
-    io.to(p.id).emit("yourHand", game.hands[p.id]);
+    turn: game.turn,
+    deckSize: game.deck.length
   });
 }
 
+function startTurnTimer() {
+  clearTimeout(turnTimer);
+  turnTimer = setTimeout(() => {
+    const current = players.find(p => p.id === game.turn);
+    if (!current) return;
+    const hand = game.hands[game.turn];
+    const drawn = game.deck.pop();
+    hand.push(drawn);
+    io.to(game.turn).emit("chat", { from: "SUE", message: `⏳ You took too long. Drew 1 card.` });
+    advanceTurn();
+  }, 60000);
+}
+
+function broadcastSound(name) {
+  io.emit("sound", name);
+}
+
+function announce(msg) {
+  io.emit("chat", { from: "SUE", message: msg });
+}
+
 function advanceTurn(skip = 1) {
-  game.turnIndex = (game.turnIndex + skip * game.direction + game.players.length) % game.players.length;
-  game.turn = game.players[game.turnIndex].id;
-  game.unoCalled = {}; // Reset UNO call tracker
+  const activePlayers = players.filter(p => !p.spectator);
+  const idx = activePlayers.findIndex(p => p.id === game.turn);
+  let nextIdx = (idx + skip) % activePlayers.length;
+  game.turn = activePlayers[nextIdx].id;
+  announce(`🎮 It's ${activePlayers[nextIdx].name}'s turn.`);
+  emitGameState();
   startTurnTimer();
 }
 
 function updateScores(winnerId) {
-  const winner = getPlayer(winnerId).name;
-  if (!scores[winner]) scores[winner] = { wins: 0, points: 0 };
-  scores[winner].wins++;
+  const winner = players.find(p => p.id === winnerId);
+  if (!winner) return;
+  scores[winner.name] = scores[winner.name] || { wins: 0, points: 0 };
+  scores[winner.name].wins += 1;
+
   let points = 0;
   Object.entries(game.hands).forEach(([pid, hand]) => {
     if (pid !== winnerId) {
@@ -134,185 +112,181 @@ function updateScores(winnerId) {
       });
     }
   });
-  scores[winner].points += points;
+  scores[winner.name].points += points;
   fs.writeFileSync("scores.json", JSON.stringify(scores, null, 2));
 }
 
 function startGame() {
-  game.deck = generateDeck();
-  game.discardPile = [game.deck.pop()];
-  game.players.forEach(p => {
+  game = {
+    deck: generateDeck(),
+    discardPile: [],
+    hands: {},
+    turn: null
+  };
+
+  const active = players.filter(p => !p.spectator);
+  active.forEach(p => {
     game.hands[p.id] = [];
     for (let i = 0; i < 7; i++) game.hands[p.id].push(game.deck.pop());
   });
-  game.turnIndex = 0;
-  game.turn = game.players[0].id;
-  game.started = true;
-  sendToAll("sound", "start");
-  sendToAll("chat", { from: "SUE", message: `🎮 Game has begun! First card: ${game.discardPile.at(-1)}` });
+
+  game.discardPile.push(game.deck.pop());
+  game.turn = active[0].id;
+  announce("🃏 Game started!");
+  broadcastSound("start");
   emitGameState();
   startTurnTimer();
 }
 
-let turnTimeout;
-function startTurnTimer() {
-  clearTimeout(turnTimeout);
-  const pid = game.turn;
-  sendToAll("chat", { from: "SUE", message: `🔁 ${getPlayer(pid).name}'s turn.` });
-  turnTimeout = setTimeout(() => {
-    game.missedTurns[pid] = (game.missedTurns[pid] || 0) + 1;
-    const card = game.deck.pop();
-    game.hands[pid].push(card);
-    sendToAll("chat", { from: "SUE", message: `${getPlayer(pid).name} took too long and drew a card.` });
-    if (game.missedTurns[pid] >= 3) {
-      sendToAll("chat", { from: "SUE", message: `${getPlayer(pid).name} has been removed for inactivity.` });
-      game.players = game.players.filter(p => p.id !== pid);
-      delete game.hands[pid];
-    }
-    if (game.players.length === 1) {
-      updateScores(game.players[0].id);
-      sendToAll("chat", { from: "SUE", message: `${game.players[0].name} wins by default.` });
-      game.started = false;
-      return;
-    }
-    advanceTurn(1);
-    emitGameState();
-  }, 60000);
+function checkUno(id) {
+  if (game && game.hands[id]?.length === 1) {
+    broadcastSound("uno");
+    announce(`🔔 ${players.find(p => p.id === id)?.name} calls UNO!`);
+  } else {
+    const hand = game.hands[id];
+    for (let i = 0; i < 2; i++) hand.push(game.deck.pop());
+    announce(`❌ UNO failed. Penalty: 2 cards.`);
+  }
+  emitGameState();
 }
 
 io.on("connection", socket => {
-  socket.on("join", ({ name }) => {
-    if (!name || game.players.concat(game.spectators).find(p => p.name === name)) {
-      socket.emit("joinDenied", "Name already in use.");
+  socket.on("join", name => {
+    if (players.some(p => p.name === name)) {
+      socket.emit("joinDenied", "Name already taken.");
       return;
     }
 
-    if (game.started && game.players.length < 10) {
-      game.players.push({ id: socket.id, name });
-      game.hands[socket.id] = [];
-      for (let i = 0; i < 7; i++) game.hands[socket.id].push(game.deck.pop());
-      sendToAll("chat", { from: "SUE", message: `${name} joined and entered the game.` });
-    } else if (!game.started && game.players.length < 10) {
-      game.players.push({ id: socket.id, name });
-      sendToAll("chat", { from: "SUE", message: `${name} joined.` });
-      if (game.players.length >= 2 && !game.countdownStarted) {
-        game.countdownStarted = true;
-        let t = 30;
-        const interval = setInterval(() => {
-          sendToAll("chat", { from: "SUE", message: `Game starting in ${t}...` });
-          if (--t <= 0) {
-            clearInterval(interval);
-            startGame();
-            game.countdownStarted = false;
-          }
-        }, 1000);
-      }
-    } else {
-      game.spectators.push({ id: socket.id, name });
-      socket.emit("chat", { from: "SUE", message: `${name}, you're a spectator.` });
+    const spectator = players.length >= 10;
+    players.push({ id: socket.id, name, spectator });
+    socket.emit("joined", { id: socket.id, name });
+    announce(`👤 ${name} joined.`);
+    broadcastSound("joined");
+
+    if (!game && players.length >= 2 && players.length <= 10) {
+      countdownTimer = setTimeout(() => startGame(), 30000);
+      announce("⏳ Game will begin in 30 seconds...");
     }
 
-    socket.join("default");
-    emitGameState();
-    sendToAll("sound", "joined");
-  });
+    if (game && !spectator) {
+      game.hands[socket.id] = [];
+      for (let i = 0; i < 7; i++) game.hands[socket.id].push(game.deck.pop());
+      announce(`🆕 ${name} joined late and was dealt a hand.`);
+    }
 
-  socket.on("chat", msg => {
-    const player = getPlayer(socket.id) || game.spectators.find(p => p.id === socket.id);
-    if (player) sendToAll("chat", { from: player.name, message: msg });
-  });
-
-  socket.on("drawCard", () => {
-    if (socket.id !== game.turn || !game.started) return;
-    const card = game.deck.pop();
-    game.hands[socket.id].push(card);
-    sendToAll("sound", "draw");
-    sendToAll("chat", { from: "SUE", message: `${getPlayer(socket.id).name} drew a card.` });
-    advanceTurn();
     emitGameState();
   });
 
   socket.on("playCard", ({ card, chosenColor }) => {
-    if (socket.id !== game.turn || !game.started) return;
+    if (!game || socket.id !== game.turn) return;
     const hand = game.hands[socket.id];
-    const i = hand.indexOf(card);
-    if (i === -1) return;
-    const lastCard = game.discardPile.at(-1);
-    const colorMatch = card.split("_")[0] === lastCard.split("_")[0];
-    const valueMatch = card.split("_")[1] === lastCard.split("_")[1];
-    const isWild = card.startsWith("wild");
+    const index = hand.indexOf(card);
+    if (index === -1) return;
 
-    if (!(colorMatch || valueMatch || isWild || card.includes("wild"))) return;
+    hand.splice(index, 1);
+    let base = card;
+    if (card.startsWith("wild") && chosenColor) {
+      base = `${chosenColor}_${card}`;
+    }
 
-    hand.splice(i, 1);
-    const finalCard = chosenColor ? `${chosenColor}_${card}` : card;
-    game.discardPile.push(finalCard);
-
-    if (hand.length === 1) game.unoCalled[socket.id] = false;
+    game.discardPile.push(base);
+    announce(`🃏 ${players.find(p => p.id === socket.id)?.name} played ${card}`);
 
     if (card.includes("skip")) {
+      broadcastSound("skip");
+      announce("⛔ Skip!");
       advanceTurn(2);
-      sendToAll("sound", "skip");
     } else if (card.includes("reverse")) {
-      game.direction *= -1;
-      if (game.players.length === 2) advanceTurn(2);
-      else advanceTurn(1);
-      sendToAll("sound", "reverse");
+      broadcastSound("reverse");
+      players.reverse();
+      advanceTurn(players.length === 2 ? 2 : 1);
     } else if (card.includes("draw2")) {
-      const next = game.players[(game.turnIndex + game.direction + game.players.length) % game.players.length];
-      game.hands[next.id].push(game.deck.pop(), game.deck.pop());
-      sendToAll("chat", { from: "SUE", message: `${getPlayer(next.id).name} draws 2!` });
-      sendToAll("sound", "special");
+      broadcastSound("special");
+      const next = players.find(p => p.id !== socket.id && !p.spectator);
+      for (let i = 0; i < 2; i++) game.hands[next.id].push(game.deck.pop());
+      announce(`➕ ${next.name} draws 2`);
       advanceTurn(2);
     } else if (card === "wild_draw4") {
-      const next = game.players[(game.turnIndex + game.direction + game.players.length) % game.players.length];
+      broadcastSound("wild");
+      const next = players.find(p => p.id !== socket.id && !p.spectator);
       for (let i = 0; i < 4; i++) game.hands[next.id].push(game.deck.pop());
-      sendToAll("chat", { from: "SUE", message: `${getPlayer(next.id).name} draws 4!` });
-      sendToAll("sound", "wild");
+      announce(`🎨 Wild Draw 4! ${next.name} draws 4`);
       advanceTurn(2);
-    } else if (card.startsWith("wild")) {
-      if (specialCardLogic[card]) specialCardLogic[card](socket.id);
-      sendToAll("sound", "special");
-      advanceTurn(1);
+    } else if (card === "wild_boss") {
+      players.forEach(p => {
+        if (p.id !== socket.id && !p.spectator) {
+          const stolen = game.hands[p.id].pop();
+          if (stolen) game.hands[socket.id].push(stolen);
+        }
+      });
+      broadcastSound("special");
+      announce("👑 THE BOSS: Took one card from everyone!");
+      advanceTurn();
+    } else if (card === "green_recycle") {
+      const allCards = [];
+      Object.values(game.hands).forEach(h => allCards.push(...h.splice(0)));
+      shuffle(allCards);
+      const ids = players.filter(p => !p.spectator).map(p => p.id);
+      allCards.forEach((c, i) => game.hands[ids[i % ids.length]].push(c));
+      broadcastSound("special");
+      announce("♻️ Recycling! Hands reshuffled.");
+      advanceTurn();
     } else {
-      sendToAll("sound", "number");
-      advanceTurn(1);
+      broadcastSound(card.includes("wild") ? "wild" : card.match(/\d/) ? "number" : "special");
+      advanceTurn();
     }
 
     if (hand.length === 0) {
-      if (!game.unoCalled[socket.id]) {
-        game.hands[socket.id].push(game.deck.pop(), game.deck.pop());
-        sendToAll("chat", { from: "SUE", message: `${getPlayer(socket.id).name} failed to call UNO and was penalized!` });
-      } else {
-        updateScores(socket.id);
-        sendToAll("chat", { from: "SUE", message: `${getPlayer(socket.id).name} wins the round! 🎉` });
-        game.started = false;
-      }
+      updateScores(socket.id);
+      announce(`🏆 ${players.find(p => p.id === socket.id).name} wins the round!`);
+      broadcastSound("win");
+      game = null;
+      return;
     }
 
     emitGameState();
   });
 
-  socket.on("callUNO", () => {
-    if (game.hands[socket.id]?.length === 1) {
-      game.unoCalled[socket.id] = true;
-      sendToAll("chat", { from: "SUE", message: `${getPlayer(socket.id).name} yells UNO!` });
-      sendToAll("sound", "uno");
+  socket.on("drawCard", () => {
+    if (!game || socket.id !== game.turn) return;
+    const card = game.deck.pop();
+    if (!card) return;
+    game.hands[socket.id].push(card);
+    broadcastSound("draw");
+    advanceTurn();
+  });
+
+  socket.on("uno", () => {
+    checkUno(socket.id);
+  });
+
+  socket.on("chat", msg => {
+    const p = players.find(p => p.id === socket.id);
+    if (p) {
+      io.emit("chat", { from: p.name, message: msg });
     }
   });
 
-  socket.on("triggerSound", sound => {
-    sendToAll("sound", sound);
+  socket.on("sound", name => {
+    io.emit("sound", name); // admin test
   });
 
   socket.on("disconnect", () => {
-    game.players = game.players.filter(p => p.id !== socket.id);
-    game.spectators = game.spectators.filter(p => p.id !== socket.id);
-    delete game.hands[socket.id];
+    const idx = players.findIndex(p => p.id === socket.id);
+    if (idx !== -1) {
+      const name = players[idx].name;
+      players.splice(idx, 1);
+      if (game?.hands[socket.id]) delete game.hands[socket.id];
+      announce(`🚪 ${name} left the game.`);
+    }
     emitGameState();
   });
 });
 
-app.get("/scores", (req, res) => res.json(scores));
+app.get("/scores", (req, res) => {
+  res.json(scores);
+});
 
-http.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+http.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
