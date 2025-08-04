@@ -1,26 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Leaderboard</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <title>UNO Leaderboard</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>🏆 Leaderboard</h1>
-  <ul id="leaderboard"></ul>
+  <h1>Leaderboard</h1>
+  <table id="score-table" style="margin: auto; width: 80%; max-width: 600px;">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Wins</th>
+        <th>Points</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script>
     fetch("/scores")
       .then(res => res.json())
       .then(scores => {
+        const tbody = document.querySelector("#score-table tbody");
         const sorted = Object.entries(scores).sort((a, b) => b[1].points - a[1].points);
-        const list = document.getElementById("leaderboard");
         sorted.forEach(([name, stats]) => {
-          const li = document.createElement("li");
-          li.textContent = `${name} — ${stats.points} pts (${stats.wins} wins)`;
-          list.appendChild(li);
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${name}</td>
+            <td>${stats.wins}</td>
+            <td>${stats.points}</td>
+          `;
+          tbody.appendChild(row);
         });
+      })
+      .catch(err => {
+        console.error("Error loading scores:", err);
       });
   </script>
 </body>
