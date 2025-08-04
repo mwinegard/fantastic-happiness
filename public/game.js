@@ -1,20 +1,22 @@
 const socket = io();
 let myId = null;
-let myHand = [];
+let myName = "";
 let isMyTurn = false;
+let muted = false;
 
-const joinForm = document.getElementById("join-form");
-const nameInput = document.getElementById("name");
-const joinScreen = document.getElementById("join-screen");
-const gameScreen = document.getElementById("game-screen");
-const playerList = document.getElementById("player-list");
+const handDiv = document.getElementById("player-hand");
 const discardPile = document.getElementById("discard-pile");
 const drawPile = document.getElementById("draw-pile");
-const handDiv = document.getElementById("player-hand");
+const playerList = document.getElementById("player-list");
 const chatLog = document.getElementById("chat-log");
 const chatInput = document.getElementById("chat-input");
 const chatSend = document.getElementById("chat-send");
+const joinForm = document.getElementById("join-form");
+const nameInput = document.getElementById("name");
+const gameScreen = document.getElementById("game-screen");
+const joinScreen = document.getElementById("join-screen");
 const unoBtn = document.getElementById("uno-btn");
+const muteBtn = document.getElementById("mute-toggle");
 
 const sounds = {
   draw: new Audio("/assets/sounds/draw.mp3"),
@@ -30,73 +32,66 @@ const sounds = {
   uno: new Audio("/assets/sounds/uno.mp3"),
 };
 
-let muted = false;
-const muteBtn = document.getElementById("mute-toggle");
-if (muteBtn) {
-  muteBtn.addEventListener("click", () => {
-    muted = !muted;
-    muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
-  });
-}
-
 function playSound(name) {
   if (muted) return;
   const sound = sounds[name];
   if (sound) sound.play().catch(() => {});
 }
 
+muteBtn.addEventListener("click", () => {
+  muted = !muted;
+  muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
+});
+
 joinForm.addEventListener("submit", e => {
   e.preventDefault();
   const name = nameInput.value.trim();
   if (name) {
-    socket.emit("join", { name });
+    socket.emit("join", name);
+    myName = name;
   }
 });
 
-socket.on("joinDenied", msg => alert(msg || "Name in use or error."));
+socket.on("joinDenied", msg => {
+  alert(msg || "Name already in use.");
+});
+
+socket.on("joined", ({ id, name }) => {
+  myId = id;
+  joinScreen.style.display = "none";
+  gameScreen.style.display = "block";
+});
 
 socket.on("state", state => {
-  myId = socket.id;
   const me = state.players.find(p => p.id === myId);
-  if (me) {
-    joinScreen.style.display = "none";
-    gameScreen.style.display = "block";
-    isMyTurn = me.isTurn;
-  }
+  isMyTurn = state.turn === myId;
 
   playerList.innerHTML = "";
   state.players.forEach(p => {
-    const item = document.createElement("li");
-    item.textContent = `${p.name} (${p.handSize}) ${p.isTurn ? "🎯" : ""}`;
-    playerList.appendChild(item);
+    const li = document.createElement("li");
+    li.textContent = `${p.name} - ${p.handSize} cards${p.id === state.turn ? " 🎯" : ""}`;
+    playerList.appendChild(li);
   });
 
   discardPile.innerHTML = "";
-  const topCard = document.createElement("img");
-  topCard.src = `/assets/cards/${state.discardTop}.png`;
-  topCard.className = "card";
-  discardPile.appendChild(topCard);
-
-  drawPile.innerHTML = "";
-  const backCard = document.createElement("img");
-  backCard.src = "/assets/cards/back.png";
-  backCard.className = "card draw-pile";
-  backCard.addEventListener("click", () => {
-    if (isMyTurn) socket.emit("drawCard");
-  });
-  drawPile.appendChild(backCard);
+  if (state.discardTop) {
+    const topCard = document.createElement("img");
+    const imgName = state.discardTop.replace(/^.*?_/, "");
+    topCard.src = `/assets/cards/${imgName}.png`;
+    topCard.classList.add("card");
+    discardPile.appendChild(topCard);
+  }
 });
 
-socket.on("yourHand", hand => {
-  myHand = hand;
-  renderHand();
-});
-
-socket.on("chat", ({ from, message }) => {
-  const msgDiv = document.createElement("div");
-  msgDiv.textContent = `[${from}]: ${message}`;
-  chatLog.appendChild(msgDiv);
+socket.on("chat", msg => {
+  const div = document.createElement("div");
+  div.textContent = `[${msg.from}]: ${msg.message}`;
+  chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
+});
+
+socket.on("sound", name => {
+  playSound(name);
 });
 
 chatSend.addEventListener("click", () => {
@@ -108,30 +103,41 @@ chatSend.addEventListener("click", () => {
 });
 
 unoBtn.addEventListener("click", () => {
-  socket.emit("callUNO");
+  socket.emit("uno");
 });
 
-socket.on("sound", name => {
-  playSound(name);
-});
-
-function renderHand() {
+function renderHand(cards) {
   handDiv.innerHTML = "";
-  myHand.forEach(card => {
-    const cardImg = document.createElement("img");
-    cardImg.src = `/assets/cards/${card}.png`;
-    cardImg.className = "card";
-    cardImg.addEventListener("click", () => {
-      if (!isMyTurn) return;
-      if (card.includes("wild")) {
-        const color = prompt("Choose a color (red, blue, green, yellow):");
-        if (["red", "blue", "green", "yellow"].includes(color)) {
-          socket.emit("playCard", { card, chosenColor: color });
-        }
-      } else {
-        socket.emit("playCard", { card });
-      }
-    });
-    handDiv.appendChild(cardImg);
+  cards.forEach(card => {
+    const img = document.createElement("img");
+    const base = card.includes("wild") && card.split("_").length > 2
+      ? `${card.split("_")[1]}_${card.split("_")[2]}`
+      : card;
+    img.src = `/assets/cards/${base}.png`;
+    img.classList.add("card");
+    img.addEventListener("click", () => playCard(card));
+    if (isMyTurn) handDiv.appendChild(img);
   });
 }
+
+function playCard(card) {
+  if (!isMyTurn) return;
+  if (card.startsWith("wild")) {
+    const chosenColor = prompt("Choose a color: red, blue, green, yellow");
+    if (["red", "blue", "green", "yellow"].includes(chosenColor)) {
+      socket.emit("playCard", { card, chosenColor });
+    } else {
+      alert("Invalid color.");
+    }
+  } else {
+    socket.emit("playCard", { card });
+  }
+}
+
+drawPile.addEventListener("click", () => {
+  if (isMyTurn) socket.emit("drawCard");
+});
+
+socket.on("hand", cards => {
+  renderHand(cards);
+});
