@@ -17,10 +17,7 @@ const unoButton = document.getElementById("uno-btn");
 const muteBtn = document.getElementById("mute-toggle");
 
 const sounds = {};
-[
-  "draw", "skip", "reverse", "wild", "special", "number",
-  "win", "lose", "start", "joined", "uno"
-].forEach(name => {
+["draw", "skip", "reverse", "wild", "special", "number", "win", "lose", "start", "joined", "uno"].forEach(name => {
   const audio = new Audio(`/assets/sounds/${name}.mp3`);
   audio.volume = 0.6;
   sounds[name] = audio;
@@ -37,6 +34,39 @@ muteBtn.addEventListener("click", () => {
   muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
 });
 
+// Wild color picker
+const wildButtons = document.createElement("div");
+wildButtons.id = "wild-buttons";
+["red", "blue", "green", "yellow"].forEach(color => {
+  const btn = document.createElement("button");
+  btn.textContent = color.toUpperCase();
+  btn.style.backgroundColor = color;
+  btn.onclick = () => {
+    socket.emit("chooseColor", { color });
+    wildButtons.style.display = "none";
+  };
+  wildButtons.appendChild(btn);
+});
+document.body.appendChild(wildButtons);
+wildButtons.style.display = "none";
+
+// Turn countdown timer
+let countdownInterval;
+const turnIndicator = document.createElement("div");
+turnIndicator.id = "turn-indicator";
+document.body.appendChild(turnIndicator);
+
+function startCountdown(seconds = 60) {
+  let remaining = seconds;
+  clearInterval(countdownInterval);
+  turnIndicator.textContent = `⏳ ${remaining}s`;
+  countdownInterval = setInterval(() => {
+    remaining--;
+    turnIndicator.textContent = `⏳ ${remaining}s`;
+    if (remaining <= 0) clearInterval(countdownInterval);
+  }, 1000);
+}
+
 joinForm.addEventListener("submit", e => {
   e.preventDefault();
   const name = nameInput.value.trim();
@@ -49,51 +79,51 @@ socket.on("joinDenied", msg => {
   alert(msg || "You can't join right now.");
 });
 
-socket.on("joined", id => {
+socket.on("joined", ({ id, name }) => {
   myId = id;
   joinForm.style.display = "none";
   gameScreen.style.display = "block";
 });
 
 socket.on("state", state => {
-  if (!myId) return;
-  const me = state.players.find(p => p.id === myId);
   isMyTurn = state.turn === myId;
-
+  handDiv.innerHTML = "";
   playerList.innerHTML = "";
-  state.players.forEach(p => {
-    const li = document.createElement("div");
-    li.textContent = `${p.name} - ${p.handSize} cards - ${p.score || 0} pts${p.id === state.turn ? " 🔁" : ""}`;
-    playerList.appendChild(li);
+
+  state.players.forEach(player => {
+    const div = document.createElement("div");
+    div.textContent = `${player.name} (${player.handSize}) ${player.isSpectator ? "👀" : ""}`;
+    if (player.handSize === 1) div.style.color = "red";
+    playerList.appendChild(div);
   });
 
   discardPile.innerHTML = "";
   if (state.discardTop) {
-    const cardImg = document.createElement("img");
-    let imgName = state.discardTop;
-    if (imgName.includes("wild")) {
-      const parts = imgName.split("_");
-      if (parts.length > 2) imgName = `${parts[1]}_${parts[2]}`;
-    }
-    cardImg.src = `/assets/cards/${imgName}.png`;
-    cardImg.className = "pile";
-    discardPile.appendChild(cardImg);
+    const img = document.createElement("img");
+    img.src = `/assets/cards/${state.discardTop}.png`;
+    img.className = "card";
+    discardPile.appendChild(img);
   }
 
-  handDiv.innerHTML = "";
-  if (me && me.hand && me.hand.length > 0) {
-    me.hand.forEach(card => {
-      const img = document.createElement("img");
-      img.src = `/assets/cards/${card}.png`;
-      img.className = "card";
-      img.onclick = () => tryPlayCard(card);
-      handDiv.appendChild(img);
-    });
+  if (isMyTurn) startCountdown();
+
+  const hand = state.players.find(p => p.id === myId);
+  if (!hand) return;
+
+  const cards = state.deckSize ? 7 : 0;
+  for (let i = 0; i < cards; i++) {
+    const card = document.createElement("img");
+    card.className = "card";
+    card.src = `/assets/cards/back.png`;
+    handDiv.appendChild(card);
   }
 });
 
-drawPile.addEventListener("click", () => {
-  if (isMyTurn) socket.emit("drawCard");
+socket.on("chat", ({ from, message }) => {
+  const msg = document.createElement("div");
+  msg.innerHTML = `<strong>${from}:</strong> ${message}`;
+  chatLog.appendChild(msg);
+  chatLog.scrollTop = chatLog.scrollHeight;
 });
 
 chatSend.addEventListener("click", () => {
@@ -104,35 +134,10 @@ chatSend.addEventListener("click", () => {
   }
 });
 
-chatInput.addEventListener("keydown", e => {
-  if (e.key === "Enter") chatSend.click();
-});
-
-socket.on("chat", ({ from, message }) => {
-  const div = document.createElement("div");
-  div.textContent = `[${from}]: ${message}`;
-  chatLog.appendChild(div);
-  chatLog.scrollTop = chatLog.scrollHeight;
+drawPile.addEventListener("click", () => {
+  if (isMyTurn) socket.emit("drawCard");
 });
 
 unoButton.addEventListener("click", () => {
-  socket.emit("callUNO");
+  socket.emit("callUno");
 });
-
-socket.on("playSound", name => {
-  playSound(name);
-});
-
-function tryPlayCard(card) {
-  if (!isMyTurn) return;
-  if (card.startsWith("wild")) {
-    const chosenColor = prompt("Choose a color: red, blue, green, yellow");
-    if (["red", "blue", "green", "yellow"].includes(chosenColor)) {
-      socket.emit("playCard", { card, chosenColor });
-    } else {
-      alert("Invalid color.");
-    }
-  } else {
-    socket.emit("playCard", { card });
-  }
-}
