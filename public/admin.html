@@ -2,39 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>UNO Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel – Fantastic Happiness UNO</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    .sound-test {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 20px;
+    }
+    button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      background-color: #444;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #666;
+    }
+  </style>
 </head>
 <body>
-  <h1>UNO Admin Panel</h1>
+  <h1>Admin Sound Trigger Panel</h1>
+  <p>Click a sound to trigger it in all active lobbies.</p>
 
-  <section id="sound-test">
-    <h2>Test Sounds (Push to All Players)</h2>
-    <div style="display: flex; flex-wrap: wrap; gap: 10px; max-width: 600px; margin: auto;">
-      <button data-sound="start">Game Start</button>
-      <button data-sound="joined">Player Joined</button>
-      <button data-sound="draw">Draw Card</button>
-      <button data-sound="number">Number Card</button>
-      <button data-sound="skip">Skip Card</button>
-      <button data-sound="reverse">Reverse Card</button>
-      <button data-sound="wild">Wild / Draw 4</button>
-      <button data-sound="special">Wild Special</button>
-      <button data-sound="win">Win</button>
-      <button data-sound="lose">Lose</button>
-      <button data-sound="uno">UNO Declared</button>
-    </div>
-  </section>
+  <div class="sound-test">
+    <button onclick="trigger('draw')">Draw</button>
+    <button onclick="trigger('skip')">Skip</button>
+    <button onclick="trigger('reverse')">Reverse</button>
+    <button onclick="trigger('wild')">Wild</button>
+    <button onclick="trigger('special')">Special</button>
+    <button onclick="trigger('number')">Number</button>
+    <button onclick="trigger('win')">Win</button>
+    <button onclick="trigger('lose')">Lose</button>
+    <button onclick="trigger('start')">Start</button>
+    <button onclick="trigger('joined')">Joined</button>
+    <button onclick="trigger('uno')">UNO</button>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-
-    document.querySelectorAll('#sound-test button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const sound = btn.getAttribute('data-sound');
-        socket.emit('adminPlaySound', sound);
-      });
-    });
+    function trigger(name) {
+      socket.emit("triggerSound", name);
+    }
   </script>
 </body>
 </html>
