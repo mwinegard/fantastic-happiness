@@ -1,4 +1,4 @@
-Here’s a complete, clear, and professional README for your Fantastic Happiness UNO project:
+AI generated UNO game to test the capabilities of ai coding.
 
 ⸻
 
