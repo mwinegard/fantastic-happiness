@@ -1,31 +1,63 @@
-# UNO Multiplayer Game (Render Ready)
+# Fantastic Happiness UNO
 
-A fully featured UNO-style multiplayer game with:
+A web-based multiplayer UNO-style game with special cards and persistent scores.
 
-- 🎴 Custom special cards (wild_boss, recycle, shopping, etc.)
-- 💬 Chat and sound
-- 🏆 Persistent leaderboard with `/scores.json`
-- ⏱ Turn timeout and game auto-start
-- 📦 Deployable on Render or any Node host
+## 🔧 Getting Started
 
-## 🚀 Deploy on Render
+1. Install dependencies:
+   ```bash
+   npm install
 
-1. Push this project to GitHub.
-2. Go to [https://render.com](https://render.com) > New Web Service.
-3. Set:
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-   - Add a disk to persist `/opt/render/project/src/scores.json` (optional)
-4. Done! Your game will auto-launch.
+   
 
-## Local Development
+🎮 Gameplay Overview
+	•	Join a lobby by entering a name and lobby code.
+	•	The game starts automatically when 2+ players join.
+	•	Play UNO rules with added special cards and a live chat feature.
+	•	Win by playing all your cards first.
 
-```bash
-npm install
-npm start
-```
+🃏 Special Cards
 
-Visit http://localhost:3000 to play.
+In addition to regular UNO cards, the deck includes:
+	•	wild_boss – Steal a card from every other player.
+	•	green_recycle – Shuffle all hands and redistribute evenly.
+	•	(Additional custom cards can be added similarly.)
 
----
-Have fun! 🎉
+🛠️ Game Rules and Logic
+	•	Skip: Skips the next player.
+	•	Reverse: Reverses turn order. In 2-player games, acts as Skip.
+	•	Draw Two: Next player draws 2 and skips.
+	•	Wild Draw Four: Next player draws 4 and skips. Player chooses color.
+	•	Wild: Player chooses color.
+	•	Wild special cards: May include unique effects like redistributing hands or stealing cards.
+
+🔒 Mid-game Join Restrictions
+	•	Players cannot join once the game has started. They must wait for the next round.
+
+🔌 Disconnect Handling
+	•	Disconnected players are removed.
+	•	If only one player remains, they automatically win.
+	•	Turn order is adjusted if the current player disconnects.
+
+🏆 Leaderboard
+	•	Persistent score tracking.
+	•	Points are awarded based on remaining cards:
+	•	Number cards: 10 pts
+	•	Action cards: 20 pts
+	•	Wilds & special cards: 50 pts
+
+📁 Files
+	•	server.js: Game server logic (Node + Socket.IO)
+	•	public/: Frontend assets and HTML
+	•	scores.json: Persistent score tracking
+	•	assets/cards/: All card images
+	•	assets/sounds/: (Optional) sound effects
+
+💡 Tips
+	•	All player actions (card play, draw, win) are synced live.
+	•	The game supports mobile-friendly layout and chat.
+	•	The admin panel (/admin.html) shows raw score data.
+
+⸻
+
+Enjoy and play responsibly! 🎉
