@@ -2,35 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin Dashboard</title>
+  <title>UNO Admin Panel</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>Admin - Scores Overview</h1>
-  <table id="score-table">
-    <thead>
-      <tr>
-        <th>Player</th>
-        <th>Wins</th>
-        <th>Points</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <h1>UNO Admin Panel</h1>
+
   <section id="sound-test">
     <h2>Test Sounds (Push to All Players)</h2>
-    <button data-sound="start">Game Start</button>
-    <button data-sound="joined">Player Joined</button>
-    <button data-sound="draw">Draw Card</button>
-    <button data-sound="number">Number Card</button>
-    <button data-sound="skip">Skip Card</button>
-    <button data-sound="reverse">Reverse Card</button>
-    <button data-sound="wild">Wild / Draw Four</button>
-    <button data-sound="special">Wild Special</button>
-    <button data-sound="win">Win</button>
-    <button data-sound="lose">Lose</button>
-    <button data-sound="uno">UNO Declared</button>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; max-width: 600px; margin: auto;">
+      <button data-sound="start">Game Start</button>
+      <button data-sound="joined">Player Joined</button>
+      <button data-sound="draw">Draw Card</button>
+      <button data-sound="number">Number Card</button>
+      <button data-sound="skip">Skip Card</button>
+      <button data-sound="reverse">Reverse Card</button>
+      <button data-sound="wild">Wild / Draw 4</button>
+      <button data-sound="special">Wild Special</button>
+      <button data-sound="win">Win</button>
+      <button data-sound="lose">Lose</button>
+      <button data-sound="uno">UNO Declared</button>
+    </div>
   </section>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -43,17 +35,6 @@
         socket.emit('adminPlaySound', sound);
       });
     });
-  
-    fetch('/scores')
-      .then(res => res.json())
-      .then(data => {
-        const tbody = document.querySelector("tbody");
-        Object.entries(data).forEach(([name, stats]) => {
-          const row = document.createElement("tr");
-          row.innerHTML = `<td>${name}</td><td>${stats.wins}</td><td>${stats.points}</td>`;
-          tbody.appendChild(row);
-        });
-      });
   </script>
 </body>
 </html>
