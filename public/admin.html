@@ -2,84 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>UNO Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard</title>
   <link rel="stylesheet" href="style.css" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    .dashboard {
-      max-width: 1000px;
-      margin: auto;
-      padding: 30px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid #eee;
-    }
-    th {
-      background: #004e98;
-      color: white;
-    }
-    h2 {
-      color: #004e98;
-    }
-  </style>
 </head>
 <body>
-  <div class="dashboard">
-    <h2>🏆 Leaderboard</h2>
-    <table id="leaderboard-table">
-      <thead>
-        <tr>
-          <th>Player</th>
-          <th>Score</th>
-          <th>Wins</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- filled by JS -->
-      </tbody>
-    </table>
-
-    <h2>🧑‍🤝‍🧑 Active Lobbies</h2>
-    <ul id="lobbies-list">
-      <!-- Populated by WebSocket -->
-    </ul>
-  </div>
+  <h1>Admin - Scores Overview</h1>
+  <table id="score-table">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Wins</th>
+        <th>Points</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script>
-    fetch('/scores.json')
+    fetch('/scores')
       .then(res => res.json())
-      .then(scores => {
-        const tbody = document.querySelector('#leaderboard-table tbody');
-        Object.entries(scores).forEach(([player, data]) => {
-          const row = document.createElement('tr');
-          row.innerHTML = `<td>${player}</td><td>${data.score}</td><td>${data.wins}</td>`;
+      .then(data => {
+        const tbody = document.querySelector("tbody");
+        Object.entries(data).forEach(([name, stats]) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `<td>${name}</td><td>${stats.wins}</td><td>${stats.points}</td>`;
           tbody.appendChild(row);
         });
       });
-
-    const socket = io();
-    socket.on('lobbies', lobbies => {
-      const ul = document.getElementById('lobbies-list');
-      ul.innerHTML = '';
-      Object.keys(lobbies).forEach(lobby => {
-        const li = document.createElement('li');
-        li.textContent = `${lobby} — ${lobbies[lobby].players.length} players`;
-        ul.appendChild(li);
-      });
-    });
-
-    socket.emit('getLobbies');
   </script>
-  <script src="/socket.io/socket.io.js"></script>
 </body>
 </html>
