@@ -121,3 +121,26 @@ button:hover {
     gap: 20px;
   }
 }
+
+/* LEADERBOARD STYLING */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 1rem;
+  margin-top: 20px;
+}
+
+th, td {
+  border-bottom: 1px solid #ddd;
+  padding: 12px;
+  text-align: left;
+}
+
+tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+th {
+  background-color: #4caf50;
+  color: white;
+}
