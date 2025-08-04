@@ -16,20 +16,23 @@
   </div>
 
   <div id="game-screen" style="display: none;">
-    <h2>Fantastic Happiness UNO</h2>
-    <div>
+    <header>
+      <h2>Fantastic Happiness UNO</h2>
       <button id="uno-btn">UNO!</button>
       <button id="mute-toggle">🔊 Sound On</button>
-    </div>
-    <div id="player-list" class="player-list"></div>
-    <div class="pile-zone">
+    </header>
+
+    <div id="player-list" class="sidebar"></div>
+
+    <div id="game-board">
       <div id="discard-pile" class="pile"></div>
-      <div id="draw-pile" class="pile"></div>
+      <img id="draw-pile" class="pile" src="/assets/cards/back.png" alt="Draw Pile" />
     </div>
+
     <div id="player-hand" class="hand"></div>
 
     <div id="chat-box">
-      <div id="chat-log" class="chat-log"></div>
+      <div id="chat-log"></div>
       <input id="chat-input" placeholder="Say something..." />
       <button id="chat-send">Send</button>
     </div>
