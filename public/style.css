@@ -71,6 +71,19 @@ header {
   height: auto;
   margin: 0 10px;
   cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+.pile::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.1);
+  z-index: -1;
+  border-radius: 4px;
 }
 
 .hand {
@@ -105,31 +118,46 @@ header {
 #chat-log {
   max-height: 150px;
   overflow-y: auto;
-  padding: 5px;
-  border: 1px solid #ddd;
   margin-bottom: 10px;
-  background: #fefefe;
-  border-radius: 4px;
 }
 
-#chat-input {
-  width: 70%;
+#wild-buttons {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+  z-index: 999;
 }
 
-#chat-send {
-  width: 25%;
+#wild-buttons button {
+  font-weight: bold;
+  padding: 10px 16px;
+  border: none;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-@media (max-width: 768px) {
-  .card {
-    width: 50px;
-  }
+#turn-indicator {
+  position: fixed;
+  top: 10px;
+  right: 20px;
+  background: #ffd700;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: bold;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
 
-  .pile {
-    width: 80px;
-  }
-
-  input, button {
-    width: 90%;
-  }
+#player-list div {
+  margin: 4px 0;
+}
+#player-list div[style*="color: red"] {
+  font-weight: bold;
 }
