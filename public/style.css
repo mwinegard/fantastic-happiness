@@ -1,143 +1,135 @@
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #fef6f9;
+  font-family: Arial, sans-serif;
+  background: #f4f4f9;
   margin: 0;
   padding: 0;
-  display: flex;
-  justify-content: center;
-  min-height: 100vh;
   color: #333;
 }
 
-#join-screen,
-#game-screen {
-  width: 100%;
-  max-width: 800px;
-  padding: 20px;
+h1, h2 {
+  text-align: center;
+  margin: 10px 0;
 }
 
 form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 0 12px rgba(0,0,0,0.1);
+  align-items: center;
+  margin-top: 60px;
 }
 
 input, button {
+  margin: 5px;
   padding: 10px;
   font-size: 1rem;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid #ccc;
 }
 
 button {
   cursor: pointer;
-  background: #e90000;
+  background-color: #007bff;
   color: white;
   border: none;
-  font-weight: bold;
-  transition: background 0.2s ease-in-out;
+  transition: background 0.2s;
 }
 
 button:hover {
-  background: #c70000;
+  background-color: #0056b3;
+}
+
+#game-screen {
+  padding: 10px;
 }
 
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
+  padding: 10px 20px;
 }
 
 #player-list {
-  margin-bottom: 10px;
-  background: #fff3f6;
+  background: #fff;
   padding: 10px;
-  border-radius: 8px;
-  box-shadow: 0 0 4px rgba(0,0,0,0.05);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  max-height: 140px;
+  overflow-y: auto;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 #game-board {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 30px;
   margin: 20px 0;
 }
 
 .pile {
   width: 100px;
-  height: 150px;
-  border-radius: 10px;
-  box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-}
-
-.card {
-  width: 80px;
-  height: 120px;
-  margin: 5px;
+  height: auto;
+  margin: 0 10px;
   cursor: pointer;
-  transition: transform 0.2s;
 }
 
-.card:hover {
-  transform: translateY(-5px);
-}
-
-#player-hand {
+.hand {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-top: 10px;
+}
+
+.card {
+  width: 70px;
+  margin: 4px;
+  transition: transform 0.2s;
+  cursor: pointer;
+}
+
+.card:hover {
+  transform: scale(1.1);
 }
 
 #chat-box {
-  display: flex;
-  flex-direction: column;
-  background: white;
+  margin-top: 20px;
+  background: #fff;
   padding: 10px;
   border-radius: 8px;
-  max-height: 250px;
-  overflow: hidden;
-  box-shadow: 0 0 6px rgba(0,0,0,0.1);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 #chat-log {
-  flex: 1;
+  max-height: 150px;
   overflow-y: auto;
-  border: 1px solid #eee;
-  padding: 8px;
-  height: 150px;
+  padding: 5px;
+  border: 1px solid #ddd;
   margin-bottom: 10px;
-  background: #fafafa;
-  font-size: 0.9rem;
+  background: #fefefe;
+  border-radius: 4px;
 }
 
 #chat-input {
-  flex: 1;
-  margin-bottom: 5px;
+  width: 70%;
 }
 
-#mute-toggle,
-#uno-btn {
-  background: #ffd800;
-  color: #222;
-  padding: 6px 12px;
-  border: none;
-  font-weight: bold;
-  border-radius: 8px;
-  font-size: 0.9rem;
+#chat-send {
+  width: 25%;
 }
 
-#uno-btn:hover {
-  background: #ffa600;
-}
+@media (max-width: 768px) {
+  .card {
+    width: 50px;
+  }
 
-#mute-toggle:hover {
-  background: #ddd600;
+  .pile {
+    width: 80px;
+  }
+
+  input, button {
+    width: 90%;
+  }
 }
