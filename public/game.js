@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io({ autoConnect: true });
 
 // --- State
 let me = { id:null, name:null, spectator:false };
@@ -12,6 +12,7 @@ let countdownEndsAt = null;
 let myHand = [];
 let isMyTurn = false;
 let muted = false;
+let ready = false; // true once socket connected
 
 // --- Elements
 const joinForm = document.getElementById("join-form");
@@ -21,7 +22,6 @@ const gameScreen = document.getElementById("game-screen");
 
 const playerList = document.getElementById("player-list");
 const drawPile = document.getElementById("draw-pile");
-const discardPile = document.getElementById("discard-pile");
 const discardTop = document.getElementById("discard-top");
 const handDiv = document.getElementById("player-hand");
 const wildButtons = document.getElementById("wild-buttons");
@@ -57,7 +57,6 @@ function cardImg(card){
   if (card.type === "wild") return "assets/cards/wild.png";
   if (card.type === "wild_draw4") return "assets/cards/wild_draw4.png";
   if (card.type === "number") return `assets/cards/${card.color}_${card.value}.png`;
-  // action
   if (card.type === "skip") return `assets/cards/${card.color}_skip.png`;
   if (card.type === "reverse") return `assets/cards/${card.color}_reverse.png`;
   if (card.type === "draw2") return `assets/cards/${card.color}_draw.png`;
@@ -69,16 +68,9 @@ function legal(card){
   if (card.type === "number") return (card.color === color || (typeof top.value !== "undefined" && card.value === top.value));
   return (card.color === color || card.type === top.type);
 }
-function msToSec(ms){
-  return Math.max(0, Math.ceil((ms)/1000));
-}
-function setUNOEnabled(){
-  const mineCount = myHand.length;
-  // Enable when at 2 cards (about to go to 1)
-  unoBtn.disabled = !(mineCount === 2 && started && !me.spectator);
-}
+function msToSec(ms){ return Math.max(0, Math.ceil(ms/1000)); }
+function setUNOEnabled(){ unoBtn.disabled = !(myHand.length === 2 && started && !me.spectator); }
 
-// --- UI Renders
 function renderPlayers(list, currentId){
   playerList.innerHTML = "";
   list.forEach(p=>{
@@ -89,17 +81,14 @@ function renderPlayers(list, currentId){
     playerList.appendChild(li);
   });
 }
-
 function renderPiles(){
   discardTop.src = cardImg(top);
   colorLabel.textContent = `Color: ${color ? color.toUpperCase() : "—"}`;
   dirLabel.textContent = `Direction: ${direction === 1 ? "→" : "←"}`;
 }
-
 function renderHand(){
   handDiv.innerHTML = "";
   if (me.spectator || !started) return;
-
   myHand.forEach((c, i)=>{
     const img = document.createElement("img");
     img.src = cardImg(c);
@@ -108,31 +97,56 @@ function renderHand(){
     img.className = "card " + (isMyTurn && legal(c) ? "playable" : "unplayable");
     if (isMyTurn && legal(c)) {
       img.classList.add("clickable");
-      img.addEventListener("click", () => {
-        socket.emit("playCard", { index: i });
-      });
+      img.addEventListener("click", () => socket.emit("playCard", { index: i }));
     }
     handDiv.appendChild(img);
   });
-
   setUNOEnabled();
 }
-
 function renderTimers(){
-  if (countdownEndsAt && !started) {
-    const secs = msToSec(countdownEndsAt - Date.now());
-    turnIndicator.textContent = `Game starts in ${secs}s`;
-  } else if (turnEndsAt && started) {
-    const secs = msToSec(turnEndsAt - Date.now());
-    turnIndicator.textContent = `Your turn ends in ${secs}s`;
-  } else {
-    turnIndicator.textContent = "—";
-  }
+  if (countdownEndsAt && !started) turnIndicator.textContent = `Game starts in ${msToSec(countdownEndsAt - Date.now())}s`;
+  else if (turnEndsAt && started)  turnIndicator.textContent = `Your turn ends in ${msToSec(turnEndsAt - Date.now())}s`;
+  else turnIndicator.textContent = "—";
 }
-
 setInterval(renderTimers, 250);
 
-// --- Socket events
+// --- Socket lifecycle
+socket.on("connect", () => { ready = true; });
+socket.on("disconnect", () => { ready = false; });
+socket.on("connect_error", (err) => {
+  console.error("Socket connect_error:", err);
+  let n = document.getElementById("sock-note");
+  if (!n) {
+    n = document.createElement("div");
+    n.id = "sock-note";
+    n.style.cssText = "margin-top:8px;font-size:12px;color:#ffdf6e;";
+    joinForm.appendChild(n);
+  }
+  n.textContent = "Connecting… if Join seems unresponsive, wait a second and try again.";
+});
+
+// --- Join flow
+joinForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = (nameInput.value || "").trim();
+  if (!ready) {
+    const btn = joinForm.querySelector("button[type=submit]");
+    const old = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Connecting…";
+    const onceConnect = () => {
+      socket.emit("join", name);
+      btn.disabled = false;
+      btn.textContent = old;
+      socket.off("connect", onceConnect);
+    };
+    socket.on("connect", onceConnect);
+    socket.connect();
+    return;
+  }
+  socket.emit("join", name);
+});
+
 socket.on("me", (payload) => {
   me = payload;
   joinScreen.style.display = "none";
@@ -149,24 +163,18 @@ socket.on("state", (s) => {
   top = s.top;
   isMyTurn = (current === me.id);
 
-  // Server doesn't send entire hand for all (privacy). It sends counts only.
-  // We maintain myHand via deltas: ask server for hand when I become active.
-  // For simplicity here, server lets client request my hand snapshot:
-  socket.emit("getMyHand"); // lightweight ask; server responds below
+  socket.emit("getMyHand");
 
   renderPlayers(s.players, current);
   renderPiles();
   renderTimers();
 
-  // Draw pile clickable only if it's my turn and I'm active
   if (isMyTurn && !me.spectator) drawPile.classList.add("clickable");
   else drawPile.classList.remove("clickable");
 });
 
-socket.on("myHand", (hand) => {
-  myHand = hand;
-  renderHand();
-});
+socket.on("handSnapshot", (hand) => { myHand = hand || []; renderHand(); });
+socket.on("myHand", (hand) => { myHand = hand || []; renderHand(); });
 
 socket.on("announce", (text) => {
   const div = document.createElement("div");
@@ -174,71 +182,32 @@ socket.on("announce", (text) => {
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
 });
-
 socket.on("chat", ({from, msg}) => {
   const div = document.createElement("div");
   div.innerHTML = `<strong>${from}:</strong> ${msg}`;
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
 });
-
 socket.on("playSound", (name) => playSound(name));
-
-socket.on("chooseColor", () => {
-  wildButtons.style.display = "flex";
-});
+socket.on("chooseColor", () => { wildButtons.style.display = "flex"; });
 
 // --- UI events
-joinForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  socket.emit("join", nameInput.value);
-});
-
 drawPile.addEventListener("click", () => {
   if (isMyTurn && !me.spectator) socket.emit("drawCard");
 });
-
-unoBtn.addEventListener("click", () => {
-  socket.emit("callUno");
-});
-
+unoBtn.addEventListener("click", () => socket.emit("callUno"));
 wildButtons.addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
   wildButtons.style.display = "none";
-  const selected = btn.getAttribute("data-color");
-  socket.emit("colorChosen", { color: selected });
+  socket.emit("colorChosen", { color: btn.getAttribute("data-color") });
 });
-
 chatSend.addEventListener("click", () => {
   const msg = chatInput.value.trim();
   if (msg) socket.emit("chat", msg);
   chatInput.value = "";
 });
-chatInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") chatSend.click();
-});
+chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") chatSend.click(); });
 
-// Ask server for my hand periodically to keep in sync (cheap)
+// Periodic hand sync
 setInterval(()=>socket.emit("getMyHand"), 2000);
-
-// Simple request/response handler for my hand
-socket.on("connect", ()=>{
-  // Register handler only once
-  if (!socket._myHandHook) {
-    socket._myHandHook = true;
-    socket.on("handSnapshot", (hand) => {
-      myHand = hand || [];
-      renderHand();
-    });
-  }
-});
-
-// Request => Response
-socket.on("connect", ()=>{
-  socket.emit("getMyHand");
-});
-socket.on("handSnapshot", (hand) => {
-  myHand = hand || [];
-  renderHand();
-});
