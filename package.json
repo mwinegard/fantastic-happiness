@@ -1,13 +1,21 @@
 {
   "name": "fantastic-happiness",
   "version": "1.0.0",
-  "description": "Multiplayer UNO-style game with special cards",
+  "private": true,
+  "description": "UNO-style multiplayer web game",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "NODE_ENV=development nodemon server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2"
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
