@@ -1,8 +1,8 @@
 {
-  "name": "fantastic-happiness",
+  "name": "uno-rebuilt",
   "version": "1.0.0",
   "private": true,
-  "description": "UNO-style multiplayer web game",
+  "description": "Robust UNO-style multiplayer game",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
