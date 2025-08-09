@@ -1,33 +1,235 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>UNO Admin Panel</title>
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UNO Admin Hub</title>
   <link rel="stylesheet" href="style.css" />
   <style>
-    body{padding:16px}
-    #buttons{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
-    #buttons button{padding:10px;border:0;border-radius:10px;background:#14345f;color:#fff;cursor:pointer}
-    #buttons button:hover{filter:brightness(1.1)}
+    .admin-grid{
+      display:grid;gap:12px;
+      grid-template-columns: 1fr 1fr 1fr;
+      padding:16px;
+    }
+    .cardbox{
+      background:#0e2136;border:1px solid #193553;border-radius:12px;padding:12px;
+    }
+    .cardbox h2{margin:0 0 8px;font-size:16px}
+    .kv{display:grid;grid-template-columns:140px 1fr;gap:6px;font-size:14px}
+    .list{max-height:260px;overflow:auto;border:1px solid #173a5c;border-radius:8px;padding:8px}
+    .row{display:flex;gap:8px;align-items:center;margin:6px 0}
+    .row input,.row select{padding:8px;border-radius:8px;border:1px solid #28425f;background:#0e2136;color:#e9eef5}
+    .row button{padding:8px 10px;border-radius:8px;border:0;background:#1b5fd1;color:#fff;cursor:pointer}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#13375d;margin-left:6px;font-size:12px}
+    .warn{color:#ffdf6e}
+    .danger{background:#a13535}
+    @media (max-width: 1100px){ .admin-grid{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
-  <h1>Admin Sound Test Panel</h1>
-  <p>Click any sound to broadcast it to all clients.</p>
-  <div id="buttons"></div>
+  <div class="topbar">
+    <div><strong>UNO Admin Hub</strong></div>
+    <div id="admin-status" class="info">Connecting…</div>
+  </div>
+
+  <div class="admin-grid">
+    <!-- Game State -->
+    <div class="cardbox">
+      <h2>Game State</h2>
+      <div class="kv">
+        <div>Started</div><div id="g-started">—</div>
+        <div>Direction</div><div id="g-dir">—</div>
+        <div>Color</div><div id="g-color">—</div>
+        <div>Current Turn</div><div id="g-current">—</div>
+        <div>Turn Ends</div><div id="g-turnends">—</div>
+        <div>Deck Size</div><div id="g-deck">—</div>
+        <div>Discard Size</div><div id="g-discard">—</div>
+        <div>Penalty</div><div id="g-penalty">—</div>
+        <div>Round Flags</div><div id="g-flags">—</div>
+      </div>
+    </div>
+
+    <!-- Players -->
+    <div class="cardbox">
+      <h2>Players</h2>
+      <div id="p-list" class="list"></div>
+    </div>
+
+    <!-- Recent Announcements (tap to copy) -->
+    <div class="cardbox">
+      <h2>Log</h2>
+      <div id="log" class="list"></div>
+    </div>
+
+    <!-- Admin Actions -->
+    <div class="cardbox">
+      <h2>Admin Actions</h2>
+
+      <div class="row">
+        <button id="a-start">Start New Game</button>
+        <button id="a-end" class="danger">End Round</button>
+      </div>
+
+      <div class="row">
+        <button id="a-toggle-happy">Toggle HAPPY</button>
+        <button id="a-rotate-left">Rotate Hands ◀︎</button>
+        <button id="a-rotate-right">Rotate Hands ▶︎</button>
+      </div>
+
+      <div class="row">
+        <select id="sel-player"></select>
+        <button id="a-kick" class="danger">Kick</button>
+        <button id="a-draw1">Draw 1</button>
+        <button id="a-give-wild">Give WILD</button>
+      </div>
+
+      <div class="row">
+        <select id="sel-color">
+          <option value="red">RED</option>
+          <option value="yellow">YELLOW</option>
+          <option value="green">GREEN</option>
+          <option value="blue">BLUE</option>
+        </select>
+        <button id="a-set-color">Set Table Color</button>
+      </div>
+
+      <div class="row">
+        <button id="a-force-relax">Force RELAX (cancel penalty)</button>
+        <span class="pill warn">Use only if a penalty is active</span>
+      </div>
+    </div>
+
+    <!-- Inspect Hands (counts only here; add peek if desired) -->
+    <div class="cardbox">
+      <h2>Hands (counts)</h2>
+      <div id="hand-counts" class="list"></div>
+      <div class="info">For privacy, this view shows counts only. If you want a peek tool, we can add an “Admin Peek” <span class="pill">off by default</span>.</div>
+    </div>
+
+    <!-- Prompts / Pending -->
+    <div class="cardbox">
+      <h2>Prompts / Pending</h2>
+      <div id="prompts" class="list"></div>
+      <div class="info">Shows players who owe a selection (color pick, look order, shopping, rainbow, etc.).</div>
+    </div>
+
+    <!-- Penalty / Stack Monitor -->
+    <div class="cardbox">
+      <h2>Penalty Monitor</h2>
+      <div id="penalty-monitor" class="list"></div>
+      <div class="info">Narrates stack: who stacked, totals, and whether RELAX canceled it.</div>
+    </div>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
-    const sounds = ["draw","skip","reverse","wild","special","number","win","lose","start","joined","uno"];
-    const container = document.getElementById("buttons");
-    sounds.forEach(name=>{
-      const btn = document.createElement("button");
-      btn.textContent = `Play: ${name}`;
-      btn.onclick = () => socket.emit("adminPlaySound", name);
-      container.appendChild(btn);
-    });
+    // TODO: Lightweight admin key (optional)
+    // const ADMIN_KEY = new URLSearchParams(location.search).get("key");
+    // if (ADMIN_KEY !== "your_key_here") alert("Read-only mode");
+
+    const el = (id)=>document.getElementById(id);
+    const s = io({ transports:["polling","websocket"] });
+
+    // Buffers
+    const logBuf = [];
+    function pushLog(text){
+      logBuf.push({text, at:Date.now()}); if (logBuf.length>200) logBuf.shift();
+      const box = el("log"); if (!box) return;
+      const div = document.createElement("div");
+      div.textContent = text;
+      div.style.cursor = "copy";
+      div.onclick = ()=>navigator.clipboard.writeText(text);
+      box.appendChild(div); box.scrollTop = box.scrollHeight;
+    }
+
+    // State rendering
+    s.on("connect", ()=> el("admin-status").textContent = "Connected");
+    s.on("disconnect", ()=> el("admin-status").textContent = "Disconnected");
+
+    s.on("announce", (t)=> pushLog(t));
+    s.on("chat", (m)=> pushLog(`${m.fromName}: ${m.msg}`));
+
+    function renderState(state){
+      el("g-started").textContent = state.started ? "Yes" : "No";
+      el("g-dir").textContent = state.direction === 1 ? "→" : "←";
+      el("g-color").textContent = state.color ? state.color.toUpperCase() : "—";
+      el("g-current").textContent = state.current || "—";
+      el("g-turnends").textContent = state.turnEndsAt ? new Date(state.turnEndsAt).toLocaleTimeString() : "—";
+      el("g-penalty").textContent = state.penalty ? `+${state.penalty.total} (${state.penalty.type}) → target ${state.penalty.target}` : "—";
+      el("g-flags").textContent = state.roundFlags?.happy ? "HAPPY=ON" : "—";
+
+      // Deck/discard sizes are not in 'state' payload by default; show unknown
+      el("g-deck").textContent = "— (server hidden)";
+      el("g-discard").textContent = state.top ? "≥1" : "0";
+
+      // Players
+      const list = el("p-list"); list.innerHTML = "";
+      const sel = el("sel-player"); sel.innerHTML = "";
+      (state.players||[]).forEach(p=>{
+        const row = document.createElement("div");
+        row.textContent = `${p.name} — ${p.spectator?"spectator":p.handCount+" cards"} ${state.current===p.id?" (TURN)":""}`;
+        list.appendChild(row);
+        const opt = document.createElement("option");
+        opt.value = p.id; opt.textContent = p.name; sel.appendChild(opt);
+      });
+
+      // Hands (counts only)
+      const counts = el("hand-counts"); counts.innerHTML="";
+      (state.players||[]).forEach(p=>{
+        const li = document.createElement("div");
+        li.textContent = `${p.name}: ${p.handCount} cards`;
+        counts.appendChild(li);
+      });
+
+      // Penalty monitor
+      el("penalty-monitor").textContent = state.penalty ? `Active: +${state.penalty.total} (${state.penalty.type}) → target ${state.penalty.target}` : "None";
+    }
+
+    s.on("state", renderState);
+
+    // ACTION hooks (server needs to implement handlers for 'admin:command')
+    function cmd(type, data){ s.emit("admin:command", { type, ...(data||{}) }); }
+
+    el("a-start").onclick = ()=> cmd("start");
+    el("a-end").onclick = ()=> cmd("endRound");
+
+    el("a-toggle-happy").onclick = ()=> cmd("toggleHappy");
+    el("a-rotate-left").onclick = ()=> cmd("rotateHands", { dir:-1 });
+    el("a-rotate-right").onclick = ()=> cmd("rotateHands", { dir:1 });
+
+    el("a-kick").onclick = ()=> {
+      const sid = el("sel-player").value;
+      if (sid) cmd("kick", { sid });
+    };
+    el("a-draw1").onclick = ()=> {
+      const sid = el("sel-player").value;
+      if (sid) cmd("drawOne", { sid });
+    };
+    el("a-give-wild").onclick = ()=> {
+      const sid = el("sel-player").value;
+      if (sid) cmd("giveCard", { sid, card:{ color:"wild", type:"wild", img:"wild.png" } });
+    };
+
+    el("a-set-color").onclick = ()=> {
+      const color = el("sel-color").value;
+      cmd("setColor", { color });
+    };
+
+    el("a-force-relax").onclick = ()=> {
+      cmd("forceRelax"); // server should clear pendingPenalty if any (no color change here)
+    };
+
+    // Ideas to add (server-side later):
+    // - admin:peekHand { sid } -> returns list of cards (opt-in, secure)
+    // - admin:setTimer { ms } / admin:addTime { ms }
+    // - admin:dealNewRound
+    // - admin:injectCardTop { card } / admin:injectCardBottom { card }
+    // - admin:shuffleDeck
+    // - admin:setDirection { dir }
+    // - admin:reorderTop4 { order:[0,1,2,3] }
+    // - admin:mutePlayer { sid } (silences chat)
+    // - admin:setMaxPlayers { n }
+    // - admin:toggleSpectate { sid }
   </script>
 </body>
 </html>
