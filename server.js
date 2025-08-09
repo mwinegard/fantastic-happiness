@@ -100,9 +100,7 @@ function generateDeck() {
 
 function cardMatchesTop(card, color, value) {
   if (card.type === "wild" || card.type === "wild_draw4") return true;
-  if (card.type === "number") {
-    return card.color === color || card.value === value;
-  }
+  if (card.type === "number") return card.color === color || card.value === value;
   // action cards match on color or same type
   return card.color === color || card.type === value; // we temporarily store last type in 'value' for actions
 }
@@ -123,7 +121,7 @@ function initGame() {
   // flip a non-wild top card
   let first = deck.pop();
   while (first.type !== "number") {
-    deck.unshift(first); // bury back
+    deck.unshift(first);
     shuffle(deck);
     first = deck.pop();
   }
@@ -184,7 +182,6 @@ function endGameIfNeeded() {
 function drawOne(id) {
   if (!game) return null;
   if (game.deck.length === 0) {
-    // reshuffle discard (keep top)
     const top = game.discardPile.pop();
     game.deck = shuffle(game.discardPile);
     game.discardPile = [top];
@@ -255,21 +252,18 @@ function tickTurnTimer() {
   if (!game?.started) return;
   if (!game.current) return;
   if (Date.now() >= game.turnEndsAt) {
-    // turn timeout
     const p = players.find(x=>x.id===game.current);
     if (p) {
       p.misses = (p.misses||0)+1;
-      const c = drawOne(p.id);
+      drawOne(p.id);
       announce(`⏰ ${p.name} ran out of time and drew a card.`);
       io.to(p.id).emit("playSound", "draw");
       if (p.misses >= MISSES_TO_KICK) {
         announce(`🚪 ${p.name} removed after ${MISSES_TO_KICK} missed turns.`);
-        // dump their hand back and reshuffle into deck
         for (const card of game.hands[p.id] || []) game.deck.push(card);
         delete game.hands[p.id];
         const idx = players.findIndex(pp=>pp.id===p.id);
         if (idx>=0) players.splice(idx,1);
-        // adjust turnIndex if needed
         const order = players.filter(pp=>!pp.spectator).map(pp=>pp.id);
         if (order.length === 0) { endGameIfNeeded(); return; }
         game.turnIndex = order.indexOf(game.current);
@@ -296,21 +290,19 @@ io.on("connection", (socket) => {
       io.emit("playSound", "joined");
     }
 
-    // If game running and we still have < MAX_PLAYERS, allow late-joiner as active with 7 cards
+    // Promote a spectator who joins mid-round if there’s room
     if (game?.started) {
       const actives = players.filter(p=>!p.spectator);
       const me = players.find(p=>p.id===socket.id);
       if (me && me.spectator && actives.length < MAX_PLAYERS) {
         me.spectator = false;
         game.hands[me.id] = dealCards(game.deck, 7);
-        // push to end of order
         const order = players.filter(p=>!p.spectator).map(p=>p.id);
         game.turnIndex = order.indexOf(game.current);
         announce(`➕ ${me.name} joined the round (late).`);
       }
     }
 
-    // Start countdown if applicable
     if (!game?.started && players.filter(p=>!p.spectator).length >= 2) startCountdown();
     emitState();
   });
@@ -329,7 +321,6 @@ io.on("connection", (socket) => {
     drawOne(socket.id);
     io.to(socket.id).emit("playSound", "draw");
     announce(`🃏 ${players.find(p=>p.id===socket.id)?.name} drew a card.`);
-    // One draw ends your action; advance turn
     advanceTurn(1);
     emitState();
   });
@@ -343,44 +334,36 @@ io.on("connection", (socket) => {
     if (typeof index !== "number" || index < 0 || index >= hand.length) return;
     const card = hand[index];
 
-    if (!cardMatchesTop(card, game.color, game.value)) return; // illegal
+    if (!cardMatchesTop(card, game.color, game.value)) return;
 
-    // Remove from hand and place
     hand.splice(index,1);
 
     if (card.type === "wild" || card.type === "wild_draw4") {
-      // Ask for color
       io.to(socket.id).emit("chooseColor");
-      // Temporarily put card on discard but don't apply color until chosen
       game.discardPile.push(card);
-      game.value = card.type; // remember
+      game.value = card.type;
       game.color = "wild";
-      // effects afterwards once color chosen
+
       socket.once("colorChosen", ({ color }) => {
         const valid = ["red","yellow","green","blue"];
-        if (!valid.includes(color)) color = valid[Math.floor(Math.random()*4)];
-        game.color = color;
+        const chosen = valid.includes(color) ? color : valid[Math.floor(Math.random()*4)];
+        game.color = chosen;
 
-        // Apply wild effects
         if (card.type === "wild") {
           io.emit("playSound", "wild");
-          announce(`🌈 ${players.find(p=>p.id===socket.id)?.name} chose ${color.toUpperCase()}.`);
+          announce(`🌈 ${players.find(p=>p.id===socket.id)?.name} chose ${chosen.toUpperCase()}.`);
           advanceTurn(1);
         } else {
-          // Wild Draw Four
           io.emit("playSound", "wild");
-          announce(`🌪️ ${players.find(p=>p.id===socket.id)?.name} played WILD +4 and chose ${color.toUpperCase()}.`);
+          announce(`🌪️ ${players.find(p=>p.id===socket.id)?.name} played WILD +4 and chose ${chosen.toUpperCase()}.`);
           const order = players.filter(p=>!p.spectator).map(p=>p.id);
           const nextIdx = (game.turnIndex + game.direction + order.length) % order.length;
           const nextId = order[nextIdx];
           for (let i=0;i<4;i++) drawOne(nextId);
-          advanceTurn(1); // skip to next after drawing player
+          advanceTurn(1);
         }
 
-        // UNO penalty check (if going to 1 card without UNO flag)
         maybeUnoPenalty(socket.id);
-
-        // Win?
         const w = winnerIfAny();
         if (w) {
           const winnerName = players.find(p=>p.id===w)?.name || "Player";
@@ -395,7 +378,6 @@ io.on("connection", (socket) => {
         emitState();
       });
     } else {
-      // Normal / action card with known color
       game.discardPile.push(card);
       game.color = card.color;
       game.value = card.type === "number" ? card.value : card.type;
@@ -411,7 +393,6 @@ io.on("connection", (socket) => {
         io.emit("playSound", "reverse");
         game.direction *= -1;
         announce(`🔁 Turn order reversed.`);
-        // With 2 players, reverse acts like skip
         if (players.filter(p=>!p.spectator).length === 2) {
           advanceTurn(2);
         } else {
@@ -429,7 +410,6 @@ io.on("connection", (socket) => {
 
       maybeUnoPenalty(socket.id);
 
-      // Win?
       const w = winnerIfAny();
       if (w) {
         const winnerName = players.find(p=>p.id===w)?.name || "Player";
@@ -449,7 +429,6 @@ io.on("connection", (socket) => {
   socket.on("callUno", () => {
     const hand = game?.hands?.[socket.id];
     if (!game?.started || !hand) return;
-    // Mark a short-lived UNO flag for this player for this turn
     socket.unoCalled = true;
     io.emit("playSound", "uno");
     announce(`📣 ${players.find(p=>p.id===socket.id)?.name} called UNO!`);
@@ -458,6 +437,14 @@ io.on("connection", (socket) => {
   // Admin broadcast sound
   socket.on("adminPlaySound", (name) => {
     io.emit("playSound", String(name));
+  });
+
+  // >>> FIX HERE: Hand snapshot handler must live INSIDE this connection scope
+  socket.on("getMyHand", () => {
+    const hand = game?.hands?.[socket.id] || [];
+    // support both event names used by clients
+    socket.emit("handSnapshot", hand);
+    socket.emit("myHand", hand);
   });
 
   socket.on("disconnect", () => {
@@ -477,26 +464,15 @@ function maybeUnoPenalty(id) {
   const hand = game.hands[id];
   if (!hand) return;
   if (hand.length === 1) {
-    // If the socket didn't call UNO, penalize +2 immediately
     const s = io.sockets.sockets.get(id);
     if (!s?.unoCalled) {
       drawOne(id); drawOne(id);
       announce(`⚠️ UNO penalty applied (+2).`);
     }
   }
-  // Clear UNO flag for everyone at end of action
-  for (const [sid, sock] of io.sockets.sockets) sock.unoCalled = false;
+  for (const [, sock] of io.sockets.sockets) sock.unoCalled = false;
 }
 
 http.listen(PORT, () => {
   console.log("Server listening on", PORT);
-});
-
-// Send my hand snapshot (privacy: only to requester)
-socket.on("getMyHand", () => {
-  if (!game?.hands?.[socket.id]) {
-    socket.emit("handSnapshot", []);
-  } else {
-    socket.emit("handSnapshot", game.hands[socket.id]);
-  }
 });
