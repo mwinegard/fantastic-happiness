@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Top Scores</title>
+  <title>Leaderboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
   <style>
@@ -13,21 +13,18 @@
   </style>
 </head>
 <body>
-  <h1>Leaderboard</h1>
-  <table id="scores">
-    <thead><tr><th>Player</th><th>Wins</th></tr></thead>
-    <tbody></tbody>
-  </table>
-
+  <h1>Top Scores</h1>
+  <table id="scores"><thead><tr><th>Player</th><th>Wins</th></tr></thead><tbody></tbody></table>
   <script>
-    async function load() {
-      const res = await fetch("/scores");
-      const data = await res.json();
-      const rows = Object.entries(data).sort((a,b)=>b[1]-a[1]);
-      const tbody = document.querySelector("#scores tbody");
-      tbody.innerHTML = rows.map(([name, wins])=>`<tr><td>${name}</td><td>${wins}</td></tr>`).join("");
-    }
-    load();
+    (async function(){
+      try{
+        const res = await fetch("/scores");
+        const data = await res.json();
+        const rows = Object.entries(data).sort((a,b)=>b[1]-a[1]);
+        document.querySelector("#scores tbody").innerHTML =
+          rows.map(([n,w])=>`<tr><td>${n}</td><td>${w}</td></tr>`).join("");
+      }catch(e){ console.error(e); }
+    })();
   </script>
 </body>
 </html>
