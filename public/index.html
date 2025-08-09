@@ -6,16 +6,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
+  <style>
+    #join-screen { position: relative; z-index: 9999; pointer-events: auto; }
+  </style>
 </head>
 <body>
+  <!-- JOIN -->
   <div id="join-screen" class="panel">
-    <form id="join-form">
+    <!-- NOTE: button type="button" prevents page reload even if JS isn’t attached yet -->
+    <form id="join-form" autocomplete="off" novalidate onsubmit="return false;">
       <h1>Join the Game</h1>
-      <input id="name" placeholder="Your name (optional)" />
-      <button type="submit">Join</button>
+      <label for="name" class="label">Name (optional)</label>
+      <input id="name" name="name" placeholder="Your name (optional)" inputmode="text" autocapitalize="words" autocomplete="off" spellcheck="false" autofocus />
+      <button type="button" id="join-btn">Join</button>
+      <div id="sock-note" class="note" aria-live="polite"></div>
     </form>
   </div>
 
+  <!-- GAME -->
   <div id="game-screen" class="screen" style="display:none;">
     <header class="topbar">
       <h2>Fantastic Happiness UNO</h2>
@@ -29,7 +37,6 @@
       <aside class="sidebar">
         <h3>Players</h3>
         <ul id="player-list"></ul>
-
         <div class="info">
           <div id="turn-indicator" class="timer-display">—</div>
           <div class="dir">
@@ -45,7 +52,7 @@
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
             <img id="discard-top" alt="Discard Top" />
           </div>
-          <div id="draw-pile" class="pile draw clickable">
+          <div id="draw-pile" class="pile draw">
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
             <img src="assets/cards/back.png" alt="Draw Pile"/>
           </div>
@@ -56,10 +63,10 @@
         </div>
 
         <div id="wild-buttons" class="wild-picker" style="display:none;">
-          <button data-color="red">Red</button>
-          <button data-color="yellow">Yellow</button>
-          <button data-color="green">Green</button>
-          <button data-color="blue">Blue</button>
+          <button type="button" data-color="red">Red</button>
+          <button type="button" data-color="yellow">Yellow</button>
+          <button type="button" data-color="green">Green</button>
+          <button type="button" data-color="blue">Blue</button>
         </div>
       </main>
 
@@ -68,13 +75,29 @@
         <div id="chat-log" class="chatlog"></div>
         <div class="chatform">
           <input id="chat-input" placeholder="Say something…" />
-          <button id="chat-send">Send</button>
+          <button id="chat-send" type="button">Send</button>
         </div>
       </aside>
     </section>
   </div>
 
+  <!-- Socket.IO from server, with CDN fallback if it 404s -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="game.js"></script>
+  <script>
+    (function ensureSocketIO(){
+      if (window.io) return;
+      var s = document.createElement('script');
+      s.src = "https://cdn.socket.io/4.7.5/socket.io.min.js";
+      s.onload = function(){ console.log("Loaded Socket.IO fallback CDN"); };
+      document.head.appendChild(s);
+    })();
+    // iOS focus helper
+    document.addEventListener("DOMContentLoaded", () => {
+      const input = document.getElementById("name");
+      if (input) { setTimeout(() => { try { input.focus(); } catch {} }, 0); }
+    });
+  </script>
+  <!-- Cache-bust the client to avoid stale JS -->
+  <script src="game.js?v=2025-08-09-joinfix-3"></script>
 </body>
 </html>
