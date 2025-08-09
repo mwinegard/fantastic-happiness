@@ -1,3 +1,4 @@
+// Robust client: no form submission, explicit button click, socket handshake
 const socket = io({ autoConnect: true });
 
 // --- State
@@ -12,10 +13,11 @@ let countdownEndsAt = null;
 let myHand = [];
 let isMyTurn = false;
 let muted = false;
-let ready = false; // true once socket connected
+let ready = false; // socket connected
 
 // --- Elements
 const joinForm = document.getElementById("join-form");
+const joinBtn = document.getElementById("join-btn");
 const nameInput = document.getElementById("name");
 const joinScreen = document.getElementById("join-screen");
 const gameScreen = document.getElementById("game-screen");
@@ -46,7 +48,7 @@ function playSound(name){
   const s = sounds[name];
   if (s) { s.currentTime = 0; s.play().catch(()=>{}); }
 }
-muteBtn.addEventListener("click", () => {
+muteBtn?.addEventListener("click", () => {
   muted = !muted;
   muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
 });
@@ -110,8 +112,11 @@ function renderTimers(){
 }
 setInterval(renderTimers, 250);
 
-// --- Socket lifecycle
-socket.on("connect", () => { ready = true; });
+// --- Socket lifecycle + hello handshake
+socket.on("connect", () => {
+  ready = true;
+  socket.emit("hello", { when: Date.now() });
+});
 socket.on("disconnect", () => { ready = false; });
 socket.on("connect_error", (err) => {
   console.error("Socket connect_error:", err);
@@ -124,13 +129,16 @@ socket.on("connect_error", (err) => {
   }
   n.textContent = "Connecting… if Join seems unresponsive, wait a second and try again.";
 });
+socket.on("helloAck", (payload) => {
+  // Useful for quick sanity; visible in dev console
+  console.log("helloAck from server:", payload);
+});
 
-// --- Join flow
-joinForm.addEventListener("submit", (e) => {
-  e.preventDefault();
+// --- Join flow (button, no form submit)
+function doJoin(){
   const name = (nameInput.value || "").trim();
   if (!ready) {
-    const btn = joinForm.querySelector("button[type=submit]");
+    const btn = joinBtn;
     const old = btn.textContent;
     btn.disabled = true;
     btn.textContent = "Connecting…";
@@ -145,8 +153,10 @@ joinForm.addEventListener("submit", (e) => {
     return;
   }
   socket.emit("join", name);
-});
+}
+joinBtn?.addEventListener("click", doJoin);
 
+// --- Server events
 socket.on("me", (payload) => {
   me = payload;
   joinScreen.style.display = "none";
@@ -209,5 +219,5 @@ chatSend.addEventListener("click", () => {
 });
 chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") chatSend.click(); });
 
-// Periodic hand sync
+// Keep hand synced
 setInterval(()=>socket.emit("getMyHand"), 2000);
