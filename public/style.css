@@ -1,163 +1,108 @@
-body {
-  font-family: Arial, sans-serif;
-  background: #f4f4f9;
-  margin: 0;
-  padding: 0;
-  color: #333;
+:root{
+  --bg:#0b1a2b;          /* deep navy (Amadeus-inspired) */
+  --fg:#e9eef5;          /* light text */
+  --accent:#1b5fd1;      /* primary blue */
+  --accent-2:#27b3ff;    /* secondary blue */
+  --muted:#8aa3c2;
+  --card-shadow: 0 6px 20px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background:linear-gradient(180deg, #0b1a2b 0%, #0f243d 100%);
+  color:var(--fg);
 }
 
-h1, h2 {
-  text-align: center;
-  margin: 10px 0;
+/* Panels */
+.panel{
+  max-width:520px;margin:10vh auto;padding:28px;border-radius:16px;
+  background:rgba(255,255,255,.05);backdrop-filter: blur(8px);
+  box-shadow:var(--card-shadow);
 }
+.panel h1{margin:0 0 10px}
+.panel input{
+  width:100%;padding:12px 14px;border-radius:12px;border:1px solid #28425f;
+  background:#0e2136;color:var(--fg);outline:none
+}
+.panel button{
+  margin-top:12px;width:100%;padding:12px;border:0;border-radius:12px;
+  background:var(--accent);color:white;font-weight:600;cursor:pointer
+}
+.panel button:hover{filter:brightness(1.08)}
 
-form {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 60px;
+/* Screen layout */
+.screen .topbar{
+  display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
+  border-bottom:1px solid #1a3450;background:#102540;
 }
+.topbar h2{margin:0;font-weight:700}
+.controls button{
+  margin-left:8px;padding:8px 12px;border:0;border-radius:10px;background:#14345f;color:#fff;cursor:pointer
+}
+.controls button:hover{filter:brightness(1.1)}
+.board{
+  display:grid;grid-template-columns:280px 1fr 320px;gap:16px;padding:16px;
+}
+.sidebar{
+  background:#0e2136;border:1px solid #193553;border-radius:14px;padding:12px;
+}
+.sidebar h3, .chat h3{margin:6px 0 8px 0}
+#player-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#player-list li{
+  background:#102a46;border:1px solid #173a5c;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;
+}
+#player-list li.me{outline:2px solid var(--accent-2)}
+#player-list .turn{background:#13375d}
+.info{margin-top:10px;color:var(--muted);font-size:14px}
+.timer-display{font-variant-numeric:tabular-nums;background:#0b1f35;border:1px solid #143352;padding:8px;border-radius:10px;text-align:center}
 
-input, button {
-  margin: 5px;
-  padding: 10px;
-  font-size: 1rem;
-  border-radius: 6px;
-  border: 1px solid #ccc;
+.table{
+  background:#0e2136;border:1px solid #193553;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;min-height:420px
 }
+.piles{display:flex;gap:20px;align-items:center;justify-content:center}
+.pile{position:relative;width:140px;height:210px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.pile img{width:140px;height:210px;border-radius:12px;box-shadow:var(--card-shadow)}
+.stack{position:absolute;width:140px;height:210px;border-radius:12px;background:#051426;box-shadow:var(--card-shadow);opacity:.5}
+.discard .s1{transform:translate(-12px,-6px) rotate(-3deg)}
+.discard .s2{transform:translate(-6px,8px) rotate(2deg)}
+.discard .s3{transform:translate(10px,-10px) rotate(3deg)}
+.draw .s1{transform:translate(-10px,6px) rotate(2deg)}
+.draw .s2{transform:translate(8px,-6px) rotate(-2deg)}
+.draw .s3{transform:translate(14px,10px) rotate(1deg)}
+.clickable{cursor:pointer}
 
-button {
-  cursor: pointer;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  transition: background 0.2s;
+#hand-wrap{width:100%;display:flex;justify-content:center}
+.hand{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
+.card{
+  width:100px;height:150px;border-radius:12px;box-shadow:var(--card-shadow);transition:transform .12s ease, filter .12s ease;user-select:none;
 }
+.card.playable{transform:translateY(-4px)}
+.card.unplayable{filter:grayscale(.75) opacity(.6)}
+.card:hover{transform:translateY(-6px) scale(1.02)}
 
-button:hover {
-  background-color: #0056b3;
+.wild-picker{display:flex;gap:8px}
+.wild-picker button{
+  padding:10px 12px;border-radius:10px;border:0;cursor:pointer;background:#14345f;color:#fff
 }
+.wild-picker button:hover{filter:brightness(1.1)}
 
-#game-screen {
-  padding: 10px;
+.chat{
+  background:#0e2136;border:1px solid #193553;border-radius:14px;padding:12px;display:flex;flex-direction:column
 }
+.chatlog{
+  height:300px;overflow:auto;background:#091a2e;border:1px solid #163350;border-radius:10px;padding:8px
+}
+.chatform{display:flex;gap:8px;margin-top:8px}
+.chatform input{
+  flex:1;padding:10px;border-radius:10px;border:1px solid #28425f;background:#0e2136;color:var(--fg)
+}
+.chatform button{padding:10px 12px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
 
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-}
-
-#player-list {
-  background: #fff;
-  padding: 10px;
-  border-radius: 10px;
-  margin-bottom: 10px;
-  max-height: 140px;
-  overflow-y: auto;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-#game-board {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 20px 0;
-}
-
-.pile {
-  width: 100px;
-  height: auto;
-  margin: 0 10px;
-  cursor: pointer;
-  position: relative;
-  z-index: 1;
-}
-.pile::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.1);
-  z-index: -1;
-  border-radius: 4px;
-}
-
-.hand {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-.card {
-  width: 70px;
-  margin: 4px;
-  transition: transform 0.2s;
-  cursor: pointer;
-}
-
-.card:hover {
-  transform: scale(1.1);
-}
-
-#chat-box {
-  margin-top: 20px;
-  background: #fff;
-  padding: 10px;
-  border-radius: 8px;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-#chat-log {
-  max-height: 150px;
-  overflow-y: auto;
-  margin-bottom: 10px;
-}
-
-#wild-buttons {
-  position: fixed;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
-  z-index: 999;
-}
-
-#wild-buttons button {
-  font-weight: bold;
-  padding: 10px 16px;
-  border: none;
-  color: white;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-#turn-indicator {
-  position: fixed;
-  top: 10px;
-  right: 20px;
-  background: #ffd700;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-weight: bold;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-}
-
-#player-list div {
-  margin: 4px 0;
-}
-#player-list div[style*="color: red"] {
-  font-weight: bold;
+@media (max-width: 980px){
+  .board{grid-template-columns:1fr;grid-template-rows:auto auto auto}
+  .chat{order:3}
+  .sidebar{order:2}
+  .table{order:1}
 }
