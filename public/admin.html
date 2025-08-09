@@ -2,31 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>UNO Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
+  <style>
+    body{padding:16px}
+    #buttons{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+    #buttons button{padding:10px;border:0;border-radius:10px;background:#14345f;color:#fff;cursor:pointer}
+    #buttons button:hover{filter:brightness(1.1)}
+  </style>
 </head>
 <body>
   <h1>Admin Sound Test Panel</h1>
+  <p>Click any sound to broadcast it to all clients.</p>
   <div id="buttons"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-
-    const sounds = [
-      "draw", "skip", "reverse", "wild", "special",
-      "number", "win", "lose", "start", "joined", "uno"
-    ];
-
+    const sounds = ["draw","skip","reverse","wild","special","number","win","lose","start","joined","uno"];
     const container = document.getElementById("buttons");
-
-    sounds.forEach(name => {
+    sounds.forEach(name=>{
       const btn = document.createElement("button");
       btn.textContent = `Play: ${name}`;
-      btn.onclick = () => {
-        socket.emit("adminPlaySound", name);
-      };
+      btn.onclick = () => socket.emit("adminPlaySound", name);
       container.appendChild(btn);
     });
   </script>
