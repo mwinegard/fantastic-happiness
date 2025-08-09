@@ -1,42 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>UNO Leaderboard</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Top Scores</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body{padding:18px}
+    table{width:100%;border-collapse:collapse;background:#0e2136;border:1px solid #193553;border-radius:14px;overflow:hidden}
+    th,td{padding:12px;border-bottom:1px solid #173a5c}
+    th{text-align:left;background:#102a46}
+  </style>
 </head>
 <body>
   <h1>Leaderboard</h1>
-  <table id="score-table" style="margin: auto; width: 80%; max-width: 600px;">
-    <thead>
-      <tr>
-        <th>Player</th>
-        <th>Wins</th>
-        <th>Points</th>
-      </tr>
-    </thead>
+  <table id="scores">
+    <thead><tr><th>Player</th><th>Wins</th></tr></thead>
     <tbody></tbody>
   </table>
 
   <script>
-    fetch("/scores")
-      .then(res => res.json())
-      .then(scores => {
-        const tbody = document.querySelector("#score-table tbody");
-        const sorted = Object.entries(scores).sort((a, b) => b[1].points - a[1].points);
-        sorted.forEach(([name, stats]) => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${name}</td>
-            <td>${stats.wins}</td>
-            <td>${stats.points}</td>
-          `;
-          tbody.appendChild(row);
-        });
-      })
-      .catch(err => {
-        console.error("Error loading scores:", err);
-      });
+    async function load() {
+      const res = await fetch("/scores");
+      const data = await res.json();
+      const rows = Object.entries(data).sort((a,b)=>b[1]-a[1]);
+      const tbody = document.querySelector("#scores tbody");
+      tbody.innerHTML = rows.map(([name, wins])=>`<tr><td>${name}</td><td>${wins}</td></tr>`).join("");
+    }
+    load();
   </script>
 </body>
 </html>
