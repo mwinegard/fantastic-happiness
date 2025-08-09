@@ -1,5 +1,6 @@
-// Robust client: no form submission, explicit button click, socket handshake
+// Robust client: expose socket globally, harden join click, add diagnostics
 const socket = io({ autoConnect: true });
+window.socket = socket; // <— expose for inline/diagnostic use
 
 // --- State
 let me = { id:null, name:null, spectator:false };
@@ -112,7 +113,7 @@ function renderTimers(){
 }
 setInterval(renderTimers, 250);
 
-// --- Socket lifecycle + hello handshake
+// --- Socket lifecycle + hello handshake + diagnostics
 socket.on("connect", () => {
   ready = true;
   socket.emit("hello", { when: Date.now() });
@@ -130,15 +131,17 @@ socket.on("connect_error", (err) => {
   n.textContent = "Connecting… if Join seems unresponsive, wait a second and try again.";
 });
 socket.on("helloAck", (payload) => {
-  // Useful for quick sanity; visible in dev console
   console.log("helloAck from server:", payload);
 });
 
 // --- Join flow (button, no form submit)
 function doJoin(){
-  const name = (nameInput.value || "").trim();
+  const name = (nameInput?.value || "").trim();
+  // emit diagnostic so we can see clicks on the server
+  try { socket.emit("clientJoinClick", { at: Date.now(), name }); } catch {}
   if (!ready) {
     const btn = joinBtn;
+    if (!btn) return;
     const old = btn.textContent;
     btn.disabled = true;
     btn.textContent = "Connecting…";
@@ -158,7 +161,9 @@ joinBtn?.addEventListener("click", doJoin);
 
 // --- Server events
 socket.on("me", (payload) => {
-  me = payload;
+  me = payload || me;
+  // Defensive: if payload missing id (shouldn't happen), do nothing
+  if (!me?.id) return;
   joinScreen.style.display = "none";
   gameScreen.style.display = "block";
 });
@@ -175,7 +180,7 @@ socket.on("state", (s) => {
 
   socket.emit("getMyHand");
 
-  renderPlayers(s.players, current);
+  renderPlayers(s.players || [], current);
   renderPiles();
   renderTimers();
 
@@ -202,22 +207,22 @@ socket.on("playSound", (name) => playSound(name));
 socket.on("chooseColor", () => { wildButtons.style.display = "flex"; });
 
 // --- UI events
-drawPile.addEventListener("click", () => {
+drawPile?.addEventListener("click", () => {
   if (isMyTurn && !me.spectator) socket.emit("drawCard");
 });
-unoBtn.addEventListener("click", () => socket.emit("callUno"));
-wildButtons.addEventListener("click", (e) => {
+unoBtn?.addEventListener("click", () => socket.emit("callUno"));
+wildButtons?.addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
   wildButtons.style.display = "none";
   socket.emit("colorChosen", { color: btn.getAttribute("data-color") });
 });
-chatSend.addEventListener("click", () => {
-  const msg = chatInput.value.trim();
+chatSend?.addEventListener("click", () => {
+  const msg = chatInput.value?.trim();
   if (msg) socket.emit("chat", msg);
   chatInput.value = "";
 });
-chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") chatSend.click(); });
+chatInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") chatSend.click(); });
 
 // Keep hand synced
 setInterval(()=>socket.emit("getMyHand"), 2000);
