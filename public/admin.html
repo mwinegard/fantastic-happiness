@@ -55,7 +55,7 @@
       <div id="p-list" class="list"></div>
     </div>
 
-    <!-- Recent Announcements (tap to copy) -->
+    <!-- Recent Announcements -->
     <div class="cardbox">
       <h2>Log</h2>
       <div id="log" class="list"></div>
@@ -99,41 +99,35 @@
       </div>
     </div>
 
-    <!-- Inspect Hands (counts only here; add peek if desired) -->
+    <!-- Hands (counts only) -->
     <div class="cardbox">
       <h2>Hands (counts)</h2>
       <div id="hand-counts" class="list"></div>
-      <div class="info">For privacy, this view shows counts only. If you want a peek tool, we can add an “Admin Peek” <span class="pill">off by default</span>.</div>
+      <div class="info">For privacy, counts only. We can add an “Admin Peek” later (opt‑in).</div>
     </div>
 
     <!-- Prompts / Pending -->
     <div class="cardbox">
       <h2>Prompts / Pending</h2>
       <div id="prompts" class="list"></div>
-      <div class="info">Shows players who owe a selection (color pick, look order, shopping, rainbow, etc.).</div>
+      <div class="info">Shows players who owe selections (color pick, look order, shopping, rainbow, etc.).</div>
     </div>
 
     <!-- Penalty / Stack Monitor -->
     <div class="cardbox">
       <h2>Penalty Monitor</h2>
       <div id="penalty-monitor" class="list"></div>
-      <div class="info">Narrates stack: who stacked, totals, and whether RELAX canceled it.</div>
+      <div class="info">Narrates stack totals and RELAX state.</div>
     </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // TODO: Lightweight admin key (optional)
-    // const ADMIN_KEY = new URLSearchParams(location.search).get("key");
-    // if (ADMIN_KEY !== "your_key_here") alert("Read-only mode");
-
     const el = (id)=>document.getElementById(id);
     const s = io({ transports:["polling","websocket"] });
 
     // Buffers
-    const logBuf = [];
     function pushLog(text){
-      logBuf.push({text, at:Date.now()}); if (logBuf.length>200) logBuf.shift();
       const box = el("log"); if (!box) return;
       const div = document.createElement("div");
       div.textContent = text;
@@ -157,12 +151,9 @@
       el("g-turnends").textContent = state.turnEndsAt ? new Date(state.turnEndsAt).toLocaleTimeString() : "—";
       el("g-penalty").textContent = state.penalty ? `+${state.penalty.total} (${state.penalty.type}) → target ${state.penalty.target}` : "—";
       el("g-flags").textContent = state.roundFlags?.happy ? "HAPPY=ON" : "—";
-
-      // Deck/discard sizes are not in 'state' payload by default; show unknown
       el("g-deck").textContent = "— (server hidden)";
       el("g-discard").textContent = state.top ? "≥1" : "0";
 
-      // Players
       const list = el("p-list"); list.innerHTML = "";
       const sel = el("sel-player"); sel.innerHTML = "";
       (state.players||[]).forEach(p=>{
@@ -173,7 +164,6 @@
         opt.value = p.id; opt.textContent = p.name; sel.appendChild(opt);
       });
 
-      // Hands (counts only)
       const counts = el("hand-counts"); counts.innerHTML="";
       (state.players||[]).forEach(p=>{
         const li = document.createElement("div");
@@ -181,13 +171,12 @@
         counts.appendChild(li);
       });
 
-      // Penalty monitor
       el("penalty-monitor").textContent = state.penalty ? `Active: +${state.penalty.total} (${state.penalty.type}) → target ${state.penalty.target}` : "None";
     }
 
     s.on("state", renderState);
 
-    // ACTION hooks (server needs to implement handlers for 'admin:command')
+    // ACTION hooks
     function cmd(type, data){ s.emit("admin:command", { type, ...(data||{}) }); }
 
     el("a-start").onclick = ()=> cmd("start");
@@ -216,20 +205,8 @@
     };
 
     el("a-force-relax").onclick = ()=> {
-      cmd("forceRelax"); // server should clear pendingPenalty if any (no color change here)
+      cmd("forceRelax");
     };
-
-    // Ideas to add (server-side later):
-    // - admin:peekHand { sid } -> returns list of cards (opt-in, secure)
-    // - admin:setTimer { ms } / admin:addTime { ms }
-    // - admin:dealNewRound
-    // - admin:injectCardTop { card } / admin:injectCardBottom { card }
-    // - admin:shuffleDeck
-    // - admin:setDirection { dir }
-    // - admin:reorderTop4 { order:[0,1,2,3] }
-    // - admin:mutePlayer { sid } (silences chat)
-    // - admin:setMaxPlayers { n }
-    // - admin:toggleSpectate { sid }
   </script>
 </body>
 </html>
