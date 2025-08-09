@@ -1,4 +1,5 @@
-// Client with specialty flows, stacking narration, HAPPY emoji, Look/Shopping/Rainbow modals, and Relax interrupt
+// Client with specialty flows, stacking narration via announcements, HAPPY emoji moderation,
+// Look/Shopping/Rainbow modals, and Relax interrupt play.
 (function boot(){
   function ensureClientId(){
     try{
@@ -32,7 +33,6 @@
     const drawPile = document.getElementById("draw-pile");
     const discardTop = document.getElementById("discard-top");
     const handDiv = document.getElementById("player-hand");
-    const wildButtons = document.getElementById("wild-buttons");
     const unoBtn = document.getElementById("uno-btn");
     const chatLog = document.getElementById("chat-log");
     const chatInput = document.getElementById("chat-input");
@@ -41,7 +41,7 @@
     const dirLabel = document.getElementById("dir-label");
     const colorLabel = document.getElementById("color-label");
 
-    // Simple modal infra
+    // Modal infra
     let modalDiv;
     function ensureModal(){
       if (modalDiv) return modalDiv;
@@ -72,6 +72,18 @@
         acts.appendChild(b);
       });
       modalDiv.classList.add("open");
+    }
+
+    function openColorPicker(onPick){
+      const body = document.createElement("div");
+      const row = document.createElement("div"); row.className="wild-picker";
+      ["red","yellow","green","blue"].forEach(c=>{
+        const b=document.createElement("button"); b.textContent=c.toUpperCase(); b.dataset.color=c;
+        b.onclick=()=>{ onPick && onPick(c); closeModal(); };
+        row.appendChild(b);
+      });
+      body.appendChild(row);
+      openModal("Choose a color", body, []);
     }
 
     function renderPlayers(list, cur){
@@ -131,11 +143,7 @@
           d.classList.add("playable");
           if (!isMyTurn && penalty && c.type==="wild_relax") {
             d.addEventListener("click", ()=>{
-              // need color for relax
-              openColorPicker((chosen)=>{
-                closeModal();
-                socket.emit("playRelax", { index:i, color: chosen });
-              });
+              openColorPicker((chosen)=> socket.emit("playRelax", { index:i, color: chosen }));
             });
           } else {
             d.addEventListener("click",()=>socket.emit("playCard",{index:i}));
@@ -145,7 +153,7 @@
         }
         handDiv.appendChild(d);
       });
-      unoBtn.disabled = !(myHand.length===2 && started && !me.spectator);
+      unoBtn && (unoBtn.disabled = !(myHand.length===2 && started && !me.spectator));
     }
     function msToSec(ms){ return Math.max(0, Math.ceil(ms/1000)); }
     function renderTimer(){
@@ -160,25 +168,12 @@
       colorLabel.textContent = `Color: ${color?color.toUpperCase():"—"}`;
     }
 
-    function openColorPicker(onPick){
-      const body = document.createElement("div");
-      const row = document.createElement("div"); row.className="wild-picker";
-      ["red","yellow","green","blue"].forEach(c=>{
-        const b=document.createElement("button"); b.textContent=c.toUpperCase(); b.dataset.color=c;
-        b.onclick=()=>onPick && onPick(c);
-        row.appendChild(b);
-      });
-      body.appendChild(row);
-      openModal("Choose a color", body, []);
-    }
-
     // lifecycle
-    socket.on("connect", ()=>{ /* ok */ });
     socket.on("me", (p)=>{
       if (!p?.id) return;
       me = { ...me, ...p };
-      joinScreen && (joinScreen.style.display = "none");
-      gameScreen && (gameScreen.style.display = "block");
+      if (joinScreen) joinScreen.style.display = "none";
+      if (gameScreen) gameScreen.style.display = "block";
     });
 
     socket.on("state", (s)=>{
@@ -207,7 +202,6 @@
       div.textContent = text; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight;
     });
 
-    // CHAT messages with ids (for Happy)
     socket.on("chat", (m)=>{
       const line = document.createElement("div");
       line.className = "chatline";
@@ -228,24 +222,20 @@
     });
 
     socket.on("happyFlagApplied", ({ messageId })=>{
-      // find line and flip emoji
-      const lines = chatLog.querySelectorAll(".chatline");
-      // naive: flip the last one with a visible happy button
-      for (let i=lines.length-1;i>=0;i--){
-        const btn = lines[i].querySelector(".happy-btn");
-        if (btn && !btn.disabled) { btn.textContent="😼"; btn.disabled = true; btn.title="Already flagged"; break; }
-      }
+      // Flip the latest visible happy button to 😼 (simple heuristic)
+      const btns = chatLog.querySelectorAll(".happy-btn:not([disabled])");
+      if (btns.length){ const btn = btns[btns.length-1]; btn.textContent="😼"; btn.disabled=true; btn.title="Already flagged"; }
     });
 
-    // Color picker prompts + specialty prompts
+    // Color picker generic (used by some wild flows if server asks)
     socket.on("chooseColor", ()=>{
-      openColorPicker((c)=>{ socket.emit("colorChosen", { color:c }); closeModal(); });
+      openColorPicker((c)=> socket.emit("colorChosen", { color:c }));
     });
 
+    // PROMPTS
     socket.on("prompt", ({ kind, data, timeoutMs })=>{
       if (kind==="targetPicker"){
-        const body = document.createElement("div");
-        body.className="target-list";
+        const body = document.createElement("div"); body.className="target-list";
         (data.targets||[]).forEach(t=>{
           const b = document.createElement("button");
           b.textContent = t.name;
@@ -306,7 +296,6 @@
           secTheirs.appendChild(d);
         });
 
-        const actions = document.createElement("div"); actions.className="muted"; actions.textContent="Confirm when ready.";
         const confirmBtn = document.createElement("button"); confirmBtn.textContent="Confirm";
         confirmBtn.onclick=()=>{
           if (mineSel.size===2 && typeof theirSel==="number") {
@@ -314,7 +303,7 @@
             closeModal();
           }
         };
-        const wrap = document.createElement("div"); wrap.append(secMine, secTheirs, actions, confirmBtn);
+        const wrap = document.createElement("div"); wrap.append(secMine, secTheirs, confirmBtn);
         openModal("Shopping: trade 2 for 1", wrap, []);
         setTimeout(()=>closeModal(), timeoutMs||20000);
       }
@@ -356,7 +345,6 @@
     chatInput?.addEventListener("keydown",(e)=>{ if (e.key==="Enter") chatSend.click(); });
 
     unoBtn?.addEventListener("click", ()=> socket.emit("callUno"));
-
   }
   waitIO();
 })();
