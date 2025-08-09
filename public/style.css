@@ -36,6 +36,8 @@ a{color:#9bd0ff}
 .draw .s3{transform:translate(14px,10px) rotate(1deg)}
 .clickable{cursor:pointer}
 
+.pile img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
+
 .card{width:100px;height:150px;border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;overflow:hidden;background:#061426}
 .card.back{background:#0b1a2b; border:2px solid #203b61}
 .card img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
