@@ -2,41 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Fantastic Happiness UNO</title>
+  <title>UNO (Robust Build)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
-  <style>
-    #join-screen { position: relative; z-index: 9999; pointer-events: auto; }
-  </style>
+  <style>#join-screen{position:relative;z-index:9999}</style>
 </head>
 <body>
   <!-- JOIN -->
   <div id="join-screen" class="panel">
-    <form id="join-form" autocomplete="off" novalidate>
-      <h1>Join the Game</h1>
-      <label for="name" class="label">Name (optional)</label>
-      <input id="name" name="name" placeholder="Your name (optional)"
-             inputmode="text" autocapitalize="words" autocomplete="off"
-             spellcheck="false" autofocus />
-      <!-- onclick fallback calls window.doJoin() if defined,
-           or directly emits 'join' via window.socket -->
-      <button
-        type="button"
-        id="join-btn"
-        onclick="(window.doJoin && window.doJoin()) || (window.socket && window.socket.emit && window.socket.emit('join', (document.getElementById('name').value||'').trim()))"
-      >Join</button>
-      <div id="sock-note" class="note" aria-live="polite"></div>
-    </form>
+    <h1>Join the Game</h1>
+    <div class="row">
+      <input id="name" placeholder="Name (optional)" autofocus />
+      <!-- Inline fallback: calls window.doJoin() or emits join directly -->
+      <button id="join-btn" type="button"
+        onclick="(window.doJoin && window.doJoin()) || (window.socket && window.socket.emit && window.socket.emit('join', (document.getElementById('name').value||'').trim()))">
+        Join
+      </button>
+    </div>
+    <div id="sock-note" class="note" aria-live="polite"></div>
   </div>
 
   <!-- GAME -->
   <div id="game-screen" class="screen" style="display:none;">
     <header class="topbar">
-      <h2>Fantastic Happiness UNO</h2>
+      <h2>UNO — Multiplayer</h2>
       <div class="controls">
         <button id="uno-btn" disabled>UNO!</button>
-        <button id="mute-toggle">🔊 Sound On</button>
       </div>
     </header>
 
@@ -46,10 +37,10 @@
         <ul id="player-list"></ul>
         <div class="info">
           <div id="turn-indicator" class="timer-display">—</div>
-          <div class="dir">
-            <span id="dir-label">Direction: →</span>
-            <span id="color-label">Color: —</span>
-          </div>
+          <div class="dir"><span id="dir-label">Direction: →</span> <span id="color-label">Color: —</span></div>
+        </div>
+        <div class="links">
+          <a href="leaderboard.html" target="_blank">Leaderboard</a>
         </div>
       </aside>
 
@@ -57,11 +48,11 @@
         <div class="piles">
           <div id="discard-pile" class="pile discard">
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
-            <img id="discard-top" alt="Discard Top" />
+            <div id="discard-top" class="card"></div>
           </div>
           <div id="draw-pile" class="pile draw">
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
-            <img src="assets/cards/back.png" alt="Draw Pile"/>
+            <div class="card back"></div>
           </div>
         </div>
 
@@ -88,10 +79,10 @@
     </section>
   </div>
 
-  <!-- Socket.IO served by app, with CDN fallback; both deferred to guarantee order -->
+  <!-- Socket.IO preferred from app, with robust fallback -->
   <script defer src="/socket.io/socket.io.js"></script>
   <script>
-    (function ensureSocketIO(){
+    (function ensureIO(){
       if (window.io) return;
       var s = document.createElement('script');
       s.defer = true;
@@ -99,16 +90,14 @@
       s.onload = function(){ console.log("Loaded Socket.IO fallback CDN"); };
       document.head.appendChild(s);
     })();
-
-    // prevent accidental form submission reload
+    // Prevent accidental form submission reloads:
     document.addEventListener("DOMContentLoaded", function(){
-      var form = document.getElementById("join-form");
-      if (form) form.addEventListener("submit", function(ev){ ev.preventDefault(); return false; });
-      var input = document.getElementById("name");
-      if (input) setTimeout(function(){ try { input.focus(); } catch(e){} }, 0);
+      const input = document.getElementById("name");
+      const btn = document.getElementById("join-btn");
+      if (input) input.addEventListener("keydown", (e)=>{ if (e.key === "Enter") btn.click(); });
+      setTimeout(()=>{ try { input && input.focus(); } catch{} }, 0);
     });
   </script>
-  <!-- Load client last; cache-bust to avoid stale JS -->
-  <script defer src="game.js?v=joinfix-inline-1"></script>
+  <script defer src="game.js?v=robust-build-1"></script>
 </body>
 </html>
