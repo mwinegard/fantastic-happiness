@@ -491,3 +491,12 @@ function maybeUnoPenalty(id) {
 http.listen(PORT, () => {
   console.log("Server listening on", PORT);
 });
+
+// Send my hand snapshot (privacy: only to requester)
+socket.on("getMyHand", () => {
+  if (!game?.hands?.[socket.id]) {
+    socket.emit("handSnapshot", []);
+  } else {
+    socket.emit("handSnapshot", game.hands[socket.id]);
+  }
+});
