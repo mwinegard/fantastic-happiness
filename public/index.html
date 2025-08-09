@@ -2,45 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Fantastic Happiness UNO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="join-screen">
+  <div id="join-screen" class="panel">
     <form id="join-form">
       <h1>Join the Game</h1>
-      <input id="name" placeholder="Your name" required />
+      <input id="name" placeholder="Your name (optional)" />
       <button type="submit">Join</button>
     </form>
   </div>
 
-  <div id="game-screen" style="display: none;">
-    <header>
+  <div id="game-screen" class="screen" style="display:none;">
+    <header class="topbar">
       <h2>Fantastic Happiness UNO</h2>
-      <button id="uno-btn">UNO!</button>
-      <button id="mute-toggle">🔊 Sound On</button>
+      <div class="controls">
+        <button id="uno-btn" disabled>UNO!</button>
+        <button id="mute-toggle">🔊 Sound On</button>
+      </div>
     </header>
 
-    <div id="player-list" class="sidebar"></div>
+    <section class="board">
+      <aside class="sidebar">
+        <h3>Players</h3>
+        <ul id="player-list"></ul>
 
-    <div id="game-board">
-      <div id="discard-pile" class="pile"></div>
-      <img id="draw-pile" class="pile" src="/assets/cards/back.png" alt="Draw Pile" />
-    </div>
+        <div class="info">
+          <div id="turn-indicator" class="timer-display">—</div>
+          <div class="dir">
+            <span id="dir-label">Direction: →</span>
+            <span id="color-label">Color: —</span>
+          </div>
+        </div>
+      </aside>
 
-    <div id="player-hand" class="hand"></div>
+      <main class="table">
+        <div class="piles">
+          <div id="discard-pile" class="pile discard">
+            <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
+            <img id="discard-top" alt="Discard Top" />
+          </div>
+          <div id="draw-pile" class="pile draw clickable">
+            <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
+            <img src="assets/cards/back.png" alt="Draw Pile"/>
+          </div>
+        </div>
 
-    <div id="chat-box">
-      <div id="chat-log"></div>
-      <input id="chat-input" placeholder="Say something..." />
-      <button id="chat-send">Send</button>
-    </div>
+        <div id="hand-wrap">
+          <div id="player-hand" class="hand"></div>
+        </div>
+
+        <div id="wild-buttons" class="wild-picker" style="display:none;">
+          <button data-color="red">Red</button>
+          <button data-color="yellow">Yellow</button>
+          <button data-color="green">Green</button>
+          <button data-color="blue">Blue</button>
+        </div>
+      </main>
+
+      <aside class="chat">
+        <h3>Chat</h3>
+        <div id="chat-log" class="chatlog"></div>
+        <div class="chatform">
+          <input id="chat-input" placeholder="Say something…" />
+          <button id="chat-send">Send</button>
+        </div>
+      </aside>
+    </section>
   </div>
-
-  <!-- Wild color selector and countdown timer UI -->
-  <div id="wild-buttons" class="wild-picker"></div>
-  <div id="turn-indicator" class="timer-display"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
