@@ -28,12 +28,10 @@ app.get("/scores", (_req, res) => res.json(scores));
 let players = [];
 let game = null;
 let countdownTimer = null;
-let turnInterval = null;
 
 const MAX_PLAYERS = 10;
 const TURN_SECONDS = 60;
 const COUNTDOWN_SECONDS = 30;
-const MISSES_TO_KICK = 3;
 
 const ANIMALS = ["Aardvark","Badger","Cougar","Dolphin","Eagle","Fox","Giraffe","Hedgehog","Iguana","Jaguar","Koala","Lemur","Manatee","Narwhal","Otter","Panda","Quokka","Raccoon","Sloth","Turtle","Urchin","Vulture","Walrus","Yak","Zebra"];
 const NUM_WORDS = ["One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten"];
@@ -62,14 +60,9 @@ function generateDeck(){
   for (let i=0;i<4;i++){ deck.push({color:"wild",type:"wild"}); deck.push({color:"wild",type:"wild_draw4"}); }
   return shuffle(deck);
 }
-function cardMatchesTop(card,color,value){
-  if (card.type==="wild"||card.type==="wild_draw4") return true;
-  if (card.type==="number") return card.color===color || card.value===value;
-  return card.color===color || card.type===value;
-}
 function dealCards(deck,n){ const out=[]; for (let i=0;i<n;i++) out.push(deck.pop()); return out; }
 
-/* ===== Emit condensed state to clients ===== */
+/* ===== Emit state ===== */
 function emitState(){
   const state = {
     started: !!game?.started,
@@ -84,13 +77,18 @@ function emitState(){
   io.emit("state", state);
 }
 
-/* ===== Socket Handlers ===== */
+/* ===== Sockets ===== */
 io.on("connection", (socket) => {
   console.log("✅ New connection:", socket.id);
 
-  // Simple hello / ack for connectivity verification
+  // Hello/Ack so we know client is really attached
   socket.on("hello", (payload) => {
     socket.emit("helloAck", { ok: true, at: Date.now(), you: socket.id, echo: payload?.when || null });
+  });
+
+  // DIAGNOSTIC: log client join button clicks
+  socket.on("clientJoinClick", (p) => {
+    console.log("🖱️ clientJoinClick from", socket.id, p);
   });
 
   // Join handler (always ACK with 'me')
@@ -108,7 +106,7 @@ io.on("connection", (socket) => {
       console.log("🔄 Updated name for", socket.id, "->", name);
     }
 
-    // Immediate ACK so UI advances from join screen even if game not started
+    // Immediate ACK so UI advances
     socket.emit("me", { id: socket.id, name: player.name, spectator: player.spectator });
 
     announce(`👤 ${player.name} ${player.spectator ? "joined as spectator." : "joined the game."}`);
@@ -120,15 +118,12 @@ io.on("connection", (socket) => {
     emitState();
   });
 
-  // Provide my hand
+  // Hand snapshot
   socket.on("getMyHand", () => {
     const hand = game?.hands?.[socket.id] || [];
     socket.emit("handSnapshot", hand);
     socket.emit("myHand", hand);
   });
-
-  // Minimal gameplay kept out here to focus on join issue;
-  // (Your previously deployed gameplay handlers can be kept if desired.)
 
   socket.on("disconnect", () => {
     console.log("❌ Disconnect:", socket.id);
@@ -136,17 +131,17 @@ io.on("connection", (socket) => {
     if (idx >= 0) {
       const gone = players[idx];
       players.splice(idx,1);
-      announce(`👋 ${gone.name || "A player"} left.`);
+      announce(`👋 ${gone?.name || "A player"} left.`);
     }
     emitState();
   });
 });
 
-/* ===== Countdown + Game bootstrap (kept minimal for join verification) ===== */
+/* ===== Countdown + Game bootstrap (minimal) ===== */
 function startCountdown(){
   if (countdownTimer || game?.started) return;
-  const endsAt = Date.now() + COUNTDOWN_SECONDS*1000;
-  game = { started:false, countdownEndsAt:endsAt };
+  const endsAt = Date.now() + 30000;
+  game = { started:false, countdownEndsAt: endsAt };
   announce("⏳ Game starts in 30 seconds…");
   countdownTimer = setInterval(()=>{
     const enough = players.filter(p=>!p.spectator).length >= 2;
@@ -155,19 +150,19 @@ function startCountdown(){
     emitState();
   },500);
 }
-
 function initGame(){
   const active = players.filter(p=>!p.spectator);
   const deck = generateDeck();
   const hands = {};
   for (const p of active) hands[p.id] = dealCards(deck,7);
+  // ensure numeric first card
   let first = deck.pop();
-  while (first.type!=="number"){ deck.unshift(first); shuffle(deck); first = deck.pop(); }
+  while (first.type !== "number") { deck.unshift(first); deck.sort(()=>Math.random()-0.5); first = deck.pop(); }
   game = {
     started:true, deck, discardPile:[first],
     turnIndex:0, direction:1, color:first.color, value:first.value,
     hands, current:active[0]?.id || null,
-    turnEndsAt: Date.now()+TURN_SECONDS*1000
+    turnEndsAt: Date.now() + TURN_SECONDS*1000
   };
   announce("🎉 Game started!");
   io.emit("playSound", "start");
