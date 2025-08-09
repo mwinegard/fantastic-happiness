@@ -49,7 +49,10 @@ function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.rando
 function cardImageName(card) {
   if (card.color === "wild") return `${card.type}.png`; // wild.png or wild_draw4.png
   if (card.type === "number") return `${card.color}_${card.value}.png`;
-  return `${card.color}_${card.type}.png`; // red_skip.png, red_reverse.png, red_draw2.png
+  // Our assets name Draw Two as "<color>_draw.png"
+  if (card.type === "draw2") return `${card.color}_draw.png`;
+  // skip / reverse match their names directly
+  return `${card.color}_${card.type}.png`;
 }
 
 function deckNew(){
@@ -62,13 +65,13 @@ function deckNew(){
       d.push({color:c,type:"number",value:v, img:`${c}_${v}.png`});
     }
     for (let i=0;i<2;i++){
-      d.push({color:c,type:"skip", img:`${c}_skip.png`});
+      d.push({color:c,type:"skip",    img:`${c}_skip.png`});
       d.push({color:c,type:"reverse", img:`${c}_reverse.png`});
-      d.push({color:c,type:"draw2", img:`${c}_draw2.png`});
+      d.push({color:c,type:"draw2",   img:`${c}_draw.png`});
     }
   }
   for (let i=0;i<4;i++){
-    d.push({color:"wild",type:"wild", img:`wild.png`});
+    d.push({color:"wild",type:"wild",       img:`wild.png`});
     d.push({color:"wild",type:"wild_draw4", img:`wild_draw4.png`});
   }
   return shuffle(d);
