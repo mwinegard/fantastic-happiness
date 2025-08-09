@@ -7,17 +7,20 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
   <style>
+    /* Keep the join panel on top and interactive */
     #join-screen { position: relative; z-index: 9999; pointer-events: auto; }
   </style>
 </head>
 <body>
   <!-- JOIN -->
   <div id="join-screen" class="panel">
-    <!-- NOTE: button type="button" prevents page reload even if JS isn’t attached yet -->
-    <form id="join-form" autocomplete="off" novalidate onsubmit="return false;">
+    <!-- Use button type="button" to prevent page reloads even if JS attaches late -->
+    <form id="join-form" autocomplete="off" novalidate>
       <h1>Join the Game</h1>
       <label for="name" class="label">Name (optional)</label>
-      <input id="name" name="name" placeholder="Your name (optional)" inputmode="text" autocapitalize="words" autocomplete="off" spellcheck="false" autofocus />
+      <input id="name" name="name" placeholder="Your name (optional)"
+             inputmode="text" autocapitalize="words" autocomplete="off"
+             spellcheck="false" autofocus />
       <button type="button" id="join-btn">Join</button>
       <div id="sock-note" class="note" aria-live="polite"></div>
     </form>
@@ -52,7 +55,7 @@
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
             <img id="discard-top" alt="Discard Top" />
           </div>
-          <div id="draw-pile" class="pile draw">
+        <div id="draw-pile" class="pile draw">
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
             <img src="assets/cards/back.png" alt="Draw Pile"/>
           </div>
@@ -81,23 +84,33 @@
     </section>
   </div>
 
-  <!-- Socket.IO from server, with CDN fallback if it 404s -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Prefer Socket.IO served by the app; add CDN fallback if it fails -->
+  <script defer src="/socket.io/socket.io.js"></script>
   <script>
     (function ensureSocketIO(){
-      if (window.io) return;
+      function hasIO(){ return !!window.io; }
+      if (hasIO()) return;
       var s = document.createElement('script');
+      s.defer = true;
       s.src = "https://cdn.socket.io/4.7.5/socket.io.min.js";
       s.onload = function(){ console.log("Loaded Socket.IO fallback CDN"); };
       document.head.appendChild(s);
     })();
-    // iOS focus helper
-    document.addEventListener("DOMContentLoaded", () => {
-      const input = document.getElementById("name");
-      if (input) { setTimeout(() => { try { input.focus(); } catch {} }, 0); }
+
+    // iOS/Safari helper: nudge focus to the name field on load
+    document.addEventListener("DOMContentLoaded", function(){
+      var input = document.getElementById("name");
+      if (input) setTimeout(function(){ try { input.focus(); } catch(e){} }, 0);
+    });
+
+    // Prevent accidental form submission reloads (belt & suspenders)
+    document.addEventListener("DOMContentLoaded", function(){
+      var form = document.getElementById("join-form");
+      if (!form) return;
+      form.addEventListener("submit", function(ev){ ev.preventDefault(); return false; });
     });
   </script>
-  <!-- Cache-bust the client to avoid stale JS -->
-  <script src="game.js?v=2025-08-09-joinfix-3"></script>
+  <!-- Cache-bust the client to avoid stale JS in browsers -->
+  <script defer src="game.js?v=2025-08-09-joinfix-5"></script>
 </body>
 </html>
