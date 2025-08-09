@@ -1,6 +1,5 @@
 :root{
   --bg:#0b1a2b; --fg:#e9eef5; --accent:#1b5fd1; --muted:#8aa3c2;
-  --r:#e74c3c; --y:#f1c40f; --g:#2ecc71; --b:#3498db; --k:#111827;
   --shadow:0 6px 20px rgba(0,0,0,.25);
 }
 *{box-sizing:border-box}html,body{height:100%}
@@ -35,23 +34,16 @@ a{color:#9bd0ff}
 .draw .s1{transform:translate(-10px,6px) rotate(2deg)}
 .draw .s2{transform:translate(8px,-6px) rotate(-2deg)}
 .draw .s3{transform:translate(14px,10px) rotate(1deg)}
+.clickable{cursor:pointer}
 
-.card{width:100px;height:150px;border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:42px;color:#fff}
+.card{width:100px;height:150px;border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;overflow:hidden;background:#061426}
 .card.back{background:#0b1a2b; border:2px solid #203b61}
-.card.red{background:linear-gradient(145deg,var(--r),#b23b2f)}
-.card.yellow{background:linear-gradient(145deg,var(--y),#c9a70d); color:#212121}
-.card.green{background:linear-gradient(145deg,var(--g),#23995a)}
-.card.blue{background:linear-gradient(145deg,var(--b),#2675b6)}
-.card.skip::after{content:"⛔";font-size:38px}
-.card.reverse::after{content:"↔";font-size:38px}
-.card.draw2::after{content:"+2";font-size:34px}
-.card.wild::after{content:"W";font-size:34px}
-.card.wild_draw4::after{content:"+4";font-size:34px}
+.card img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
+.card.playable img{cursor:pointer;transform:scale(1);transition:transform .15s ease-in-out}
+.card.playable img:hover{transform:scale(1.05)}
+.card.unplayable img{opacity:.55}
 
 .hand{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.card.playable{transform:translateY(-4px);outline:3px solid #ffffff55;cursor:pointer}
-.card.unplayable{filter:grayscale(.6) opacity(.7)}
-.card:hover{transform:translateY(-6px) scale(1.02)}
 
 .wild-picker{display:flex;gap:8px}
 .wild-picker button{padding:10px 12px;border-radius:10px;border:0;background:#14345f;color:#fff;cursor:pointer}
