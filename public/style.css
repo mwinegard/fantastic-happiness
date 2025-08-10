@@ -1,4 +1,3 @@
-/* ==== Your original look (kept intact) ==== */
 body {
   font-family: sans-serif;
   background: #222;
@@ -43,7 +42,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: none; /* keep discard card bright/visible */
+  filter: none; /* ensure discard card is visible */
 }
 
 #player-hand {
@@ -122,16 +121,20 @@ button:hover {
   background: #666;
 }
 
-/* ==== Modal styling (kept), with subtle usability tweaks ==== */
+/* Modal styling */
 #modal {
   position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   display: none;
-  z-index: 999999; /* ensure prompts are always above cards */
+  z-index: 999999; /* very high so it appears above cards */
 }
 
-#modal.open { display: block; }
+#modal.open {
+  display: block;
+}
 
 .modal-backdrop {
   position: absolute;
@@ -148,10 +151,6 @@ button:hover {
   max-width: 500px;
   border-radius: 8px;
   z-index: 1000000;
-  /* NEW: make long prompts scroll nicely on mobile, but keep your look */
-  max-height: 86vh;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .modal-title {
@@ -159,14 +158,22 @@ button:hover {
   margin-bottom: 10px;
 }
 
-.modal-body { margin-bottom: 10px; }
+.modal-body {
+  margin-bottom: 10px;
+}
 
-.modal-actions { text-align: right; }
+.modal-actions {
+  text-align: right;
+}
 
-.modal-actions button { margin-left: 8px; }
+.modal-actions button {
+  margin-left: 8px;
+}
 
 /* Prompt-specific */
-.wild-picker button { margin: 4px; }
+.wild-picker button {
+  margin: 4px;
+}
 
 .card.mini {
   width: 50px;
@@ -180,11 +187,18 @@ button:hover {
   object-fit: contain;
 }
 
-.card.picked { outline: 3px solid #ffd700; }
+.card.picked {
+  outline: 3px solid #ffd700;
+}
 
-.handsec { margin-bottom: 10px; }
+.handsec {
+  margin-bottom: 10px;
+}
 
-.muted { font-size: 0.9em; color: #ccc; }
+.muted {
+  font-size: 0.9em;
+  color: #ccc;
+}
 
 .target-list button {
   display: block;
@@ -203,40 +217,12 @@ button:hover {
     width: 90%;
     margin: 20px auto;
   }
-  .card { width: 60px; height: 90px; }
-  .card.mini { width: 40px; height: 60px; }
-}
-
-/* ==== Minimal, tasteful visual hints (NEW, subtle) ==== */
-
-/* When you must draw, give the pile a gentle pulse without changing your theme */
-#draw-pile.pulse {
-  animation: dpulse 1.2s ease-in-out infinite;
-}
-@keyframes dpulse {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.04); }
-  100% { transform: scale(1); }
-}
-
-/* Slight outline for playable (keeps your hover scale); only applied when JS adds .glow */
-.card.glow {
-  box-shadow: 0 0 0 2px rgba(255,215,0,0.25);
-}
-
-/* Small banner to explain stacking choices (appears only when needed) */
-#penalty-banner {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 16px;
-  background: rgba(255, 215, 0, 0.15);
-  color: #ffd700;
-  border: 1px solid rgba(255,215,0,0.4);
-  padding: 8px 12px;
-  border-radius: 8px;
-  z-index: 1000001;
-  backdrop-filter: blur(2px);
-  display: none; /* JS toggles this on */
-  font-size: 0.95em;
+  .card {
+    width: 60px;
+    height: 90px;
+  }
+  .card.mini {
+    width: 40px;
+    height: 60px;
+  }
 }

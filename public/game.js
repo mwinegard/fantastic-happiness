@@ -1,6 +1,6 @@
 // Client with specialty flows, stacking UI affordances, HAPPY emoji moderation,
 // Look/Shopping/Rainbow prompts, Relax interrupt, improved timer label,
-// penalty-target gating (only stack/RELAX allowed), and visual hints (glow/pulse/banner).
+// and penalty-target gating (only stack/RELAX allowed).
 (function boot(){
   function ensureClientId(){
     try{
@@ -42,15 +42,6 @@
     const turnIndicator = document.getElementById("turn-indicator");
     const dirLabel = document.getElementById("dir-label");
     const colorLabel = document.getElementById("color-label");
-
-    // Visual hint banner (insert if missing)
-    let penaltyBanner = document.getElementById("penalty-banner");
-    if (!penaltyBanner) {
-      penaltyBanner = document.createElement("div");
-      penaltyBanner.id = "penalty-banner";
-      penaltyBanner.style.display = "none";
-      document.body.appendChild(penaltyBanner);
-    }
 
     // Modal infra
     let modalDiv;
@@ -120,13 +111,12 @@
       const img = document.createElement("img");
       img.src = "assets/cards/back.png"; img.alt = "Draw Pile";
       drawPile.appendChild(img);
-      drawPile.classList.remove("playable","pulse");
-      drawPile.onclick = null;
       if (isMyTurn && !me.spectator) {
         drawPile.classList.add("playable");
-        // Pulse when I'm under a penalty (hint you can click to draw full)
-        if (penalty && penalty.target === me.id) drawPile.classList.add("pulse");
         drawPile.onclick = () => socket.emit("drawCard");
+      } else {
+        drawPile.classList.remove("playable");
+        drawPile.onclick = null;
       }
     }
 
@@ -162,7 +152,7 @@
         if (!isMyTurn && penalty && c.type==="wild_relax") clickable = true;
 
         if (clickable) {
-          d.classList.add("playable","glow");
+          d.classList.add("playable");
           if (!isMyTurn && penalty && c.type==="wild_relax") {
             d.addEventListener("click", ()=>{
               openColorPicker((chosen)=> socket.emit("playRelax", { index:i, color: chosen }));
@@ -189,14 +179,6 @@
       const active = playersState.find(p => p.id === current);
       const who = isMyTurn ? "Your" : (active ? `${active.name}'s` : "Player");
       turnIndicator.textContent = `${who} turn ends in ${secs}s`;
-
-      // Penalty banner
-      if (penalty && penalty.target === me.id && isMyTurn) {
-        penaltyBanner.innerHTML = `⚠️ ${playersState.find(p=>p.id===me.id)?.name || "You"} must <b>stack a ${penalty.type==="draw2"?"+2":"+4"}</b>, play <b>RELAX</b>, or click the draw pile to take <b>+${penalty.total}</b>.`;
-        penaltyBanner.style.display = "block";
-      } else {
-        penaltyBanner.style.display = "none";
-      }
     }
     function renderPiles(){
       renderTopCard(top);
@@ -285,12 +267,10 @@
       if (kind==="lookOrder"){
         const body = document.createElement("div"); body.className="look4";
         const picks = [];
-        const cards = data.top4 || [];
-        const info = document.createElement("div"); info.className="muted"; info.textContent= cards.length
-          ? `Click in the order you want them drawn (1st → ${cards.length}th)`
-          : `No cards to reorder.`;
+        const top4 = data.top4 || [];
+        const info = document.createElement("div"); info.className="muted"; info.textContent="Click in the order you want them drawn (1st → 4th)";
         body.appendChild(info);
-        cards.forEach((c,i)=>{
+        top4.forEach((c,i)=>{
           const d=document.createElement("div"); d.className="card mini";
           const img=document.createElement("img"); img.src=`assets/cards/${c.img}`;
           d.appendChild(img);
@@ -298,12 +278,12 @@
             if (picks.includes(i)) return;
             picks.push(i);
             d.classList.add("picked");
-            if (picks.length===cards.length){ socket.emit("promptChoice", { kind, order: picks }); closeModal(); }
+            if (picks.length===4){ socket.emit("promptChoice", { kind, order: picks }); closeModal(); }
           };
           body.appendChild(d);
         });
-        openModal(`Look: reorder top ${cards.length}`, body, []);
-        setTimeout(()=>{ if (document.body.contains(body)) { socket.emit("promptChoice", { kind, order: cards.map((_,i)=>i) }); closeModal(); } }, timeoutMs||15000);
+        openModal("Look: reorder top 4", body, []);
+        setTimeout(()=>{ if (document.body.contains(body)) { socket.emit("promptChoice", { kind, order:[0,1,2,3] }); closeModal(); } }, timeoutMs||15000);
       }
       if (kind==="shoppingPick"){
         const body = document.createElement("div"); body.className="shopping";
