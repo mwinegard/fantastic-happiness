@@ -1,5 +1,5 @@
 // Client with specialty flows, stacking narration via announcements, HAPPY emoji moderation,
-// Look/Shopping/Rainbow modals, and Relax interrupt play.
+// Look/Shopping/Rainbow modals, Relax interrupt, and improved timer label.
 (function boot(){
   function ensureClientId(){
     try{
@@ -23,6 +23,7 @@
     let turnEndsAt=null, countdownEndsAt=null, myHand=[], isMyTurn=false;
     let penalty=null; // { total, type, target }
     let roundFlags={ happy:false };
+    let playersState = [];
 
     // DOM
     const joinBtn = document.getElementById("join-btn");
@@ -121,7 +122,6 @@
       if (!started || !top) return false;
       if (card.type==="number") return (card.color===color || (typeof top.value!=="undefined" && card.value===top.value));
       if (card.type.startsWith("wild")) return true;
-      // actions: match color or type
       return (card.color===color || card.type===top.type);
     }
     function renderHand(){
@@ -136,7 +136,6 @@
 
         let clickable = false;
         if (isMyTurn) clickable = legal(c);
-        // OUT-OF-TURN Relax: allow if penalty exists and card is wild_relax
         if (!isMyTurn && penalty && c.type==="wild_relax") clickable = true;
 
         if (clickable) {
@@ -157,9 +156,15 @@
     }
     function msToSec(ms){ return Math.max(0, Math.ceil(ms/1000)); }
     function renderTimer(){
-      if (countdownEndsAt && !started) turnIndicator.textContent = `Game starts in ${msToSec(countdownEndsAt - Date.now())}s`;
-      else if (turnEndsAt && started)  turnIndicator.textContent = `Your turn ends in ${msToSec(turnEndsAt - Date.now())}s`;
-      else turnIndicator.textContent = "—";
+      if (countdownEndsAt && !started) {
+        turnIndicator.textContent = `Game starts in ${msToSec(countdownEndsAt - Date.now())}s`;
+        return;
+      }
+      if (!started || !turnEndsAt) { turnIndicator.textContent = "—"; return; }
+      const secs = msToSec(turnEndsAt - Date.now());
+      const active = playersState.find(p => p.id === current);
+      const who = isMyTurn ? "Your" : (active ? `${active.name}'s` : "Player");
+      turnIndicator.textContent = `${who} turn ends in ${secs}s`;
     }
     function renderPiles(){
       renderTopCard(top);
@@ -186,6 +191,7 @@
       top = s.top;
       penalty = s.penalty;
       roundFlags = s.roundFlags || { happy:false };
+      playersState = s.players || [];
       isMyTurn = (current === me.id);
 
       renderPlayers(s.players, current);
@@ -221,13 +227,12 @@
       chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
     });
 
-    socket.on("happyFlagApplied", ({ messageId })=>{
-      // Flip the latest visible happy button to 😼 (simple heuristic)
+    socket.on("happyFlagApplied", ()=>{
       const btns = chatLog.querySelectorAll(".happy-btn:not([disabled])");
       if (btns.length){ const btn = btns[btns.length-1]; btn.textContent="😼"; btn.disabled=true; btn.title="Already flagged"; }
     });
 
-    // Color picker generic (used by some wild flows if server asks)
+    // Color picker generic
     socket.on("chooseColor", ()=>{
       openColorPicker((c)=> socket.emit("colorChosen", { color:c }));
     });
