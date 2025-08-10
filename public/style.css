@@ -1,89 +1,228 @@
-:root{
-  --bg:#0b1a2b; --fg:#e9eef5; --accent:#1b5fd1; --muted:#8aa3c2;
-  --shadow:0 6px 20px rgba(0,0,0,.25);
+body {
+  font-family: sans-serif;
+  background: #222;
+  color: #eee;
+  margin: 0;
+  padding: 0;
 }
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(180deg,#0b1a2b,#0f243d);color:var(--fg)}
-a{color:#9bd0ff}
 
-.panel{max-width:560px;margin:10vh auto;padding:18px;border-radius:14px;background:rgba(255,255,255,.06);backdrop-filter: blur(8px);box-shadow:var(--shadow)}
-.panel h1{margin:0 0 12px}
-.panel .row{display:flex;gap:8px}
-.panel input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid #28425f;background:#0e2136;color:var(--fg)}
-.panel button{padding:12px 14px;border-radius:12px;border:0;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
-.note{margin-top:8px;color:#ffdf6e;font-size:12px;min-height:1em}
+#join-screen, #game-screen {
+  padding: 10px;
+}
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1a3450;background:#102540}
-.board{display:grid;grid-template-columns:280px 1fr 320px;gap:16px;padding:16px}
-.sidebar{background:#0e2136;border:1px solid #193553;border-radius:14px;padding:12px}
-.sidebar h3,.chat h3{margin:6px 0 8px}
-#player-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-#player-list li{background:#102a46;border:1px solid #173a5c;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center}
-#player-list li.me{outline:2px solid #27b3ff}
-#player-list .turn{background:#13375d}
-.info{margin-top:10px;color:var(--muted);font-size:14px}
-.timer-display{font-variant-numeric:tabular-nums;background:#0b1f35;border:1px solid #143352;padding:8px;border-radius:10px;text-align:center}
+#player-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
 
-.table{background:#0e2136;border:1px solid #193553;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;min-height:420px}
-.piles{display:flex;gap:20px;align-items:center;justify-content:center}
-.pile{position:relative;width:140px;height:210px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+#player-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px;
+}
 
-/* Keep top card visually above the decorative stacks */
-.pile .card { position: relative; z-index: 2; }
+#player-list li.me {
+  background: rgba(0, 255, 0, 0.2);
+}
 
-/* Put faux stacks behind and lighten them */
-.stack{position:absolute;width:140px;height:210px;border-radius:12px;background:#0a1c33;opacity:.25;z-index:1}
-.discard .s1{transform:translate(-12px,-6px) rotate(-3deg)}
-.discard .s2{transform:translate(-6px,8px) rotate(2deg)}
-.discard .s3{transform:translate(10px,-10px) rotate(3deg)}
-.draw .s1{transform:translate(-10px,6px) rotate(2deg)}
-.draw .s2{transform:translate(8px,-6px) rotate(-2deg)}
-.draw .s3{transform:translate(14px,10px) rotate(1deg)}
-.clickable{cursor:pointer}
+#player-list li.turn {
+  font-weight: bold;
+  color: #ffd700;
+}
 
-.pile img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
+#discard-top, #draw-pile {
+  width: 100px;
+  height: 150px;
+  display: inline-block;
+  margin: 4px;
+}
 
-/* Make the visible discard card pop a bit more */
-#discard-top.card img { filter: brightness(1.08) contrast(1.04); }
+#discard-top img, #draw-pile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: none; /* ensure discard card is visible */
+}
 
-.card{width:100px;height:150px;border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;overflow:hidden;background:#061426}
-.card.mini{width:72px;height:108px;margin:6px}
-.card.back{background:#0b1a2b; border:2px solid #203b61}
-.card img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
-.card.playable img{cursor:pointer;transform:scale(1);transition:transform .15s ease-in-out}
-.card.playable img:hover{transform:scale(1.05)}
-.card.unplayable img{opacity:.55}
-.card.mini.picked{outline:3px solid #fff5; transform:translateY(-3px)}
+#player-hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
 
-.hand{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.card {
+  width: 80px;
+  height: 120px;
+  position: relative;
+  transition: transform 0.2s;
+}
 
-.wild-picker{display:flex;gap:8px;justify-content:center;margin-top:10px}
-.wild-picker button{padding:10px 12px;border-radius:10px;border:0;background:#14345f;color:#fff;cursor:pointer}
-.wild-picker button:hover{filter:brightness(1.1)}
+.card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
-.chat{background:#0e2136;border:1px solid #193553;border-radius:14px;padding:12px;display:flex;flex-direction:column}
-.chatlog{height:300px;overflow:auto;background:#091a2e;border:1px solid #163350;border-radius:10px;padding:8px}
-.chatline{display:flex;align-items:center;gap:8px;padding:2px 0}
-.happy-btn{border:none;background:transparent;font-size:18px;cursor:pointer;line-height:1}
-.happy-btn:disabled{opacity:.7;cursor:default}
-.chatform{display:flex;gap:8px;margin-top:8px}
-.chatform input{flex:1;padding:10px;border-radius:10px;border:1px solid #28425f;background:#0e2136;color:var(--fg)}
-.chatform button{padding:10px 12px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+.card.playable:hover {
+  transform: scale(1.1);
+  cursor: pointer;
+}
 
-#modal{position:fixed;inset:0;display:none}
-#modal.open{display:block}
-.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5)}
-.modal-card{position:relative;max-width:660px;margin:10vh auto;background:#0f2036;border:1px solid #193553;border-radius:12px;box-shadow:var(--shadow);padding:16px}
-.modal-title{font-weight:700;margin-bottom:8px}
-.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
-.modal-body{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.handsec{border:1px dashed #234;padding:8px;border-radius:8px}
-.muted{color:#9fb3cf;font-size:13px}
+.card.unplayable {
+  opacity: 0.5;
+}
 
-/* Admin top discard preview image sizing */
-.admin-topcard img{ width:100%; height:auto; border-radius:6px; }
+#turn-indicator {
+  font-size: 1.2em;
+  margin: 10px 0;
+}
 
-@media (max-width: 980px){
-  .board{grid-template-columns:1fr;gap:12px}
-  .chat{order:3}.sidebar{order:2}.table{order:1}
+#wild-buttons button {
+  margin: 4px;
+}
+
+#chat-log {
+  height: 150px;
+  overflow-y: auto;
+  border: 1px solid #555;
+  background: #111;
+  padding: 4px;
+}
+
+.chatline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.happy-btn {
+  margin-left: 8px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-size: 1.2em;
+}
+
+.happy-btn:hover {
+  transform: scale(1.2);
+}
+
+button {
+  background: #444;
+  color: #fff;
+  border: none;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #666;
+}
+
+/* Modal styling */
+#modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  z-index: 999999; /* very high so it appears above cards */
+}
+
+#modal.open {
+  display: block;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6);
+}
+
+.modal-card {
+  position: relative;
+  background: #333;
+  margin: 50px auto;
+  padding: 15px;
+  max-width: 500px;
+  border-radius: 8px;
+  z-index: 1000000;
+}
+
+.modal-title {
+  font-size: 1.2em;
+  margin-bottom: 10px;
+}
+
+.modal-body {
+  margin-bottom: 10px;
+}
+
+.modal-actions {
+  text-align: right;
+}
+
+.modal-actions button {
+  margin-left: 8px;
+}
+
+/* Prompt-specific */
+.wild-picker button {
+  margin: 4px;
+}
+
+.card.mini {
+  width: 50px;
+  height: 75px;
+  display: inline-block;
+}
+
+.card.mini img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.card.picked {
+  outline: 3px solid #ffd700;
+}
+
+.handsec {
+  margin-bottom: 10px;
+}
+
+.muted {
+  font-size: 0.9em;
+  color: #ccc;
+}
+
+.target-list button {
+  display: block;
+  margin: 5px 0;
+}
+
+.shopping, .rainbow, .look4 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .modal-card {
+    width: 90%;
+    margin: 20px auto;
+  }
+  .card {
+    width: 60px;
+    height: 90px;
+  }
+  .card.mini {
+    width: 40px;
+    height: 60px;
+  }
 }
