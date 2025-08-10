@@ -1,5 +1,6 @@
+/* ==== Your original look (kept intact) ==== */
 body {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: sans-serif;
   background: #222;
   color: #eee;
   margin: 0;
@@ -23,11 +24,11 @@ body {
 }
 
 #player-list li.me {
-  background: rgba(0, 255, 0, 0.18);
+  background: rgba(0, 255, 0, 0.2);
 }
 
 #player-list li.turn {
-  font-weight: 700;
+  font-weight: bold;
   color: #ffd700;
 }
 
@@ -42,13 +43,13 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: none; /* ensure discard card is visible */
+  filter: none; /* keep discard card bright/visible */
 }
 
 #player-hand {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   margin-top: 10px;
 }
 
@@ -56,7 +57,7 @@ body {
   width: 80px;
   height: 120px;
   position: relative;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition: transform 0.2s;
 }
 
 .card img {
@@ -66,7 +67,7 @@ body {
 }
 
 .card.playable:hover {
-  transform: translateY(-2px) scale(1.04);
+  transform: scale(1.1);
   cursor: pointer;
 }
 
@@ -74,23 +75,8 @@ body {
   opacity: 0.5;
 }
 
-/* Visual hint: glow for playable cards */
-.card.glow {
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 0 12px rgba(255,215,0,0.35);
-}
-
-/* Draw pile pulse when you can/should draw */
-#draw-pile.pulse {
-  animation: pulse 1s ease-in-out infinite;
-}
-@keyframes pulse {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,215,0,0.0); }
-  50% { transform: scale(1.05); box-shadow: 0 0 16px 6px rgba(255,215,0,0.2); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,215,0,0.0); }
-}
-
 #turn-indicator {
-  font-size: 1.1em;
+  font-size: 1.2em;
   margin: 10px 0;
 }
 
@@ -104,7 +90,6 @@ body {
   border: 1px solid #555;
   background: #111;
   padding: 4px;
-  -webkit-overflow-scrolling: touch;
 }
 
 .chatline {
@@ -137,21 +122,21 @@ button:hover {
   background: #666;
 }
 
-/* Modal styling (always on top, mobile-friendly) */
+/* ==== Modal styling (kept), with subtle usability tweaks ==== */
 #modal {
   position: fixed;
-  inset: 0;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   display: none;
-  z-index: 999999; /* very high so it appears above cards */
+  z-index: 999999; /* ensure prompts are always above cards */
 }
 
-#modal.open {
-  display: block;
-}
+#modal.open { display: block; }
 
 .modal-backdrop {
   position: absolute;
-  inset: 0;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   background: rgba(0,0,0,0.6);
 }
 
@@ -163,6 +148,7 @@ button:hover {
   max-width: 500px;
   border-radius: 8px;
   z-index: 1000000;
+  /* NEW: make long prompts scroll nicely on mobile, but keep your look */
   max-height: 86vh;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
@@ -173,22 +159,14 @@ button:hover {
   margin-bottom: 10px;
 }
 
-.modal-body {
-  margin-bottom: 10px;
-}
+.modal-body { margin-bottom: 10px; }
 
-.modal-actions {
-  text-align: right;
-}
+.modal-actions { text-align: right; }
 
-.modal-actions button {
-  margin-left: 8px;
-}
+.modal-actions button { margin-left: 8px; }
 
 /* Prompt-specific */
-.wild-picker button {
-  margin: 4px;
-}
+.wild-picker button { margin: 4px; }
 
 .card.mini {
   width: 50px;
@@ -202,18 +180,11 @@ button:hover {
   object-fit: contain;
 }
 
-.card.picked {
-  outline: 3px solid #ffd700;
-}
+.card.picked { outline: 3px solid #ffd700; }
 
-.handsec {
-  margin-bottom: 10px;
-}
+.handsec { margin-bottom: 10px; }
 
-.muted {
-  font-size: 0.9em;
-  color: #ccc;
-}
+.muted { font-size: 0.9em; color: #ccc; }
 
 .target-list button {
   display: block;
@@ -223,10 +194,37 @@ button:hover {
 .shopping, .rainbow, .look4 {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
-/* Penalty banner */
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .modal-card {
+    width: 90%;
+    margin: 20px auto;
+  }
+  .card { width: 60px; height: 90px; }
+  .card.mini { width: 40px; height: 60px; }
+}
+
+/* ==== Minimal, tasteful visual hints (NEW, subtle) ==== */
+
+/* When you must draw, give the pile a gentle pulse without changing your theme */
+#draw-pile.pulse {
+  animation: dpulse 1.2s ease-in-out infinite;
+}
+@keyframes dpulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+/* Slight outline for playable (keeps your hover scale); only applied when JS adds .glow */
+.card.glow {
+  box-shadow: 0 0 0 2px rgba(255,215,0,0.25);
+}
+
+/* Small banner to explain stacking choices (appears only when needed) */
 #penalty-banner {
   position: fixed;
   left: 50%;
@@ -239,20 +237,6 @@ button:hover {
   border-radius: 8px;
   z-index: 1000001;
   backdrop-filter: blur(2px);
-}
-
-/* Mobile adjustments */
-@media (max-width: 600px) {
-  .modal-card {
-    width: 90%;
-    margin: 20px auto;
-  }
-  .card {
-    width: 60px;
-    height: 90px;
-  }
-  .card.mini {
-    width: 40px;
-    height: 60px;
-  }
+  display: none; /* JS toggles this on */
+  font-size: 0.95em;
 }
