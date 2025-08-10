@@ -1,5 +1,6 @@
-// Client with specialty flows, stacking narration via announcements, HAPPY emoji moderation,
-// Look/Shopping/Rainbow modals, Relax interrupt, and improved timer label.
+// Client with specialty flows, stacking UI affordances, HAPPY emoji moderation,
+// Look/Shopping/Rainbow prompts, Relax interrupt, improved timer label,
+// and penalty-target gating (only stack/RELAX allowed).
 (function boot(){
   function ensureClientId(){
     try{
@@ -118,12 +119,24 @@
         drawPile.onclick = null;
       }
     }
+
+    // Client-side legality including penalty gating
     function legal(card){
       if (!started || !top) return false;
+
+      // If a draw penalty targets me, I can only stack same type or play RELAX.
+      if (penalty && penalty.target === me.id) {
+        const tp = penalty.type; // "draw2" | "wild_draw4"
+        const isStack = (tp === "draw2" && card.type === "draw2") || (tp === "wild_draw4" && card.type === "wild_draw4");
+        const isRelax = (card.type === "wild_relax");
+        return isStack || isRelax;
+      }
+
       if (card.type==="number") return (card.color===color || (typeof top.value!=="undefined" && card.value===top.value));
       if (card.type.startsWith("wild")) return true;
       return (card.color===color || card.type===top.type);
     }
+
     function renderHand(){
       handDiv.innerHTML="";
       if (me.spectator || !started) return;
@@ -154,6 +167,7 @@
       });
       unoBtn && (unoBtn.disabled = !(myHand.length===2 && started && !me.spectator));
     }
+
     function msToSec(ms){ return Math.max(0, Math.ceil(ms/1000)); }
     function renderTimer(){
       if (countdownEndsAt && !started) {
