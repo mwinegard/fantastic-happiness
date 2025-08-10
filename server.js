@@ -561,6 +561,10 @@ io.on("connection", (socket) => {
       game.color = "blue"; game.value = "look";
       const top4 = []; for (let i=0;i<4;i++){ if (game.deck.length) top4.push(game.deck[game.deck.length-1-i]); }
       const payload = top4.map((c, i)=>({ idx:i, img:c.img, color:c.color, type:c.type }));
+      requireChoice(me.sid, "lookOrder", { top4: payload }, 15000,
+        ()=>{}, ()=>{}
+      );
+      // handle through socket.once listener below
       io.to(me.id).emit("prompt", { kind:"lookOrder", data:{ top4: payload }, timeoutMs:15000 });
       const t = setTimeout(()=>{ announce(`👀 Look: top 4 of the draw pile were reordered.`); advanceTurn(1); emitState(); }, 15000);
       socket.once("promptChoice", ({ kind, order })=>{
