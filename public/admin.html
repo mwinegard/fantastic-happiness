@@ -29,7 +29,10 @@
 <body>
   <div class="topbar">
     <div><strong>UNO Admin Hub</strong></div>
-    <div id="admin-status" class="info">Connecting…</div>
+    <div class="info" style="display:flex; gap:8px; align-items:center;">
+      <button id="a-refresh">Refresh</button>
+      <span id="admin-status">Connecting…</span>
+    </div>
   </div>
 
   <div class="admin-grid">
@@ -59,6 +62,27 @@
     <div class="cardbox">
       <h2>Log</h2>
       <div id="log" class="list"></div>
+    </div>
+
+    <!-- Top Discard -->
+    <div class="cardbox">
+      <h2>Top Discard</h2>
+      <div id="topcard-wrap" style="display:flex;align-items:center;gap:10px;">
+        <div class="admin-topcard card" style="width:80px;height:120px;">
+          <img id="g-topcard" alt="Top card" />
+        </div>
+        <div id="g-topmeta" class="info">—</div>
+      </div>
+    </div>
+
+    <!-- Table Chat (Admin) -->
+    <div class="cardbox">
+      <h2>Table Chat (Admin)</h2>
+      <div class="list" id="admin-chat-log" style="max-height:200px;"></div>
+      <div class="row">
+        <input id="admin-chat-input" placeholder="Message as Admin…" maxlength="200" />
+        <button id="admin-chat-send">Send</button>
+      </div>
     </div>
 
     <!-- Admin Actions -->
@@ -126,7 +150,7 @@
     const el = (id)=>document.getElementById(id);
     const s = io({ transports:["polling","websocket"] });
 
-    // Buffers
+    // Buffers & helpers
     function pushLog(text){
       const box = el("log"); if (!box) return;
       const div = document.createElement("div");
@@ -135,13 +159,22 @@
       div.onclick = ()=>navigator.clipboard.writeText(text);
       box.appendChild(div); box.scrollTop = box.scrollHeight;
     }
+    function pushAdminChat(line){
+      const box = el("admin-chat-log"); if (!box) return;
+      const div = document.createElement("div");
+      div.textContent = line;
+      box.appendChild(div); box.scrollTop = box.scrollHeight;
+    }
 
     // State rendering
     s.on("connect", ()=> el("admin-status").textContent = "Connected");
     s.on("disconnect", ()=> el("admin-status").textContent = "Disconnected");
 
     s.on("announce", (t)=> pushLog(t));
-    s.on("chat", (m)=> pushLog(`${m.fromName}: ${m.msg}`));
+    s.on("chat", (m)=> {
+      pushLog(`${m.fromName}: ${m.msg}`);
+      pushAdminChat(`${m.fromName}: ${m.msg}`);
+    });
 
     function renderState(state){
       el("g-started").textContent = state.started ? "Yes" : "No";
@@ -172,12 +205,29 @@
       });
 
       el("penalty-monitor").textContent = state.penalty ? `Active: +${state.penalty.total} (${state.penalty.type}) → target ${state.penalty.target}` : "None";
+
+      // Top discard preview
+      const top = state.top;
+      const img = el("g-topcard");
+      const meta = el("g-topmeta");
+      if (img){
+        if (top && top.img){
+          img.src = `assets/cards/${top.img}`;
+          img.alt = `${top.color} ${top.type}`;
+          meta.textContent = top.type==="number" ? `${top.color} ${top.value}` : `${top.color} ${top.type}`;
+        } else {
+          img.src = "assets/cards/back.png";
+          img.alt = "No discard";
+          meta.textContent = "—";
+        }
+      }
     }
 
     s.on("state", renderState);
 
     // ACTION hooks
     function cmd(type, data){ s.emit("admin:command", { type, ...(data||{}) }); }
+    el("a-refresh").onclick = ()=> s.emit("admin:refresh");
 
     el("a-start").onclick = ()=> cmd("start");
     el("a-end").onclick = ()=> cmd("endRound");
@@ -207,6 +257,16 @@
     el("a-force-relax").onclick = ()=> {
       cmd("forceRelax");
     };
+
+    // Admin chat send
+    el("admin-chat-send").onclick = ()=>{
+      const inp = el("admin-chat-input");
+      const msg = (inp.value || "").trim();
+      if (!msg) return;
+      s.emit("admin:chat", { msg });
+      inp.value = "";
+    };
+    el("admin-chat-input").addEventListener("keydown", (e)=>{ if (e.key==="Enter") el("admin-chat-send").click(); });
   </script>
 </body>
 </html>
