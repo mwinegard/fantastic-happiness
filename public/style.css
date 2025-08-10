@@ -1,5 +1,5 @@
 body {
-  font-family: sans-serif;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   background: #222;
   color: #eee;
   margin: 0;
@@ -23,11 +23,11 @@ body {
 }
 
 #player-list li.me {
-  background: rgba(0, 255, 0, 0.2);
+  background: rgba(0, 255, 0, 0.18);
 }
 
 #player-list li.turn {
-  font-weight: bold;
+  font-weight: 700;
   color: #ffd700;
 }
 
@@ -48,7 +48,7 @@ body {
 #player-hand {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   margin-top: 10px;
 }
 
@@ -56,7 +56,7 @@ body {
   width: 80px;
   height: 120px;
   position: relative;
-  transition: transform 0.2s;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .card img {
@@ -66,7 +66,7 @@ body {
 }
 
 .card.playable:hover {
-  transform: scale(1.1);
+  transform: translateY(-2px) scale(1.04);
   cursor: pointer;
 }
 
@@ -74,8 +74,23 @@ body {
   opacity: 0.5;
 }
 
+/* Visual hint: glow for playable cards */
+.card.glow {
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 0 12px rgba(255,215,0,0.35);
+}
+
+/* Draw pile pulse when you can/should draw */
+#draw-pile.pulse {
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,215,0,0.0); }
+  50% { transform: scale(1.05); box-shadow: 0 0 16px 6px rgba(255,215,0,0.2); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,215,0,0.0); }
+}
+
 #turn-indicator {
-  font-size: 1.2em;
+  font-size: 1.1em;
   margin: 10px 0;
 }
 
@@ -89,6 +104,7 @@ body {
   border: 1px solid #555;
   background: #111;
   padding: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chatline {
@@ -121,13 +137,10 @@ button:hover {
   background: #666;
 }
 
-/* Modal styling */
+/* Modal styling (always on top, mobile-friendly) */
 #modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   display: none;
   z-index: 999999; /* very high so it appears above cards */
 }
@@ -138,8 +151,7 @@ button:hover {
 
 .modal-backdrop {
   position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
+  inset: 0;
   background: rgba(0,0,0,0.6);
 }
 
@@ -151,6 +163,9 @@ button:hover {
   max-width: 500px;
   border-radius: 8px;
   z-index: 1000000;
+  max-height: 86vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-title {
@@ -208,7 +223,22 @@ button:hover {
 .shopping, .rainbow, .look4 {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
+}
+
+/* Penalty banner */
+#penalty-banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+  border: 1px solid rgba(255,215,0,0.4);
+  padding: 8px 12px;
+  border-radius: 8px;
+  z-index: 1000001;
+  backdrop-filter: blur(2px);
 }
 
 /* Mobile adjustments */
