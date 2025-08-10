@@ -27,7 +27,12 @@ a{color:#9bd0ff}
 .table{background:#0e2136;border:1px solid #193553;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;min-height:420px}
 .piles{display:flex;gap:20px;align-items:center;justify-content:center}
 .pile{position:relative;width:140px;height:210px;border-radius:12px;display:flex;align-items:center;justify-content:center}
-.stack{position:absolute;width:140px;height:210px;border-radius:12px;background:#051426;box-shadow:var(--shadow);opacity:.5}
+
+/* Keep top card visually above the decorative stacks */
+.pile .card { position: relative; z-index: 2; }
+
+/* Put faux stacks behind and lighten them */
+.stack{position:absolute;width:140px;height:210px;border-radius:12px;background:#0a1c33;opacity:.25;z-index:1}
 .discard .s1{transform:translate(-12px,-6px) rotate(-3deg)}
 .discard .s2{transform:translate(-6px,8px) rotate(2deg)}
 .discard .s3{transform:translate(10px,-10px) rotate(3deg)}
@@ -37,6 +42,9 @@ a{color:#9bd0ff}
 .clickable{cursor:pointer}
 
 .pile img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
+
+/* Make the visible discard card pop a bit more */
+#discard-top.card img { filter: brightness(1.08) contrast(1.04); }
 
 .card{width:100px;height:150px;border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;overflow:hidden;background:#061426}
 .card.mini{width:72px;height:108px;margin:6px}
@@ -71,6 +79,9 @@ a{color:#9bd0ff}
 .modal-body{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .handsec{border:1px dashed #234;padding:8px;border-radius:8px}
 .muted{color:#9fb3cf;font-size:13px}
+
+/* Admin top discard preview image sizing */
+.admin-topcard img{ width:100%; height:auto; border-radius:6px; }
 
 @media (max-width: 980px){
   .board{grid-template-columns:1fr;gap:12px}
