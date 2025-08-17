@@ -335,8 +335,20 @@ let chatBuffer = []; // last 200 messages
 
 /* ---------- Core play announcer ---------- */
 function faceString(card){
-  if (card.type==="number") return `${card.color} ${card.value}`;
-  return card.type.startsWith("wild") ? card.type : `${card.color} ${card.type}`;
+  const color = card.color;
+  const t = card.type;
+  if (t === "number") return `${color} ${card.value}`;
+  if (t === "draw2") return `${color} draw two`;
+  if (t === "skip") return `${color} skip`;
+  if (t === "reverse") return `${color} reverse`;
+  if (t === "wild") return `wild`;
+  if (t === "wild_draw4") return `wild draw four`;
+  if (t === "wild_relax") return `wild relax`;
+  if (t === "wild_boss") return `wild boss`;
+  if (t === "wild_packyourbags") return `wild pack your bags`;
+  if (t === "wild_rainbow") return `wild rainbow`;
+  // specialties keep their color prefix for clarity
+  return `${color} ${t}`;
 }
 function sidToName(sid){ return players.find(p=>p.sid===sid)?.name || "Player"; }
 function previousActiveSid(fromSid){
@@ -351,36 +363,16 @@ function nextActiveSid(fromSid){
   if (idx<0) return null;
   return order[(idx + game.dir + order.length) % order.length];
 }
-
-/* Move a random card between hands (no-op if source empty) */
-function giveRandomCard(fromSid, toSid){
-  if (!fromSid || !toSid || fromSid===toSid) return;
-  const from = game.hands[fromSid] || [];
-  if (!from.length) return;
-  const i = Math.floor(Math.random()*from.length);
-  const [card] = from.splice(i,1);
-  if (!game.hands[toSid]) game.hands[toSid] = [];
-  game.hands[toSid].push(card);
-}
-
-/* Prompt helper with timeout to a single player */
-function requireChoice(sid, kind, data, timeoutMs, onOk, onTimeout){
-  const sock = players.find(p=>p.sid===sid)?.id;
-  if (!sock) { onTimeout && onTimeout(); return; }
-  io.to(sock).emit("prompt", { kind, data, timeoutMs });
-  let used = false;
-  const handler = (payload={})=>{
-    if (used) return;
-    used = true;
-    onOk && onOk(payload);
-  };
-  const timer = setTimeout(()=>{
-    if (used) return;
-    used = true;
-    onTimeout && onTimeout();
-  }, Math.max(500, timeoutMs||10000));
-  // caller should attach a one-time socket.once("promptChoice", ...) specific to this player/kind
-  return { handler, timer, sockId: sock };
+function rotateHands(direction){
+  const order = activeOrder();
+  if (order.length <= 1) return;
+  let hands = order.map(sid=> game.hands[sid] || []);
+  if (direction === -1) { // left
+    hands.push(hands.shift());
+  } else { // right
+    hands.unshift(hands.pop());
+  }
+  order.forEach((sid,i)=> game.hands[sid] = hands[i]);
 }
 
 /* ---------- Legality ---------- */
@@ -427,6 +419,31 @@ function cancelPenaltyByRelax(actorSid, chosenColor){
   advanceTurn(1);
   game.relaxLock = false;
   return true;
+}
+
+/* ---------- Prompt helper with cleanup ---------- */
+function requireChoice(sid, kind, data, timeoutMs, onOk, onTimeout){
+  const sock = players.find(p=>p.sid===sid)?.id;
+  if (!sock) { onTimeout && onTimeout(); return; }
+  io.to(sock).emit("prompt", { kind, data, timeoutMs });
+
+  let used = false;
+  let timer;
+
+  const handler = (payload={})=>{
+    if (used) return;
+    used = true;
+    clearTimeout(timer);
+    onOk && onOk(payload);
+  };
+
+  timer = setTimeout(()=>{
+    if (used) return;
+    used = true;
+    onTimeout && onTimeout();
+  }, Math.max(500, timeoutMs||10000));
+
+  return { handler, timer, sockId: sock };
 }
 
 /* ---------- SOCKETS ---------- */
