@@ -31,7 +31,7 @@ app.get("/scores", (_req, res) => res.json(scores));
 /* ---------- Game state ---------- */
 const MAX_PLAYERS = 10;
 const TURN_SECONDS = 60;
-const COUNTDOWN_SECONDS = 20;
+const COUNTDOWN_SECONDS = 60;
 
 let players = []; // {id,sid,clientId,name,spectator,misses,lastChatAt}
 let game = null;  // main game object
@@ -40,7 +40,7 @@ let turnTicker = null;
 
 /* ---------- Helpers ---------- */
 const COLORS = ["red","yellow","green","blue"];
-const ANIMALS = ["Aardvark","Badger","Cougar","Dolphin","Eagle","Fox","Giraffe","Hedgehog","Iguana","Jaguar","Koala","Lemur","Manatee","Narwhal","Otter","Panda","Quokka","Raccoon","Sloth","Turtle","Urchin","Vulture","Walrus","Yak","Zebra"];
+const ANIMALS = ["Aardvark","Badger","Cougar","Dolphin","Eagle","Fox","Gopher","Heron","Ibis","Jay","Koala","Lynx","Moose","Newt","Otter","Puma","Quail","Raven","Seal","Tiger","Urchin","Viper","Wolf","Xerus","Yak","Zebra"];
 const NUM = ["One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten"];
 
 function announce(t){ io.emit("announce", t); }
@@ -91,7 +91,7 @@ function deckNew(){
   d.push({color:"blue",  type:"look",              img:"blue_look.png"});
   d.push({color:"green", type:"happy",             img:"green_happy.png"});
   d.push({color:"green", type:"recycle",           img:"green_recycle.png"});
-  d.push({color:"yellow",type:"pinky",             img:"yellow_pinky_promise.png"});
+  d.push({color:"yellow",type:"pinky",             img:"yellow_pinkypromise.png"}); // filename fixed
   d.push({color:"yellow",type:"shopping",          img:"yellow_shopping.png"});
   d.push({color:"wild",  type:"wild_boss",         img:"wild_boss.png"});
   d.push({color:"wild",  type:"wild_packyourbags", img:"wild_packyourbags.png"});
@@ -122,14 +122,36 @@ function emptyGame() {
 }
 
 /* ---------- Drawing / checks ---------- */
+function restockDeckIfNeeded(nNeeded=1){
+  if (!game) return;
+  // If draw pile is running low (<=10) or not enough to satisfy upcoming draw, restock from discard (except top)
+  const need = Math.max(nNeeded, 0);
+  if ((game.deck?.length || 0) <= 10 || (game.deck?.length || 0) < need) {
+    if ((game.discard?.length || 0) > 1) {
+      const top = game.discard.pop();
+      const rest = game.discard.splice(0);
+      shuffle(rest);
+      // place rest at the BOTTOM of the draw pile
+      if (!game.deck) game.deck = [];
+      game.deck = rest.concat(game.deck);
+      game.discard = [top];
+    }
+  }
+}
+
 function drawOne(sid){
   if (!game) return null;
+  restockDeckIfNeeded(1);
   if (game.deck.length === 0) {
-    const top = game.discard.pop();
-    game.deck = shuffle(game.discard);
-    game.discard = [top];
+    // fallback: last resort rebuild
+    if (game.discard.length > 1) {
+      const top = game.discard.pop();
+      game.deck = shuffle(game.discard);
+      game.discard = [top];
+    }
   }
   const card = game.deck.pop();
+  if (!card) return null;
   if (!card.img) card.img = cardImageName(card);
   if (!game.hands[sid]) game.hands[sid] = [];
   game.hands[sid].push(card);
@@ -149,17 +171,40 @@ function settleWinIf(anySid){
   const name = players.find(p=>p.sid===anySid)?.name || "Player";
   announce(`🏆 ${name} wins the round!`);
   scores[name] = (scores[name]||0)+1; saveScores();
-  game = null; emitState();
+
+  // Prepare next game and countdown
+  game = emptyGame();
+  game.started = false;
+  let endsAt = Date.now() + 60000;
+  game.countdownEndsAt = endsAt;
+  announce("⏳ Next round in 60s… promoting spectators if space is available.");
+
+  // Promote spectators to players until we reach MAX_PLAYERS
+  const actives = players.filter(p=>!p.spectator);
+  const specs = players.filter(p=>p.spectator);
+  const available = Math.max(0, MAX_PLAYERS - actives.length);
+  for (let i=0;i<Math.min(available, specs.length); i++){
+    specs[i].spectator = false;
+    announce(`🎟️ ${specs[i].name} moved to players for next round.`);
+  }
+  emitState();
+
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(()=>{
+    const enough = players.filter(p=>!p.spectator).length >= 2;
+    if (Date.now() >= endsAt) {
+      if (enough) { clearInterval(countdownTimer); countdownTimer=null; initGame(); }
+      else {
+        announce("⏳ Waiting for at least 2 players to start the next round…");
+        endsAt = Date.now() + 60000; // extend by 60s chunks until enough players
+        game.countdownEndsAt = endsAt;
+        emitState();
+      }
+    }
+  }, 300);
 }
 
-function checkAndSettleWin(actorSid){
-  const w = winnerIfAny();
-  if (w) { settleWinIf(w); return true; }
-  if ((game.hands[actorSid]||[]).length === 0) { settleWinIf(actorSid); return true; }
-  return false;
-}
-
-/* ---------- State emission ---------- */
+/* ---------- Build state snapshot for clients ---------- */
 function buildState(){
   return {
     started: !!game?.started,
@@ -171,20 +216,19 @@ function buildState(){
     top: game?.discard?.[game.discard.length-1] || null,
     penalty: game?.pendingPenalty ? { total: game.pendingPenalty.total, type: game.pendingPenalty.type, target: game.pendingPenalty.targetSid } : null,
     roundFlags: game?.roundFlags || { happy:false },
-    players: players.map(p=>({ id:p.sid, name:p.name, spectator:!!p.spectator, handCount: game?.hands?.[p.sid]?.length ?? 0 }))
+    players: players.map(p=>({ id:p.sid, name:p.name, spectator:!!p.spectator, handCount: game?.hands?.[p.sid]?.length ?? 0 })),
   };
 }
 function emitState(){
   io.emit("state", buildState());
   if (game?.hands) {
     for (const p of players) {
-      const hand = game.hands[p.sid] || [];
-      if (p.id) io.to(p.id).emit("handSnapshot", hand);
+      if (p.sid && game.hands[p.sid]) io.to(p.id).emit("handSnapshot", game.hands[p.sid]);
     }
   }
 }
 
-/* ---------- Game lifecycle ---------- */
+/* ---------- Countdown -> Init ---------- */
 function startCountdown(){
   if (game?.started || countdownTimer) return;
   if (players.filter(p=>!p.spectator).length < 2) return;
@@ -195,7 +239,7 @@ function startCountdown(){
   emitState();
   countdownTimer = setInterval(()=>{
     const enough = players.filter(p=>!p.spectator).length >= 2;
-    if (!enough) { clearInterval(countdownTimer); countdownTimer=null; game=null; announce("❌ Countdown canceled—need at least 2 players."); emitState(); return; }
+    if (!enough) { clearInterval(countdownTimer); countdownTimer=null; announce("❌ Countdown canceled—need at least 2 players."); emitState(); return; }
     if (Date.now() >= endsAt) { clearInterval(countdownTimer); countdownTimer=null; initGame(); }
   }, 300);
 }
@@ -235,12 +279,14 @@ function endGameIfNeeded(){
 
 function advanceTurn(skips=1){
   const order = activeOrder();
-  if (order.length === 0) { endGameIfNeeded(); return; }
-  let idx = game.turnIdx;
-  for (let i=0;i<skips;i++) idx = nextIdx(idx, game.dir, order);
-  game.turnIdx = idx;
+  if (!order.length) { endGameIfNeeded(); return; }
+  let idx = order.indexOf(game.current);
+  if (idx<0) idx = 0;
+  for (let s=0; s<skips; s++){
+    idx = nextIdx(idx, game.dir, order);
+  }
   game.current = order[idx];
-  game.turnEndsAt = Date.now() + TURN_SECONDS*1000;
+  game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
 }
 
 function onTurnTick(){
@@ -258,6 +304,7 @@ function onTurnTick(){
     // If penalty pending and target timed out: settle penalty
     if (game.pendingPenalty && game.pendingPenalty.targetSid === curSid) {
       const total = game.pendingPenalty.total;
+      restockDeckIfNeeded(total);
       for (let i=0;i<total;i++) drawOne(curSid);
       announce(`${p.name} drew ${total} (stack ended).`);
       game.pendingPenalty = null;
@@ -272,52 +319,6 @@ function onTurnTick(){
   }
   advanceTurn(1);
   emitState();
-}
-
-/* ---------- Legality ---------- */
-function isWild(type){ return type==="wild" || type==="wild_draw4" || type.startsWith("wild_"); }
-function cardMatchesTop(card, color, value) {
-  if (isWild(card.type)) return true;
-  if (card.type === "number") return card.color === color || card.value === value;
-  // any action type can match action type (including specialties)
-  return card.color === color || card.type === value;
-}
-
-/* ---------- Specialty helpers ---------- */
-function sidToName(sid){ return players.find(p=>p.sid===sid)?.name || "Player"; }
-function previousActiveSid(fromSid){
-  const order = activeOrder();
-  const idx = order.indexOf(fromSid);
-  if (idx<0) return null;
-  return order[(idx - game.dir + order.length) % order.length];
-}
-function nextActiveSid(fromSid){
-  const order = activeOrder();
-  const idx = order.indexOf(fromSid);
-  if (idx<0) return null;
-  return order[(idx + game.dir + order.length) % order.length];
-}
-function rotateHands(direction){
-  const order = activeOrder();
-  if (order.length<=1) return;
-  const hands = order.map(sid=>game.hands[sid]||[]);
-  if (direction===-1) {
-    const first = hands.shift();
-    hands.push(first);
-  } else {
-    const last = hands.pop();
-    hands.unshift(last);
-  }
-  order.forEach((sid,i)=>{ game.hands[sid] = hands[i]; });
-}
-function giveRandomCard(fromSid, toSid){
-  const h = game.hands[fromSid]||[];
-  if (!h.length) return null;
-  const idx = Math.floor(Math.random()*h.length);
-  const [card] = h.splice(idx,1);
-  if (!game.hands[toSid]) game.hands[toSid]=[];
-  game.hands[toSid].push(card);
-  return card;
 }
 
 /* ---------- Chat buffer for HAPPY ---------- */
@@ -341,10 +342,9 @@ function beginPenalty(fromSid, type){
   const add = (type==="draw2") ? 2 : 4;
   const fromName = sidToName(fromSid);
   const nextName = sidToName(nextSid);
-
   if (!game.pendingPenalty) {
     game.pendingPenalty = { total:add, type: (type==="draw2"?"draw2":"wild_draw4"), targetSid: nextSid, lastFromSid: fromSid };
-    announce(`${fromName} promoted a Draw card to stack — ${nextName} can draw +${game.pendingPenalty.total} or stack.`);
+    announce(`${fromName} started a +${add} stack → ${nextName}. ${nextName} can draw +${add} or stack.`);
   } else {
     if (game.pendingPenalty.type === (type==="draw2"?"draw2":"wild_draw4")) {
       game.pendingPenalty.total += add;
@@ -354,45 +354,55 @@ function beginPenalty(fromSid, type){
       announce(`${fromName} added +${add} — ${targetName} can draw +${total} or stack.`);
     }
   }
-  // advance turn to target (they must stack or draw on their turn)
-  advanceTurn(1);
 }
 
-function cancelPenaltyByRelax(casterSid, chosenColor){
+function cancelPenaltyByRelax(actorSid, chosenColor){
   if (!game.pendingPenalty || game.relaxLock) return false;
+  // lock relax (only once per stack) and clear penalty; advance as if draw resolved
   game.relaxLock = true;
-  const lastType = game.pendingPenalty.type; // draw2 or wild_draw4
-  // Set color per Relax and clear penalty; advance as if draw resolved
+  const lastType = game.pendingPenalty.type; // keep last type as table "value"
+  game.pendingPenalty = null;
   game.color = chosenColor;
   game.value = lastType;
   announce(`🌴 Relax: draw penalty canceled. Color → ${chosenColor.toUpperCase()}.`);
-  game.pendingPenalty = null;
   advanceTurn(1);
   game.relaxLock = false;
   return true;
 }
 
-/* ---------- Prompt helper (bind to the player's socket) ---------- */
-function requireChoice(targetSid, kind, data, timeoutMs, onResolve, onTimeout){
-  const p = players.find(x => x.sid === targetSid);
-  if (!p?.id) { onTimeout && onTimeout(); return; }
-  const targetSocket = io.sockets.sockets.get(p.id);
-  if (!targetSocket) { onTimeout && onTimeout(); return; }
-
-  targetSocket.emit("prompt", { kind, data, timeoutMs });
-
-  const timer = setTimeout(()=>{ cleanup(); onTimeout && onTimeout(); }, timeoutMs || 15000);
-
-  function handler(payload){
-    if (!payload || payload.kind !== kind) return;
-    cleanup();
-    onResolve && onResolve(payload);
+/* ---------- Prompt helper (bind to player only) ---------- */
+function sidToName(sid){ return players.find(p=>p.sid===sid)?.name || "Player"; }
+function previousActiveSid(fromSid){
+  const order = activeOrder();
+  const idx = order.indexOf(fromSid);
+  if (idx<0) return null;
+  return order[(idx - game.dir + order.length) % order.length];
+}
+function nextActiveSid(fromSid){
+  const order = activeOrder();
+  const idx = order.indexOf(fromSid);
+  if (idx<0) return null;
+  return order[(idx + game.dir + order.length) % order.length];
+}
+function rotateHands(direction){
+  const order = activeOrder();
+  if (order.length <= 1) return;
+  let hands = order.map(sid=> game.hands[sid] || []);
+  if (direction === -1) { // left
+    hands.push(hands.shift());
+  } else { // right
+    hands.unshift(hands.pop());
   }
-  function cleanup(){
-    clearTimeout(timer);
-    targetSocket.off("promptChoice", handler);
-  }
-  targetSocket.on("promptChoice", handler);
+  order.forEach((sid,i)=> game.hands[sid] = hands[i]);
+}
+
+/* ---------- Legality ---------- */
+function isWild(type){ return String(type||"").startsWith("wild"); }
+function cardMatchesTop(card, color, value) {
+  if (isWild(card.type)) return true;
+  if (card.type === "number") return card.color === color || card.value === value;
+  // any action type can match action type (including specialties)
+  return card.color === color || card.type === value;
 }
 
 /* ---------- SOCKETS ---------- */
@@ -425,7 +435,7 @@ io.on("connection", (socket) => {
     emitState();
   });
 
-  // CHAT (with ID for HAPPY)
+  // CHAT
   socket.on("chat", (msg) => {
     const me = players.find(p=>p.id===socket.id);
     if (!me) return;
@@ -448,6 +458,9 @@ io.on("connection", (socket) => {
     const found = chatBuffer.find(m=>m.id===messageId);
     if (!found) return;
     game._happyFlagged.add(messageId);
+    // Exclude admin/system and spectators from HAPPY flagging
+    const actor = players.find(p=>p.sid===found.fromSid);
+    if (!actor || actor.spectator || found.fromSid==="admin") return;
     drawOne(found.fromSid);
     io.emit("happyFlagApplied", { messageId });
     announce(`😊 Happy: ${found.fromName} draws 1 (message flagged).`);
@@ -469,6 +482,7 @@ io.on("connection", (socket) => {
     // If penalty is pending and it's your turn as target, drawing settles
     if (game.pendingPenalty && game.pendingPenalty.targetSid === me.sid && game.current === me.sid) {
       const total = game.pendingPenalty.total;
+      restockDeckIfNeeded(total);
       for (let i=0;i<total;i++) drawOne(me.sid);
       announce(`${me.name} drew ${total} (stack ended).`);
       game.pendingPenalty = null; game.relaxLock = false;
@@ -514,6 +528,14 @@ io.on("connection", (socket) => {
     const card = hand[index];
 
     // must be player's turn (out-of-turn relax handled separately)
+    // If a penalty is pending and it's your turn as the target, you may ONLY stack the same penalty type or draw.
+    if (game.pendingPenalty && game.pendingPenalty.targetSid === me.sid) {
+      const pType = game.pendingPenalty.type; // "draw2" or "wild_draw4"
+      if (card.type !== pType) {
+        // Not a valid stack; ignore (client should also gray out)
+        return;
+      }
+    }
     if (game.current !== me.sid) return;
     if (!card || !cardMatchesTop(card, game.color, game.value)) return;
 
@@ -534,6 +556,7 @@ io.on("connection", (socket) => {
         socket.once("colorChosen", ({ color })=>{
           const chosen = COLORS.includes(color)?color:sample(COLORS);
           game.color = chosen; game.value = "wild";
+          if (checkAndSettleWin(me.sid)) return;
           advanceTurn(1); emitState();
         });
         return;
@@ -552,13 +575,9 @@ io.on("connection", (socket) => {
         io.to(me.id).emit("chooseColor");
         socket.once("colorChosen", ({ color })=>{
           const chosen = COLORS.includes(color)?color:sample(COLORS);
-          const actives = activeOrder();
-          let few = Infinity; let cands=[];
-          for (const sid of actives){ const n=(game.hands[sid]||[]).length; if (n<few){few=n;cands=[sid];} else if (n===few){cands.push(sid);} }
-          let bossSid = cands.length===1 ? cands[0] : sample(cands);
-          if (cands.length>1) announce(`👑 Boss: tie broken — ${sidToName(bossSid)} promoted to the Boss! Color → ${chosen.toUpperCase()}.`);
-          else announce(`👑 Boss: Color → ${chosen.toUpperCase()}.`);
           game.color = chosen; game.value = "wild_boss";
+          const actives = activeOrder();
+          const bossSid = me.sid;
           for (const sid of actives) if (sid!==bossSid) giveRandomCard(sid, bossSid);
           announce(`👑 Boss: everyone gifts 1 to ${sidToName(bossSid)}.`);
           if (checkAndSettleWin(me.sid)) return;
@@ -599,19 +618,19 @@ io.on("connection", (socket) => {
           const needed = new Set(COLORS); const picks=[];
           const handArr = (game.hands[me.sid]||[]);
           for (let i=0;i<handArr.length;i++){
-            const cc = handArr[i];
-            if (needed.has(cc.color)) { picks.push(i); needed.delete(cc.color); }
-            if (needed.size===0) break;
+            const c = handArr[i];
+            if (needed.has(c.color)) { picks.push(i); needed.delete(c.color); }
+            if (picks.length===4) break;
           }
-          apply(picks);
+          applyPicks(picks);
         }
         socket.once("promptChoice", ({ kind, picks })=>{
-          clearTimeout(t);
           if (kind!=="rainbowSelects" || !Array.isArray(picks) || picks.length!==4) return resolveAuto();
-          apply(picks);
+          applyPicks(picks);
         });
-        function apply(picks){
-          const h = game.hands[me.sid]||[];
+        function applyPicks(picks){
+          clearTimeout(t);
+          const h = game.hands[me.sid] || [];
           const sorted = [...picks].sort((a,b)=>b-a);
           const removed = [];
           for (const pi of sorted){ if (pi>=0 && pi<h.length) removed.push(h.splice(pi,1)[0]); }
@@ -665,31 +684,24 @@ io.on("connection", (socket) => {
     }
     if (card.type === "moon" && card.color==="blue") {
       game.color = "blue"; game.value = "moon";
-      const others = activeOrder().filter(sid=>sid!==me.sid);
-      if (others.length) {
-        const target = sample(others);
-        drawOne(target);
-        announce(`🌙 To the Moon: the rocket lands near ${sidToName(target)} — they gain 1!`);
-      }
+      const order = activeOrder();
+      const r = Math.floor(Math.random()*order.length);
+      const victim = order[r];
+      if (victim) { drawOne(victim); announce(`🌙 Moon: random player (${sidToName(victim)}) draws 1.`); }
       if (checkAndSettleWin(me.sid)) return;
       advanceTurn(1); emitState(); return;
     }
     if (card.type === "look" && card.color==="blue") {
       game.color = "blue"; game.value = "look";
       const top4 = [];
-      for (let i=0;i<4;i++){ if (game.deck.length) top4.push(game.deck[game.deck.length-1-i]); }
-      const payload = top4.map((c, i)=>({ idx:i, img:c.img, color:c.color, type:c.type }));
-      io.to(me.id).emit("prompt", { kind:"lookOrder", data:{ top4: payload }, timeoutMs:15000 });
-      const t = setTimeout(()=>{ announce(`👀 Look: top 4 of the draw pile were reordered.`); advanceTurn(1); emitState(); }, 15000);
+      for (let i=0;i<4;i++){ restockDeckIfNeeded(1); const c=game.deck.pop(); if (c) top4.push(c); }
+      const payload = top4.map((c,i)=>({ img:c.img, idx:i }));
+      io.to(me.id).emit("prompt", { kind:"lookOrder", data:{ top4: payload }, timeoutMs: 15000 });
       socket.once("promptChoice", ({ kind, order })=>{
-        clearTimeout(t);
-        if (kind==="lookOrder" && Array.isArray(order) && order.length===4) {
-          const actual = [];
-          for (const oi of order) if (typeof oi==="number" && top4[oi]) actual.push(top4[oi]);
-          for (let i=0;i<top4.length;i++) game.deck.pop();
-          for (let i=actual.length-1;i>=0;i--) game.deck.push(actual[i]);
-        }
-        announce(`👀 Look: top 4 of the draw pile were reordered.`);
+        const ord = Array.isArray(order) && order.length===4 ? order : [0,1,2,3];
+        const arr = [top4[ord[3]], top4[ord[2]], top4[ord[1]], top4[ord[0]]].filter(Boolean);
+        game.deck.push(...arr);
+        announce(`👀 Look: top 4 reordered.`);
         if (checkAndSettleWin(me.sid)) return;
         advanceTurn(1); emitState();
       });
@@ -698,8 +710,7 @@ io.on("connection", (socket) => {
     if (card.type === "happy" && card.color==="green") {
       game.color = "green"; game.value = "happy";
       game.roundFlags.happy = true;
-      game._happyFlagged = new Set();
-      announce(`😊 Happy: Be kind! Tap 🙂 on any message to make the author draw 1 (once per message) until round ends.`);
+      announce(`🙂 HAPPY mode: flag a chat to make the author draw 1 (admin/spectators excluded).`);
       if (checkAndSettleWin(me.sid)) return;
       advanceTurn(1); emitState(); return;
     }
@@ -730,41 +741,9 @@ io.on("connection", (socket) => {
           const bCount = pool.length - aCount;
           game.hands[me.sid] = pool.splice(0,aCount);
           game.hands[targetSid] = pool.splice(0,bCount);
-          announce(`🤝 Pinky Promise: ${sidToName(me.sid)} and ${sidToName(targetSid)} reshuffled & split hands.`);
+          announce(`🤝 Pinky Promise: ${sidToName(me.sid)} split cards with ${sidToName(targetSid)}.`);
           if (checkAndSettleWin(me.sid)) return;
           advanceTurn(1); emitState();
-        },
-        ()=>{ advanceTurn(1); emitState(); }
-      );
-      return;
-    }
-    if (card.type === "shopping" && card.color==="yellow") {
-      game.color = "yellow"; game.value = "shopping";
-      const targets = activeOrder().filter(sid=>sid!==me.sid).map(sid=>({ sid, name: sidToName(sid) }));
-      requireChoice(me.sid, "targetPicker", { targets }, 15000,
-        ({ targetSid })=>{
-          if (!targetSid || !game.hands[targetSid]) { advanceTurn(1); emitState(); return; }
-          const mine = (game.hands[me.sid]||[]).map((c,i)=>({idx:i,img:c.img,color:c.color,type:c.type}));
-          const theirs = (game.hands[targetSid]||[]).map((c,i)=>({idx:i,img:c.img,color:c.color,type:c.type}));
-          requireChoice(me.sid, "shoppingPick", { mine, theirs }, 20000,
-            ({ myTwo, theirOne })=>{
-              if (!Array.isArray(myTwo) || myTwo.length!==2 || typeof theirOne!=="number") { advanceTurn(1); emitState(); return; }
-              const aHand = game.hands[me.sid]||[], bHand = game.hands[targetSid]||[];
-              const [a1Idx,a2Idx] = [...myTwo].sort((x,y)=>y-x);
-              const takeA1 = aHand[a1Idx]; const takeA2 = aHand[a2Idx];
-              const takeB  = bHand[theirOne];
-              if (!takeA1 || !takeA2 || !takeB) { advanceTurn(1); emitState(); return; }
-              const remA1 = aHand.splice(a1Idx,1)[0];
-              const remA2 = aHand.splice(a2Idx,1)[0];
-              const remB  = bHand.splice(theirOne,1)[0];
-              aHand.push(remB);
-              bHand.push(remA1, remA2);
-              announce(`🛍️ Shopping: ${sidToName(me.sid)} traded 2 for 1 with ${sidToName(targetSid)}.`);
-              if (checkAndSettleWin(me.sid)) return;
-              advanceTurn(1); emitState();
-            },
-            ()=>{ advanceTurn(1); emitState(); }
-          );
         },
         ()=>{ advanceTurn(1); emitState(); }
       );
@@ -792,12 +771,24 @@ io.on("connection", (socket) => {
       emitState(); return;
     }
 
+    // default fallback
+    advanceTurn(1); emitState();
   });
 
   // Admin utilities
-  socket.on("admin:refresh", ()=>{
-    socket.emit("state", buildState());
+  socket.on("admin:refresh", ()=> socket.emit("state", buildState()));
+  socket.on("admin:newRound", ()=>{
+    if (countdownTimer) return;
+    if (!game?.started && players.filter(p=>!p.spectator).length >= 2) startCountdown();
+    else { announce("⏳ Cannot start: round active or insufficient players."); }
   });
+  socket.on("admin:endRound", ()=>{
+    if (!game?.started) return;
+    announce("⛔ Round ended by admin.");
+    game = null; emitState();
+  });
+
+  // Admin chat (broadcast as Admin)
   socket.on("admin:chat", ({ msg })=>{
     const text = String(msg||"").trim();
     if (!text) return;
@@ -805,38 +796,9 @@ io.on("connection", (socket) => {
     io.emit("chat", payload);
   });
 
-  // DISCONNECT
-  socket.on("disconnect", () => {
-    const me = players.find(p=>p.id===socket.id);
-    if (!me) return;
-    me.id = "";
-    setTimeout(() => {
-      if (!me.id) {
-        const idx = players.indexOf(me);
-        if (idx>=0) {
-          announce(`👋 ${me.name} left.`);
-          players.splice(idx,1);
-          if (game?.hands) delete game.hands[me.sid];
-          endGameIfNeeded();
-          emitState();
-        }
-      }
-    }, 60000);
-    emitState();
-  });
-
   /* ---------- Admin Hub commands (simple, no auth) ---------- */
-  socket.on("admin:command", ({ type, ...data })=>{
-    if (!game && type!=="start") { announce("Admin: no game running."); return; }
-    switch(type){
-      case "start":
-        if (!game?.started && players.filter(p=>!p.spectator).length>=2) initGame();
-        else announce("Admin: cannot start (already running or not enough players).");
-        break;
-      case "endRound":
-        announce("⛔ Round ended by admin.");
-        game = null; emitState();
-        break;
+  socket.on("admin:cmd", (data={})=>{
+    switch (data.type) {
       case "toggleHappy":
         game.roundFlags.happy = !game.roundFlags.happy;
         announce(`Admin toggled HAPPY: ${game.roundFlags.happy?"ON":"OFF"}.`);
@@ -850,25 +812,29 @@ io.on("connection", (socket) => {
       case "kick": {
         const sid = data.sid;
         const i = players.findIndex(p=>p.sid===sid);
-        if (i>=0){
-          announce(`🚪 Admin kicked ${players[i].name}.`);
+        if (i>=0) {
+          announce(`Admin kicked ${players[i].name}.`);
           if (game?.hands) delete game.hands[players[i].sid];
           players.splice(i,1);
-          endGameIfNeeded(); emitState();
+          endGameIfNeeded();
+          emitState();
         }
         break;
       }
       case "drawOne": {
-        const sid = data.sid; if (sid) { drawOne(sid); emitState(); }
+        const sid = data.sid; if (!sid) break;
+        drawOne(sid); announce(`Admin: forced draw 1 to ${sidToName(sid)}.`);
+        emitState();
         break;
       }
       case "giveCard": {
         const sid = data.sid; const card = data.card;
-        if (sid && card) { if (!game.hands[sid]) game.hands[sid]=[]; game.hands[sid].push(card); emitState(); }
+        if (sid && card) { if (!game.hands[sid]) game.hands[sid]=[]; game.hands[sid].push(card); announce(`Admin gave a card to ${sidToName(sid)}.`); emitState(); }
         break;
       }
       case "setColor": {
-        const c = data.color; if (COLORS.includes(c)) { game.color = c; announce(`Admin set table color → ${c.toUpperCase()}.`); emitState(); }
+        const c = data.color;
+        if (COLORS.includes(c)) { game.color = c; announce(`Admin set table color → ${c.toUpperCase()}.`); emitState(); }
         break;
       }
       case "forceRelax": {
@@ -880,7 +846,7 @@ io.on("connection", (socket) => {
         break;
       }
       default:
-        announce(`Admin: unknown command '${type}'.`);
+        announce(`Admin: unknown command '${data.type}'.`);
     }
   });
 
