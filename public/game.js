@@ -35,30 +35,22 @@
     const dirLabel = document.getElementById("dir-label");
     const colorLabel = document.getElementById("color-label");
 
-    // Use the existing prompt dock (no injected styling)
+    // prompt dock
     const promptDock = document.getElementById("prompt-dock");
 
-    // Simple prompt helpers (unstyled blocks under the timer)
-    let promptNode;
-    function closePrompt(){ if (promptDock) promptDock.innerHTML=""; promptNode=null; }
+    // prompt helpers
+    function closePrompt(){ if (promptDock) promptDock.innerHTML=""; }
     function openPrompt(title, bodyNode, actions=[]){
       if (!promptDock) return;
       const wrap = document.createElement("div");
       wrap.className = "prompt";
-      const t = document.createElement("strong");
-      t.textContent = title || "";
-      const body = document.createElement("div");
-      if (bodyNode) body.appendChild(bodyNode);
+      const t = document.createElement("strong"); t.textContent = title || "";
+      const body = document.createElement("div"); if (bodyNode) body.appendChild(bodyNode);
       const acts = document.createElement("div");
       actions.forEach(a=>{ const b=document.createElement("button"); b.textContent=a.label; b.onclick=()=>a.onClick && a.onClick(); acts.appendChild(b); });
-      wrap.appendChild(t);
-      wrap.appendChild(body);
-      wrap.appendChild(acts);
-      promptDock.innerHTML="";
-      promptDock.appendChild(wrap);
-      promptNode = wrap;
+      wrap.appendChild(t); wrap.appendChild(body); wrap.appendChild(acts);
+      promptDock.innerHTML=""; promptDock.appendChild(wrap);
     }
-
     function openColorPicker(onPick){
       const body = document.createElement("div");
       const row = document.createElement("div"); row.className="wild-picker";
@@ -98,11 +90,10 @@
       drawPile.appendChild(img);
     }
 
-    // State (from server)
+    // State
     let started=false, countdownEndsAt=null, turnEndsAt=null, current=null, dir=1, color=null, top=null, penalty=null, roundFlags={happy:false};
     let playersState=[], isMyTurn=false, myHand=[];
 
-    // simple legality (server is the source of truth; this just gates UI)
     function legal(card){
       if (!started || !top) return false;
       if (card.type==="number") return (card.color===color || (typeof top.value!=="undefined" && card.value===top.value));
@@ -152,11 +143,8 @@
       const who = isMyTurn ? "Your" : (active ? `${active.name}'s` : "Player");
       turnIndicator.textContent = `${who} turn ends in ${secs}s`;
     }
-
-    // Keep the timer label live without waiting for server pushes
-    setInterval(() => {
-      try { renderTimer(); } catch {}
-    }, 250);
+    // Live tick so the label counts down smoothly
+    setInterval(() => { try { renderTimer(); } catch {} }, 250);
 
     function renderPiles(){
       renderTopCard(top);
@@ -228,7 +216,7 @@
     // Color picker generic
     socket.on("chooseColor", ()=> openColorPicker((c)=> socket.emit("colorChosen", { color:c })));
 
-    // PROMPTS (now shown inline in the prompt dock below the timer)
+    // PROMPTS (shown inline under the timer)
     socket.on("prompt", ({ kind, data, timeoutMs })=>{
       if (kind==="targetPicker"){
         const body = document.createElement("div");
@@ -335,21 +323,15 @@
     });
     chatInput?.addEventListener("keydown",(e)=>{ if (e.key==="Enter") chatSend.click(); });
 
-    // Draw pile click → draw when it's your turn, or when you're the stack target on your turn
+    // Draw pile click
     drawPile?.addEventListener("click", () => {
       if (!started) return;
-
-      // If a penalty stack is pending against you and it's your turn, drawing settles the full total
       if (penalty && penalty.target === me.id && current === me.id) {
-        socket.emit("drawCard");
-        return;
+        socket.emit("drawCard"); return;
       }
-
-      // Normal draw on your own turn
       if (current === me.id) {
         socket.emit("drawCard");
       }
-      // Otherwise ignore; server also ignores
     });
 
     unoBtn?.addEventListener("click", ()=> socket.emit("callUno"));
