@@ -15,15 +15,8 @@
   }
 
   function start(){
-    const socket = io({ autoConnect:true, transports:["polling","websocket"] });
-    window.socket = socket;
-
-    let me = { id:null, name:null, spectator:false, clientId: ensureClientId() };
-    let started=false, current=null, dir=1, color=null, top=null;
-    let turnEndsAt=null, countdownEndsAt=null, myHand=[], isMyTurn=false;
-    let penalty=null; // { total, type, target }
-    let roundFlags={ happy:false };
-    let playersState = [];
+    const socket = io();
+    const me = { clientId: ensureClientId(), id:null, name:null };
 
     // DOM
     const joinBtn = document.getElementById("join-btn");
@@ -42,37 +35,39 @@
     const dirLabel = document.getElementById("dir-label");
     const colorLabel = document.getElementById("color-label");
 
-    // Modal infra
+    // Inline prompt dock, injected just below the top timer area
+    const promptDock = (function(){
+      const gs = document.getElementById("game-screen");
+      const dock = document.createElement("div");
+      dock.id = "prompt-dock";
+      dock.style.margin = "8px 16px";
+      gs && gs.insertBefore(dock, gs.querySelector(".board"));
+      return dock;
+    })();
+
+    // Inline prompt “modal-card” (no overlay), reusing existing .modal-card styles
+    // so nothing layers over gameplay and prompts live under the timer as requested.
     let modalDiv;
     function ensureModal(){
       if (modalDiv) return modalDiv;
       modalDiv = document.createElement("div");
-      modalDiv.id = "modal";
-      modalDiv.innerHTML = `
-        <div class="modal-backdrop"></div>
-        <div class="modal-card">
-          <div class="modal-title"></div>
-          <div class="modal-body"></div>
-          <div class="modal-actions"></div>
-        </div>`;
-      document.body.appendChild(modalDiv);
-      modalDiv.addEventListener("click",(e)=>{
-        if (e.target.classList.contains("modal-backdrop")) closeModal();
-      });
+      modalDiv.className = "modal-card"; // reuse card styling
       return modalDiv;
     }
-    function closeModal(){ if (modalDiv) modalDiv.classList.remove("open"); }
+    function closeModal(){
+      if (!promptDock) return;
+      promptDock.innerHTML = "";
+    }
     function openModal(title, bodyNode, actions=[]) {
-      ensureModal();
-      modalDiv.querySelector(".modal-title").textContent = title || "";
-      const body = modalDiv.querySelector(".modal-body"); body.innerHTML = "";
-      body.appendChild(bodyNode);
-      const acts = modalDiv.querySelector(".modal-actions"); acts.innerHTML="";
-      actions.forEach(a=>{
-        const b=document.createElement("button"); b.textContent=a.label; b.onclick=()=>a.onClick && a.onClick();
-        acts.appendChild(b);
-      });
-      modalDiv.classList.add("open");
+      const card = ensureModal();
+      card.innerHTML = "";
+      const t = document.createElement("div"); t.className="modal-title"; t.textContent = title || "";
+      const body = document.createElement("div"); body.className="modal-body";
+      if (bodyNode) body.appendChild(bodyNode);
+      const acts = document.createElement("div"); acts.className="modal-actions";
+      actions.forEach(a=>{ const b=document.createElement("button"); b.textContent=a.label; b.onclick=()=>a.onClick && a.onClick(); acts.appendChild(b); });
+      card.appendChild(t); card.appendChild(body); card.appendChild(acts);
+      promptDock.innerHTML = ""; promptDock.appendChild(card);
     }
 
     function openColorPicker(onPick){
@@ -107,17 +102,20 @@
     }
     function renderDrawPile(){
       drawPile.innerHTML = "";
+      const back = document.createElement("div");
+      back.className = "card back";
       const img = document.createElement("img");
-      img.src = "assets/cards/back.png"; img.alt = "Draw Pile";
-      drawPile.appendChild(img);
-      if (isMyTurn && !me.spectator) {
-        drawPile.classList.add("playable");
-        drawPile.onclick = () => socket.emit("drawCard");
-      } else {
-        drawPile.classList.remove("playable");
-        drawPile.onclick = null;
-      }
+      img.src = "assets/cards/back.png";
+      img.alt = "Draw Pile";
+      back.appendChild(img);
+      drawPile.appendChild(back);
     }
+
+    // State (from server)
+    let started=false, countdownEndsAt=null, turnEndsAt=null, current=null, dir=1, color=null, top=null, penalty=null, roundFlags={happy:false};
+    let playersState=[], isMyTurn=false, myHand=[];
+
+    // simple legality (server is the source of truth; this just gates UI)
     function legal(card){
       if (!started || !top) return false;
       if (card.type==="number") return (card.color===color || (typeof top.value!=="undefined" && card.value===top.value));
@@ -135,7 +133,10 @@
         d.appendChild(img);
 
         let clickable = false;
-        if (isMyTurn) clickable = legal(c);
+        if (isMyTurn) {
+          if (penalty && penalty.target === me.id) { clickable = (c.type === (penalty.type)); }
+          else { clickable = legal(c); }
+        }
         if (!isMyTurn && penalty && c.type==="wild_relax") clickable = true;
 
         if (clickable) {
@@ -173,10 +174,12 @@
       colorLabel.textContent = `Color: ${color?color.toUpperCase():"—"}`;
     }
 
-    // lifecycle
+    // socket streams
+    socket.on("helloAck", ()=>{ /* no-op */ });
+
     socket.on("me", (p)=>{
       if (!p?.id) return;
-      me = { ...me, ...p };
+      me.id = p.id; me.name = p.name; me.spectator = !!p.spectator;
       if (joinScreen) joinScreen.style.display = "none";
       if (gameScreen) gameScreen.style.display = "block";
     });
@@ -216,12 +219,16 @@
       line.appendChild(txt);
 
       if (roundFlags.happy) {
-        const btn = document.createElement("button");
-        btn.className = "happy-btn";
-        btn.textContent = "🙂";
-        btn.title = "Flag this message (author draws 1)";
-        btn.onclick = ()=> socket.emit("happyFlag", { messageId: m.id });
-        line.appendChild(btn);
+        const sender = (playersState||[]).find(p=>p.id===m.fromSid);
+        const eligible = (m.fromSid!=="admin" && sender && !sender.spectator);
+        if (eligible) {
+          const btn = document.createElement("button");
+          btn.className = "happy-btn";
+          btn.textContent = "🙂";
+          btn.title = "Flag this message (author draws 1)";
+          btn.onclick = ()=> socket.emit("happyFlag", { messageId: m.id });
+          line.appendChild(btn);
+        }
       }
 
       chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
@@ -237,7 +244,7 @@
       openColorPicker((c)=> socket.emit("colorChosen", { color:c }));
     });
 
-    // PROMPTS
+    // PROMPTS (now shown inline in the prompt dock below the timer)
     socket.on("prompt", ({ kind, data, timeoutMs })=>{
       if (kind==="targetPicker"){
         const body = document.createElement("div"); body.className="target-list";
@@ -252,27 +259,26 @@
       }
       if (kind==="lookOrder"){
         const body = document.createElement("div"); body.className="look4";
-        const picks = [];
-        const top4 = data.top4 || [];
-        const info = document.createElement("div"); info.className="muted"; info.textContent="Click in the order you want them drawn (1st → 4th)";
-        body.appendChild(info);
-        top4.forEach((c,i)=>{
-          const d=document.createElement("div"); d.className="card mini";
-          const img=document.createElement("img"); img.src=`assets/cards/${c.img}`;
-          d.appendChild(img);
+        // simple reorder UX: choose the order by clicking 1..4
+        const order=[], cards=(data.top4||[]);
+        cards.forEach((c,i)=>{
+          const d = document.createElement("div"); d.className="card mini";
+          const img = document.createElement("img"); img.src = `assets/cards/${c.img}`; d.appendChild(img);
           d.onclick=()=>{
-            if (picks.includes(i)) return;
-            picks.push(i);
-            d.classList.add("picked");
-            if (picks.length===4){ socket.emit("promptChoice", { kind, order: picks }); closeModal(); }
+            if (order.includes(i)) return;
+            order.push(i); d.classList.add("picked");
           };
           body.appendChild(d);
         });
-        openModal("Look: reorder top 4", body, []);
-        setTimeout(()=>{ if (document.body.contains(body)) { socket.emit("promptChoice", { kind, order:[0,1,2,3] }); closeModal(); } }, timeoutMs||15000);
+        const confirmBtn = document.createElement("button"); confirmBtn.textContent="Confirm order";
+        confirmBtn.onclick=()=>{ if (order.length===4){ socket.emit("promptChoice", { kind, order }); closeModal(); } };
+        openModal("Look: reorder the next 4 cards (top to bottom)", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
+        setTimeout(()=>closeModal(), timeoutMs||15000);
       }
-      if (kind==="shoppingPick"){
+      if (kind==="shoppingTrade"){
         const body = document.createElement("div"); body.className="shopping";
+        const wrap = document.createElement("div"); wrap.style.display="flex"; wrap.style.gap="10px"; wrap.style.flexWrap="wrap";
+
         const mineSel = new Set(); let theirSel = null;
 
         const secMine = document.createElement("div"); secMine.className="handsec";
@@ -296,7 +302,7 @@
           const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
           d.onclick=()=>{
             if (theirSel===c.idx){ theirSel=null; d.classList.remove("picked"); }
-            else { theirSel=c.idx; [...secTheirs.querySelectorAll(".picked")].forEach(x=>x.classList.remove("picked")); d.classList.add("picked"); }
+            else { theirSel=c.idx; [...secTheirs.querySelectorAll(".card")].forEach(x=>x.classList.remove("picked")); d.classList.add("picked"); }
           };
           secTheirs.appendChild(d);
         });
@@ -308,7 +314,7 @@
             closeModal();
           }
         };
-        const wrap = document.createElement("div"); wrap.append(secMine, secTheirs, confirmBtn);
+        wrap.append(secMine, secTheirs, confirmBtn);
         openModal("Shopping: trade 2 for 1", wrap, []);
         setTimeout(()=>closeModal(), timeoutMs||20000);
       }
