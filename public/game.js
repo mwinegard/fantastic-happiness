@@ -1,572 +1,340 @@
-/* global io */
-(() => {
-  const socket = io();
+// Client with specialty flows, stacking narration via announcements, HAPPY emoji moderation,
+// Look/Shopping/Rainbow prompts, Relax interrupt, and improved timer label.
+(function boot(){
+  function ensureClientId(){
+    try{
+      const k="unoClientId"; let id = localStorage.getItem(k);
+      if (!id) { id = "c_"+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k, id); }
+      return id;
+    }catch{ return "c_"+Math.random().toString(36).slice(2); }
+  }
+  function waitIO(tries=0){
+    if (window.io) return start();
+    if (tries>200) { console.error("Socket.IO failed to load"); return; }
+    setTimeout(()=>waitIO(tries+1), 25);
+  }
 
-  // ---------- DOM helpers ----------
-  const byId = (id) => document.getElementById(id);
+  function start(){
+    const socket = io();
+    const me = { clientId: ensureClientId(), id:null, name:null };
 
-  // Core UI references (safe if null)
-  let $players, $draw, $discard, $hand, $chatLog, $chatInput, $sendChat, $timer, $prompts;
-  let $joinForm, $joinBtn, $nameInput, $joinOverlay, $statusText;
+    // DOM
+    const joinBtn = document.getElementById("join-btn");
+    const nameInput = document.getElementById("name");
+    const joinScreen = document.getElementById("join-screen");
+    const gameScreen = document.getElementById("game-screen");
+    const playerList = document.getElementById("player-list");
+    const drawPile = document.getElementById("draw-pile");
+    const discardTop = document.getElementById("discard-top");
+    const handDiv = document.getElementById("player-hand");
+    const unoBtn = document.getElementById("uno-btn");
+    const chatLog = document.getElementById("chat-log");
+    const chatInput = document.getElementById("chat-input");
+    const chatSend = document.getElementById("chat-send");
+    const turnIndicator = document.getElementById("turn-indicator");
+    const dirLabel = document.getElementById("dir-label");
+    const colorLabel = document.getElementById("color-label");
 
-  // ---------- State ----------
-  const COLORS = ["red","yellow","green","blue"];
-  const cardImgPath = (img) => `/assets/cards/${img || "back.png"}`;
-  const backImg = `/assets/cards/back.png`;
+    // prompt dock
+    const promptDock = document.getElementById("prompt-dock");
 
-  let me = { id:null, name:null, spectator:true, clientId:null };
+    // prompt helpers
+    function closePrompt(){ if (promptDock) promptDock.innerHTML=""; }
+    function openPrompt(title, bodyNode, actions=[]){
+      if (!promptDock) return;
+      const wrap = document.createElement("div");
+      wrap.className = "prompt";
+      const t = document.createElement("strong"); t.textContent = title || "";
+      const body = document.createElement("div"); if (bodyNode) body.appendChild(bodyNode);
+      const acts = document.createElement("div");
+      actions.forEach(a=>{ const b=document.createElement("button"); b.textContent=a.label; b.onclick=()=>a.onClick && a.onClick(); acts.appendChild(b); });
+      wrap.appendChild(t); wrap.appendChild(body); wrap.appendChild(acts);
+      promptDock.innerHTML=""; promptDock.appendChild(wrap);
+    }
+    function openColorPicker(onPick){
+      const body = document.createElement("div");
+      const row = document.createElement("div"); row.className="wild-picker";
+      ["red","yellow","green","blue"].forEach(c=>{
+        const b=document.createElement("button"); b.textContent=c.toUpperCase(); b.dataset.color=c;
+        b.onclick=()=>{ onPick && onPick(c); closePrompt(); };
+        row.appendChild(b);
+      });
+      body.appendChild(row);
+      openPrompt("Choose a color", body, []);
+    }
 
-  let started = false;
-  let countdownEndsAt = null;
-  let turnEndsAt = null;
-  let current = null;
-  let dir = 1;
-  let color = null;
-  let top = null;
-  let penalty = null;  // { total, type, target }
-  let roundFlags = { happy:false };
-  let playersState = [];
-  let myHand = [];
+    function renderPlayers(list, cur){
+      playerList.innerHTML = "";
+      (list||[]).forEach(p=>{
+        const li = document.createElement("li");
+        if (p.id===me.id) li.classList.add("me");
+        if (p.id===cur) li.classList.add("turn");
+        li.innerHTML = `<span>${p.name}${p.spectator?" (spectator)":""}</span><span>${p.spectator?"—":p.handCount}</span>`;
+        playerList.appendChild(li);
+      });
+    }
+    function renderTopCard(card){
+      discardTop.innerHTML = "";
+      const img = document.createElement("img");
+      if (!card) { img.src = "assets/cards/back.png"; img.alt = "Empty Pile"; }
+      else { img.src = `assets/cards/${card.img}`; img.alt = `${card.color} ${card.type}`; }
+      discardTop.classList.add("card");
+      discardTop.appendChild(img);
+    }
+    function renderDrawPile(){
+      drawPile.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = "assets/cards/back.png";
+      img.alt = "Draw Pile";
+      drawPile.classList.add("card","back");
+      drawPile.appendChild(img);
+    }
 
-  let uiTicker = null;
+    // State
+    let started=false, countdownEndsAt=null, turnEndsAt=null, current=null, dir=1, color=null, top=null, penalty=null, roundFlags={happy:false};
+    let playersState=[], isMyTurn=false, myHand=[];
 
-  // ---------- Socket diagnostics ----------
-  socket.on("connect_error", (err) => {
-    console.warn("socket connect_error:", err?.message || err);
-    if ($statusText) $statusText.textContent = "Connection error. Check server.";
-  });
-  socket.on("reconnect", () => {
-    if ($statusText) $statusText.textContent = "Reconnected.";
-  });
+    function legal(card){
+      if (!started || !top) return false;
+      if (card.type==="number") return (card.color===color || (typeof top.value!=="undefined" && card.value===top.value));
+      if (card.type.startsWith("wild")) return true;
+      return (card.color===color || card.type===top.type);
+    }
+    function renderHand(){
+      handDiv.innerHTML="";
+      if (me.spectator || !started) return;
+      myHand.forEach((c, i)=>{
+        const d = document.createElement("div");
+        d.className = "card";
+        const img = document.createElement("img");
+        img.src = `assets/cards/${c.img}`; img.alt = `${c.color} ${c.type}`;
+        d.appendChild(img);
 
-  // ---------- JOIN logic ----------
-  function persist(k, v) { try { localStorage.setItem(k, v); } catch {} }
-  function read(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } }
+        let clickable = false;
+        if (isMyTurn) {
+          if (penalty && penalty.target === me.id) { clickable = (c.type === (penalty.type)); }
+          else { clickable = legal(c); }
+        }
+        if (!isMyTurn && penalty && c.type==="wild_relax") clickable = true;
 
-  function emitJoin(nameFromUI) {
-    const name = (nameFromUI ?? ($nameInput?.value || "")).trim();
-    if (name) persist("unoName", name);
-    const savedClientId = read("unoClientId");
-
-    if ($joinBtn) { $joinBtn.disabled = true; $joinBtn.textContent = "Joining…"; }
-    if ($statusText) $statusText.textContent = "Joining…";
-
-    // Use ACK to confirm on the client that server processed the join
-    socket.emit("join", { name, clientId: savedClientId }, (resp) => {
-      if (!resp || !resp.ok) {
-        if ($statusText) $statusText.textContent = "Join failed. Try again.";
-        if ($joinBtn) { $joinBtn.disabled = false; $joinBtn.textContent = "Join"; }
+        if (clickable) {
+          d.classList.add("playable");
+          if (!isMyTurn && penalty && c.type==="wild_relax") {
+            d.addEventListener("click", ()=> openColorPicker((chosen)=> socket.emit("playRelax", { index:i, color: chosen })));
+          } else {
+            d.addEventListener("click",()=>socket.emit("playCard",{index:i}));
+          }
+        } else {
+          d.classList.add("unplayable");
+        }
+        handDiv.appendChild(d);
+      });
+      unoBtn && (unoBtn.disabled = !(myHand.length===2 && started && !me.spectator));
+    }
+    function msToSec(ms){ return Math.max(0, Math.ceil(ms/1000)); }
+    function renderTimer(){
+      if (countdownEndsAt && !started) {
+        turnIndicator.textContent = `Game starts in ${msToSec(countdownEndsAt - Date.now())}s`;
         return;
       }
-      // The server will also emit "me" and "state"; we still gracefully hide overlay now
-      if ($joinOverlay) $joinOverlay.style.display = "none";
-      if ($statusText) $statusText.textContent = "Joined";
-      if ($joinBtn) { $joinBtn.disabled = false; $joinBtn.textContent = "Join"; }
+      if (!started || !turnEndsAt) { turnIndicator.textContent = "—"; return; }
+      const secs = msToSec(turnEndsAt - Date.now());
+      const active = playersState.find(p => p.id === current);
+      const who = isMyTurn ? "Your" : (active ? `${active.name}'s` : "Player");
+      turnIndicator.textContent = `${who} turn ends in ${secs}s`;
+    }
+    // Live tick so the label counts down smoothly
+    setInterval(() => { try { renderTimer(); } catch {} }, 250);
+
+    function renderPiles(){
+      renderTopCard(top);
+      renderDrawPile();
+      dirLabel.textContent = `Direction: ${dir===1?"→":"←"}`;
+      colorLabel.textContent = `Color: ${color?color.toUpperCase():"—"}`;
+    }
+
+    // socket streams
+    socket.on("helloAck", ()=>{});
+
+    socket.on("me", (p)=>{
+      if (!p?.id) return;
+      me.id = p.id; me.name = p.name; me.spectator = !!p.spectator;
+      if (joinScreen) joinScreen.style.display = "none";
+      if (gameScreen) gameScreen.style.display = "block";
     });
-  }
 
-  function wireJoinUI() {
-    // Safe re-query after DOM is ready
-    $joinForm    = byId("joinForm");
-    $joinBtn     = byId("joinBtn");
-    $nameInput   = byId("nameInput");
-    $joinOverlay = byId("joinOverlay");
-    $statusText  = byId("status");
+    socket.on("state", (s)=>{
+      started = !!s.started;
+      countdownEndsAt = s.countdownEndsAt;
+      turnEndsAt = s.turnEndsAt;
+      current = s.current;
+      dir = s.direction;
+      color = s.color;
+      top = s.top;
+      penalty = s.penalty;
+      roundFlags = s.roundFlags || { happy:false };
+      playersState = s.players || [];
+      isMyTurn = (current === me.id);
 
-    // Prefill saved name if available
-    const savedName = read("unoName");
-    if ($nameInput && savedName && !$nameInput.value) $nameInput.value = savedName;
+      renderPlayers(s.players, current);
+      renderPiles();
+      renderTimer();
+      renderHand();
+    });
 
-    // Button + form submit (prevent default page reload)
-    if ($joinBtn && !$joinBtn.__wired) {
-      $joinBtn.__wired = true;
-      $joinBtn.addEventListener("click", (e) => { e.preventDefault(); emitJoin(); });
+    socket.on("handSnapshot", (hand)=>{ myHand = hand || []; renderHand(); });
+
+    // Announce & chat
+    socket.on("announce", (text)=>{
+      const div = document.createElement("div");
+      div.textContent = text; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight;
+    });
+
+    socket.on("chat", (m)=>{
+      const line = document.createElement("div");
+      line.className = "chatline";
+      const txt = document.createElement("span");
+      txt.textContent = `${m.fromName}: ${m.msg}`;
+      line.appendChild(txt);
+
+      if (roundFlags.happy) {
+        const sender = (playersState||[]).find(p=>p.id===m.fromSid);
+        const eligible = (m.fromSid!=="admin" && sender && !sender.spectator);
+        if (eligible) {
+          const btn = document.createElement("button");
+          btn.className = "happy-btn";
+          btn.textContent = "🙂";
+          btn.title = "Flag this message (author draws 1)";
+          btn.onclick = ()=> socket.emit("happyFlag", { messageId: m.id });
+          line.appendChild(btn);
+        }
+      }
+
+      chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
+    });
+
+    // Color picker generic
+    socket.on("chooseColor", ()=> openColorPicker((c)=> socket.emit("colorChosen", { color:c })));
+
+    // PROMPTS (shown inline under the timer)
+    socket.on("prompt", ({ kind, data, timeoutMs })=>{
+      if (kind==="targetPicker"){
+        const body = document.createElement("div");
+        (data.targets||[]).forEach(t=>{
+          const b = document.createElement("button");
+          b.textContent = t.name;
+          b.onclick = ()=>{ socket.emit("promptChoice", { kind, targetSid: t.sid }); closePrompt(); };
+          body.appendChild(b);
+        });
+        openPrompt("Choose a player", body, []);
+        setTimeout(()=>closePrompt(), timeoutMs||15000);
+      }
+      if (kind==="lookOrder"){
+        const body = document.createElement("div");
+        const order=[], cards=(data.top4||[]);
+        cards.forEach((c,i)=>{
+          const d = document.createElement("div"); d.className="card";
+          const img = document.createElement("img"); img.src = `assets/cards/${c.img}`; d.appendChild(img);
+          d.onclick=()=>{ if (!order.includes(i)) { order.push(i); d.style.outline='2px solid #1b5fd1'; } };
+          body.appendChild(d);
+        });
+        const confirmBtn = document.createElement("button"); confirmBtn.textContent="Confirm order";
+        confirmBtn.onclick=()=>{ if (order.length===4){ socket.emit("promptChoice", { kind, order }); closePrompt(); } };
+        openPrompt("Look: reorder the next 4 cards (top to bottom)", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
+        setTimeout(()=>closePrompt(), timeoutMs||15000);
+      }
+      if (kind==="shoppingTrade"){
+        const body = document.createElement("div");
+
+        const mineSel = new Set(); let theirSel = null;
+
+        const secMine = document.createElement("div");
+        const titleMine = document.createElement("div"); titleMine.textContent="Pick TWO of yours";
+        secMine.appendChild(titleMine);
+        (data.mine||[]).forEach(c=>{
+          const d=document.createElement("div"); d.className="card";
+          const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
+          d.onclick=()=>{
+            if (mineSel.has(c.idx)) { mineSel.delete(c.idx); d.style.outline=""; }
+            else if (mineSel.size<2){ mineSel.add(c.idx); d.style.outline="2px solid #1b5fd1"; }
+          };
+          secMine.appendChild(d);
+        });
+
+        const secTheirs = document.createElement("div");
+        const titleTheirs = document.createElement("div"); titleTheirs.textContent="Pick ONE of theirs";
+        secTheirs.appendChild(titleTheirs);
+        (data.theirs||[]).forEach(c=>{
+          const d=document.createElement("div"); d.className="card";
+          const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
+          d.onclick=()=>{
+            [...secTheirs.querySelectorAll(".card")].forEach(x=>x.style.outline="");
+            if (theirSel===c.idx){ theirSel=null; d.style.outline=""; }
+            else { theirSel=c.idx; d.style.outline="2px solid #1b5fd1"; }
+          };
+          secTheirs.appendChild(d);
+        });
+
+        const confirmBtn = document.createElement("button"); confirmBtn.textContent="Confirm";
+        confirmBtn.onclick=()=>{
+          if (mineSel.size===2 && typeof theirSel==="number") {
+            socket.emit("promptChoice", { kind, myTwo: Array.from(mineSel), theirOne: theirSel });
+            closePrompt();
+          }
+        };
+        body.append(secMine, secTheirs);
+        openPrompt("Shopping: trade 2 for 1", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
+        setTimeout(()=>closePrompt(), timeoutMs||20000);
+      }
+      if (kind==="rainbowSelects"){
+        const body = document.createElement("div");
+        const info = document.createElement("div"); info.textContent="Pick one RED, YELLOW, GREEN, and BLUE card from your hand.";
+        body.appendChild(info);
+        const picks = new Set();
+        (data.hand||[]).forEach(c=>{
+          if (!["red","yellow","green","blue"].includes(c.color)) return;
+          const d=document.createElement("div"); d.className="card";
+          const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
+          d.onclick=()=>{
+            if (picks.has(c.idx)){ picks.delete(c.idx); d.style.outline=""; }
+            else if (picks.size<4){ picks.add(c.idx); d.style.outline="2px solid #1b5fd1"; }
+          };
+          body.appendChild(d);
+        });
+        const confirm = document.createElement("button"); confirm.textContent="Confirm 4";
+        confirm.onclick=()=>{ if (picks.size===4){ socket.emit("promptChoice", { kind, picks: Array.from(picks) }); closePrompt(); } };
+        openPrompt("Rainbow: choose one of each color", body, [{label:"Confirm", onClick:()=>confirm.onclick()}]);
+        setTimeout(()=>closePrompt(), timeoutMs||20000);
+      }
+    });
+
+    // UI
+    function doJoin(){
+      const name = (nameInput?.value || "").trim();
+      socket.emit("join", { name, clientId: me.clientId });
     }
-    if ($joinForm && !$joinForm.__wired) {
-      $joinForm.__wired = true;
-      $joinForm.addEventListener("submit", (e) => { e.preventDefault(); emitJoin(); });
-    }
-  }
+    joinBtn?.addEventListener("click", doJoin);
+    nameInput?.addEventListener("keydown", (e)=>{ if (e.key === "Enter") doJoin(); });
 
-  // Auto-join once using persisted identity (comment out to require manual join)
-  function autoJoinOnce() {
-    const savedClientId = read("unoClientId");
-    const savedName = read("unoName");
-    socket.emit("join", { name: savedName, clientId: savedClientId }, () => { /* ack ignored here */ });
-  }
+    chatSend?.addEventListener("click", ()=>{
+      const msg = (chatInput?.value || "").trim();
+      if (msg) socket.emit("chat", msg);
+      if (chatInput) chatInput.value = "";
+    });
+    chatInput?.addEventListener("keydown",(e)=>{ if (e.key==="Enter") chatSend.click(); });
 
-  // ---------- Server acks identity ----------
-  socket.on("me", (info) => {
-    me.id = info.id;
-    me.name = info.name;
-    me.spectator = !!info.spectator;
-    me.clientId = info.clientId;
-    if (info.clientId) persist("unoClientId", info.clientId);
-
-    if ($joinOverlay) $joinOverlay.style.display = "none";
-    if ($statusText) $statusText.textContent = "Joined";
-    if ($joinBtn) { $joinBtn.disabled = false; $joinBtn.textContent = "Join"; }
-  });
-
-  // ---------- State / hand ----------
-  socket.on("state", (s) => {
-    started = !!s.started;
-    countdownEndsAt = s.countdownEndsAt;
-    turnEndsAt = s.turnEndsAt;
-    current = s.current;
-    dir = s.direction;
-    color = s.color;
-    top = s.top;
-    penalty = s.penalty;
-    roundFlags = s.roundFlags || { happy:false };
-    playersState = s.players || [];
-
-    const myRow = playersState.find(p => p.id === me.id);
-    if (myRow) me.spectator = !!myRow.spectator;
-
-    if ($joinOverlay && me.id) $joinOverlay.style.display = "none";
-
-    renderAll();
-  });
-
-  socket.on("handSnapshot", (cards) => {
-    myHand = Array.isArray(cards) ? cards.slice() : [];
-    renderHand();
-  });
-
-  socket.on("announce", (t) => logLine(t));
-
-  // ---------- Happy moderation feedback (optional UI) ----------
-  socket.on("happyFlagApplied", ({ messageId }) => {
-    // could visually mark a message with data-mid === messageId
-  });
-
-  // ---------- Wild color chooser ----------
-  socket.on("chooseColor", () => {
-    showColorPicker("Choose a color", (c) => {
-      socket.emit("colorChosen", { color: c });
-      clearPrompt();
-    }, () => clearPrompt());
-  });
-
-  // ---------- Prompts ----------
-  socket.on("prompt", ({ kind, data, timeoutMs }) => {
-    switch(kind) {
-      case "lookOrder":      renderLookOrderPrompt(data, timeoutMs); break;
-      case "rainbowSelects": renderRainbowPrompt(data, timeoutMs);    break;
-      case "targetPicker":   renderTargetPicker(data, timeoutMs);     break;
-      case "shoppingTrade":  renderShoppingPrompt(data, timeoutMs);   break;
-    }
-  });
-
-  // ---------- Chat ----------
-  function sendChat() {
-    const text = ($chatInput.value || "").trim();
-    if (!text) return;
-    socket.emit("chat", text);
-    $chatInput.value = "";
-  }
-
-  // ---------- Draw pile ----------
-  function bindDrawClick() {
-    if (!$draw || $draw.__wired) return;
-    $draw.__wired = true;
-    $draw.addEventListener("click", () => {
+    // Draw pile click
+    drawPile?.addEventListener("click", () => {
       if (!started) return;
-      if (me.spectator) return;
-      if (current !== me.id) return;
-      socket.emit("drawCard");
-    });
-  }
-
-  // ---------- Rendering ----------
-  function renderAll() {
-    renderPlayers(playersState, current);
-    renderPiles();
-    renderTimer();
-    renderHand();
-    ensureTicker();
-  }
-
-  function renderPlayers(pl, cur) {
-    if (!$players || !Array.isArray(pl)) return;
-    $players.innerHTML = "";
-    pl.forEach(p => {
-      const row = document.createElement("div");
-      row.className = "player-row" + (p.id === cur ? " current" : "") + (p.spectator ? " spectator" : "");
-      row.textContent = `${p.name}${p.spectator ? " (spec)" : ""} — ${p.handCount ?? 0}`;
-      $players.appendChild(row);
-    });
-  }
-
-  function renderPiles() {
-    if ($discard) {
-      const img = document.createElement("img");
-      img.alt = "Top discard";
-      img.src = top?.img ? cardImgPath(top.img) : backImg;
-      img.className = "card-img top-discard";
-      $discard.innerHTML = "";
-      $discard.appendChild(img);
-    }
-    if ($draw) {
-      const img = document.createElement("img");
-      img.alt = "Draw pile";
-      img.src = backImg;
-      img.className = "card-img draw-pile";
-      $draw.innerHTML = "";
-      $draw.appendChild(img);
-      if (started && !me.spectator && current === me.id) $draw.classList.add("clickable");
-      else $draw.classList.remove("clickable");
-    }
-  }
-
-  function renderTimer() {
-    if (!$timer) return;
-    const now = Date.now();
-    let leftMs = 0;
-    if (!started && countdownEndsAt) leftMs = Math.max(0, countdownEndsAt - now);
-    else if (started && turnEndsAt)  leftMs = Math.max(0, turnEndsAt - now);
-    const secs = Math.ceil(leftMs / 1000);
-    $timer.textContent = !started ? `Game starts in: ${secs}s` : `Turn time: ${secs}s`;
-  }
-  function ensureTicker() {
-    if (uiTicker) return;
-    uiTicker = setInterval(renderTimer, 250);
-  }
-
-  function renderHand() {
-    if (!$hand) return;
-    $hand.innerHTML = "";
-    const pendingStackAgainstMe = !!(penalty && penalty.target === me.id);
-    const myTurn = started && current === me.id && !me.spectator;
-
-    myHand.forEach((c, idx) => {
-      const el = document.createElement("img");
-      el.className = "card-img hand-card";
-      el.src = cardImgPath(c.img);
-      el.alt = c.type || "";
-      el.dataset.index = String(idx);
-
-      let enabled = false;
-
-      if (penalty && c.type === "wild_relax") {
-        enabled = true;
-        el.classList.add("relax-card");
-        el.title = "Play RELAX to cancel stack";
+      if (penalty && penalty.target === me.id && current === me.id) {
+        socket.emit("drawCard"); return;
       }
-
-      if (myTurn) {
-        if (!penalty) enabled = clientCanMatchTop(c);
-        else if (pendingStackAgainstMe) enabled = (c.type === penalty.type);
-        else enabled = false;
+      if (current === me.id) {
+        socket.emit("drawCard");
       }
-
-      if (enabled) el.classList.add("clickable");
-      else el.classList.remove("clickable");
-
-      el.onclick = () => {
-        if (!enabled) return;
-        if (penalty && c.type === "wild_relax") { socket.emit("playRelax", { index: idx }); return; }
-        if (started && current === me.id) socket.emit("playCard", { index: idx });
-      };
-
-      $hand.appendChild(el);
     });
+
+    unoBtn?.addEventListener("click", ()=> socket.emit("callUno"));
   }
-
-  function clientCanMatchTop(card) {
-    if (!top) return true;
-    const isWild = String(card.type || "").startsWith("wild");
-    if (isWild) return true;
-    if (card.type === "number") return (card.color === color) || (card.value === top.value);
-    return (card.color === color) || (card.type === top.type);
-  }
-
-  // ---------- Prompts UI ----------
-  function clearPrompt() { if ($prompts) $prompts.innerHTML = ""; }
-
-  function showColorPicker(title, onPick, onCancel) {
-    if (!$prompts) return;
-    $prompts.innerHTML = "";
-    const wrap = document.createElement("div");
-    wrap.className = "prompt color-picker";
-    const h = document.createElement("div");
-    h.className = "prompt-title";
-    h.textContent = title || "Choose color";
-    wrap.appendChild(h);
-    const row = document.createElement("div");
-    row.className = "color-row";
-    COLORS.forEach(c => {
-      const b = document.createElement("button");
-      b.className = `color-btn ${c}`;
-      b.textContent = c.toUpperCase();
-      b.onclick = () => onPick && onPick(c);
-      row.appendChild(b);
-    });
-    wrap.appendChild(row);
-    const cancel = document.createElement("button");
-    cancel.textContent = "Cancel";
-    cancel.className = "prompt-cancel";
-    cancel.onclick = () => onCancel && onCancel();
-    wrap.appendChild(cancel);
-    $prompts.appendChild(wrap);
-  }
-
-  function renderLookOrderPrompt(data, timeoutMs) {
-    if (!$prompts) return;
-    const top4 = (data && data.top4) || [];
-    let picks = [];
-    const wrap = document.createElement("div");
-    wrap.className = "prompt look-order";
-    const title = document.createElement("div");
-    title.className = "prompt-title";
-    title.textContent = "Reorder the next 4 draw cards (first click = top of deck)";
-    wrap.appendChild(title);
-    const grid = document.createElement("div");
-    grid.className = "prompt-grid";
-    top4.forEach((c, i) => {
-      const img = document.createElement("img");
-      img.src = cardImgPath(c.img);
-      img.className = "card-img";
-      img.onclick = () => {
-        if (picks.length >= 4 || picks.includes(i)) return;
-        picks.push(i);
-        img.style.opacity = 0.6;
-        img.setAttribute("data-ord", String(picks.length));
-      };
-      grid.appendChild(img);
-    });
-    wrap.appendChild(grid);
-    const btns = document.createElement("div");
-    const ok = document.createElement("button");
-    ok.textContent = "Confirm Order";
-    ok.onclick = () => { socket.emit("promptChoice", { kind: "lookOrder", order: picks }); clearPrompt(); };
-    btns.appendChild(ok);
-    const cancel = document.createElement("button");
-    cancel.textContent = "Cancel";
-    cancel.onclick = () => clearPrompt();
-    btns.appendChild(cancel);
-    if (timeoutMs) {
-      const t = document.createElement("span");
-      t.className = "prompt-time";
-      tickCountdown(t, timeoutMs);
-      btns.appendChild(t);
-    }
-    wrap.appendChild(btns);
-    $prompts.innerHTML = "";
-    $prompts.appendChild(wrap);
-  }
-
-  function renderRainbowPrompt(data, timeoutMs) {
-    if (!$prompts) return;
-    const hand = (data && data.hand) || [];
-    const picks = new Set();
-    const wrap = document.createElement("div");
-    wrap.className = "prompt rainbow";
-    const title = document.createElement("div");
-    title.className = "prompt-title";
-    title.textContent = "Rainbow: select one card of each color (R/Y/G/B)";
-    wrap.appendChild(title);
-    const grid = document.createElement("div");
-    grid.className = "prompt-grid";
-    hand.forEach((c) => {
-      const img = document.createElement("img");
-      img.src = cardImgPath(c.img);
-      img.className = "card-img";
-      img.onclick = () => {
-        if (picks.has(c.idx)) { picks.delete(c.idx); img.classList.remove("selected"); }
-        else { picks.add(c.idx); img.classList.add("selected"); }
-      };
-      grid.appendChild(img);
-    });
-    wrap.appendChild(grid);
-    const btns = document.createElement("div");
-    const ok = document.createElement("button");
-    ok.textContent = "Discard 4 (one of each)";
-    ok.onclick = () => { socket.emit("promptChoice", { kind:"rainbowSelects", picks: Array.from(picks) }); clearPrompt(); };
-    btns.appendChild(ok);
-    const cancel = document.createElement("button");
-    cancel.textContent = "Cancel";
-    cancel.onclick = () => clearPrompt();
-    btns.appendChild(cancel);
-    if (timeoutMs) {
-      const t = document.createElement("span");
-      t.className = "prompt-time";
-      tickCountdown(t, timeoutMs);
-      btns.appendChild(t);
-    }
-    wrap.appendChild(btns);
-    $prompts.innerHTML = "";
-    $prompts.appendChild(wrap);
-  }
-
-  function renderTargetPicker(data, timeoutMs) {
-    if (!$prompts) return;
-    const targets = (data && data.targets) || [];
-    const wrap = document.createElement("div");
-    wrap.className = "prompt target-picker";
-    const title = document.createElement("div");
-    title.className = "prompt-title";
-    title.textContent = "Choose a player to Pinky Promise with";
-    wrap.appendChild(title);
-    const list = document.createElement("div");
-    list.className = "prompt-list";
-    let selected = null;
-    targets.forEach(t => {
-      const btn = document.createElement("button");
-      btn.className = "prompt-btn";
-      btn.textContent = t.name;
-      btn.onclick = () => { selected = t.sid; };
-      list.appendChild(btn);
-    });
-    wrap.appendChild(list);
-    const controls = document.createElement("div");
-    const ok = document.createElement("button");
-    ok.textContent = "Confirm";
-    ok.onclick = () => { socket.emit("promptChoice", { kind:"targetPicker", targetSid: selected }); clearPrompt(); };
-    controls.appendChild(ok);
-    const cancel = document.createElement("button");
-    cancel.textContent = "Cancel";
-    cancel.onclick = () => clearPrompt();
-    controls.appendChild(cancel);
-    if (timeoutMs) {
-      const t = document.createElement("span");
-      t.className = "prompt-time";
-      tickCountdown(t, timeoutMs);
-      controls.appendChild(t);
-    }
-    wrap.appendChild(controls);
-    $prompts.innerHTML = "";
-    $prompts.appendChild(wrap);
-  }
-
-  function renderShoppingPrompt(data, timeoutMs) {
-    if (!$prompts) return;
-    const mine = (data && data.mine) || [];
-    const theirs = (data && data.theirs) || [];
-    const wrap = document.createElement("div");
-    wrap.className = "prompt shopping";
-    const title = document.createElement("div");
-    title.className = "prompt-title";
-    title.textContent = "Shopping: pick TWO to give, and ONE to take";
-    wrap.appendChild(title);
-    const cols = document.createElement("div");
-    cols.className = "prompt-cols";
-
-    const mineCol = document.createElement("div");
-    mineCol.className = "prompt-col";
-    mineCol.appendChild(makeLabel("Your cards (pick 2)"));
-    const mineGrid = document.createElement("div");
-    mineGrid.className = "prompt-grid";
-    const mineSet = new Set();
-    mine.forEach(m => {
-      const img = document.createElement("img");
-      img.src = cardImgPath(m.img);
-      img.className = "card-img";
-      img.onclick = () => {
-        if (mineSet.has(m.idx)) { mineSet.delete(m.idx); img.classList.remove("selected"); }
-        else if (mineSet.size < 2) { mineSet.add(m.idx); img.classList.add("selected"); }
-      };
-      mineGrid.appendChild(img);
-    });
-    mineCol.appendChild(mineGrid);
-
-    const theirCol = document.createElement("div");
-    theirCol.className = "prompt-col";
-    theirCol.appendChild(makeLabel("Their cards (pick 1)"));
-    const theirGrid = document.createElement("div");
-    theirGrid.className = "prompt-grid";
-    let theirPick = null;
-    theirs.forEach(t => {
-      const img = document.createElement("img");
-      img.src = cardImgPath(t.img);
-      img.className = "card-img";
-      img.onclick = () => {
-        theirPick = t.idx;
-        Array.from(theirGrid.querySelectorAll("img")).forEach(x => x.classList.remove("selected"));
-        img.classList.add("selected");
-      };
-      theirGrid.appendChild(img);
-    });
-    theirCol.appendChild(theirGrid);
-
-    cols.appendChild(mineCol);
-    cols.appendChild(theirCol);
-    wrap.appendChild(cols);
-
-    const controls = document.createElement("div");
-    const ok = document.createElement("button");
-    ok.textContent = "Trade";
-    ok.onclick = () => { socket.emit("promptChoice", { kind:"shoppingTrade", myTwo: Array.from(mineSet), theirOne: theirPick }); clearPrompt(); };
-    controls.appendChild(ok);
-    const cancel = document.createElement("button");
-    cancel.textContent = "Cancel";
-    cancel.onclick = () => clearPrompt();
-    controls.appendChild(cancel);
-    if (timeoutMs) {
-      const t = document.createElement("span");
-      t.className = "prompt-time";
-      tickCountdown(t, timeoutMs);
-      controls.appendChild(t);
-    }
-    $prompts.innerHTML = "";
-    $prompts.appendChild(wrap);
-  }
-
-  function makeLabel(text) { const d = document.createElement("div"); d.className = "prompt-label"; d.textContent = text; return d; }
-  function tickCountdown(el, ms) {
-    if (!el) return; const end = Date.now() + (ms || 10000);
-    const f = () => { const left = Math.max(0, end - Date.now()); el.textContent = ` (${Math.ceil(left/1000)}s)`; if (left > 0) requestAnimationFrame(f); };
-    f();
-  }
-
-  // ---------- Chat setup after DOM ready ----------
-  function wireChat() {
-    if ($sendChat && !$sendChat.__wired) {
-      $sendChat.__wired = true;
-      $sendChat.addEventListener("click", sendChat);
-    }
-    if ($chatInput && !$chatInput.__wired) {
-      $chatInput.__wired = true;
-      $chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
-    }
-  }
-
-  // ---------- Log helper ----------
-  function logLine(t) {
-    if (!$chatLog) return;
-    const el = document.createElement("div");
-    el.className = "chat-announce";
-    el.textContent = t;
-    $chatLog.appendChild(el);
-    $chatLog.scrollTop = $chatLog.scrollHeight;
-  }
-
-  // ---------- Initial DOM hookup ----------
-  function queryCoreNodes() {
-    $players   = byId("players");
-    $draw      = byId("drawPile");
-    $discard   = byId("discardPile");
-    $hand      = byId("hand");
-    $chatLog   = byId("chatLog");
-    $chatInput = byId("chatInput");
-    $sendChat  = byId("sendChat");
-    $timer     = byId("timer");
-    $prompts   = byId("prompts");
-  }
-
-  function onDomReady() {
-    queryCoreNodes();
-    wireJoinUI();
-    wireChat();
-    bindDrawClick();
-    // Auto-join using persisted identity
-    autoJoinOnce();
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", onDomReady, { once:true });
-  } else {
-    onDomReady();
-  }
+  waitIO();
 })();
