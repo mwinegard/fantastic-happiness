@@ -1,89 +1,297 @@
+/* ========== Base ========== */
 :root{
-  --bg:#0b1a2b; --fg:#e9eef5; --accent:#1b5fd1; --muted:#8aa3c2;
-  --shadow:0 6px 20px rgba(0,0,0,.25);
+  --bg: #f6f7fb;
+  --text: #222;
+  --muted: #6b7280;
+  --panel: #ffffff;
+  --border: #e5e7eb;
+  --accent: #3b82f6;
+  --danger: #ef4444;
+  --ok: #10b981;
+  --shadow: 0 6px 20px rgba(0,0,0,0.08);
 }
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(180deg,#0b1a2b,#0f243d);color:var(--fg)}
-a{color:#9bd0ff}
 
-.panel{max-width:560px;margin:10vh auto;padding:18px;border-radius:14px;background:rgba(255,255,255,.06);backdrop-filter: blur(8px);box-shadow:var(--shadow)}
-.panel h1{margin:0 0 12px}
-.panel .row{display:flex;gap:8px}
-.panel input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid #28425f;background:#0e2136;color:var(--fg)}
-.panel button{padding:12px 14px;border-radius:12px;border:0;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
-.note{margin-top:8px;color:#ffdf6e;font-size:12px;min-height:1em}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: var(--text);
+  background: var(--bg);
+}
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1a3450;background:#102540}
-.board{display:grid;grid-template-columns:280px 1fr 320px;gap:16px;padding:16px}
-.sidebar{background:#0e2136;border:1px solid #193553;border-radius:14px;padding:12px}
-.sidebar h3,.chat h3{margin:6px 0 8px}
-#player-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-#player-list li{background:#102a46;border:1px solid #173a5c;border-radius:10px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center}
-#player-list li.me{outline:2px solid #27b3ff}
-#player-list .turn{background:#13375d}
-.info{margin-top:10px;color:var(--muted);font-size:14px}
-.timer-display{font-variant-numeric:tabular-nums;background:#0b1f35;border:1px solid #143352;padding:8px;border-radius:10px;text-align:center}
+/* ========== Screens ========== */
+#join-screen, #game-screen{
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+#join-screen h1{ margin: 0 0 12px; }
+#join-screen input{
+  padding: 10px 12px;
+  font-size: 16px;
+  width: min(420px, 90%);
+  margin-right: 8px;
+}
+#join-screen button{
+  padding: 10px 14px;
+  font-size: 16px;
+  cursor: pointer;
+}
 
-.table{background:#0e2136;border:1px solid #193553;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;min-height:420px}
-.piles{display:flex;gap:20px;align-items:center;justify-content:center}
-.pile{position:relative;width:140px;height:210px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+/* ========== Header (Timer + Status) ========== */
+header{
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+}
+#turn-indicator{
+  font-weight: 600;
+}
+#dir-label, #color-label{
+  color: var(--muted);
+  font-size: 14px;
+}
 
-/* Keep top card visually above the decorative stacks */
-.pile .card { position: relative; z-index: 2; }
+/* ========== Prompt Dock (under header, non-overlay) ========== */
+#prompt-dock{
+  margin: 10px 0 14px;
+}
 
-/* Put faux stacks behind and lighten them */
-.stack{position:absolute;width:140px;height:210px;border-radius:12px;background:#0a1c33;opacity:.25;z-index:1}
-.discard .s1{transform:translate(-12px,-6px) rotate(-3deg)}
-.discard .s2{transform:translate(-6px,8px) rotate(2deg)}
-.discard .s3{transform:translate(10px,-10px) rotate(3deg)}
-.draw .s1{transform:translate(-10px,6px) rotate(2deg)}
-.draw .s2{transform:translate(8px,-6px) rotate(-2deg)}
-.draw .s3{transform:translate(14px,10px) rotate(1deg)}
-.clickable{cursor:pointer}
+.modal-card{
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+}
+.modal-title{
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.modal-body{
+  display: block;
+}
+.modal-actions{
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.modal-actions button{
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.modal-actions button:hover{ border-color: var(--accent); }
 
-.pile img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
+/* Wild color picker row used in prompts */
+.wild-picker{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(80px, 1fr));
+  gap: 8px;
+}
+.wild-picker button{
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+.wild-picker button:hover{ border-color: var(--accent); }
 
-/* Make the visible discard card pop a bit more */
-#discard-top.card img { filter: brightness(1.08) contrast(1.04); }
+/* Rainbow / Look / Shopping prompt helpers */
+.muted{ color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+.look4, .rainbow, .shopping, .target-list, .handsec{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
 
-.card{width:100px;height:150px;border-radius:12px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;overflow:hidden;background:#061426}
-.card.mini{width:72px;height:108px;margin:6px}
-.card.back{background:#0b1a2b; border:2px solid #203b61}
-.card img{width:100%;height:auto;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.4)}
-.card.playable img{cursor:pointer;transform:scale(1);transition:transform .15s ease-in-out}
-.card.playable img:hover{transform:scale(1.05)}
-.card.unplayable img{opacity:.55}
-.card.mini.picked{outline:3px solid #fff5; transform:translateY(-3px)}
+/* ========== Board & Piles ========== */
+.board{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  margin: 10px 0 14px;
+}
+.pile{
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 10px;
+}
 
-.hand{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+/* ========== Cards (consistent sizing everywhere) ========== */
+.card{
+  width: 96px;
+  height: 144px;              /* 2:3 ratio for consistency */
+  border-radius: 10px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  user-select: none;
+}
+.card img{
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
-.wild-picker{display:flex;gap:8px;justify-content:center;margin-top:10px}
-.wild-picker button{padding:10px 12px;border-radius:10px;border:0;background:#14345f;color:#fff;cursor:pointer}
-.wild-picker button:hover{filter:brightness(1.1)}
+/* Mini card previews inside prompts (rainbow/look/shopping) */
+.card.mini{
+  width: 72px;
+  height: 108px;
+}
+.card.mini.picked{
+  outline: 3px solid var(--accent);
+  outline-offset: -2px;
+}
 
-.chat{background:#0e2136;border:1px solid #193553;border-radius:14px;padding:12px;display:flex;flex-direction:column}
-.chatlog{height:300px;overflow:auto;background:#091a2e;border:1px solid #163350;border-radius:10px;padding:8px}
-.chatline{display:flex;align-items:center;gap:8px;padding:2px 0}
-.happy-btn{border:none;background:transparent;font-size:18px;cursor:pointer;line-height:1}
-.happy-btn:disabled{opacity:.7;cursor:default}
-.chatform{display:flex;gap:8px;margin-top:8px}
-.chatform input{flex:1;padding:10px;border-radius:10px;border:1px solid #28425f;background:#0e2136;color:var(--fg)}
-.chatform button{padding:10px 12px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+/* Draw pile back appearance */
+.card.back{
+  background: #fff;
+}
 
-#modal{position:fixed;inset:0;display:none}
-#modal.open{display:block}
-.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5)}
-.modal-card{position:relative;max-width:660px;margin:10vh auto;background:#0f2036;border:1px solid #193553;border-radius:12px;box-shadow:var(--shadow);padding:16px}
-.modal-title{font-weight:700;margin-bottom:8px}
-.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
-.modal-body{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.handsec{border:1px dashed #234;padding:8px;border-radius:8px}
-.muted{color:#9fb3cf;font-size:13px}
+/* Hand row */
+.hand{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  min-height: 170px;
+}
 
-/* Admin top discard preview image sizing */
-.admin-topcard img{ width:100%; height:auto; border-radius:6px; }
+/* Playability cues (no layout changes) */
+.card.playable{
+  cursor: pointer;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+.card.playable:hover{
+  transform: translateY(-4px);
+}
+.card.unplayable{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 
-@media (max-width: 980px){
-  .board{grid-template-columns:1fr;gap:12px}
-  .chat{order:3}.sidebar{order:2}.table{order:1}
+/* Sections under board */
+#uno-btn{
+  margin: 10px 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+}
+#uno-btn:disabled{
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========== Players ========== */
+#player-list{
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+#player-list li{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+#player-list li:last-child{ border-bottom: 0; }
+#player-list li.me span:first-child{ font-weight: 600; }
+#player-list li.turn{
+  background: #f0f7ff;
+}
+
+/* ========== Chat ========== */
+#chat{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: start;
+}
+#chat-log{
+  grid-column: 1 / -1;
+  min-height: 140px;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 8px 10px;
+}
+#chat input{
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+#chat button{
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.chatline{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+.happy-btn{
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.happy-btn[disabled]{
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 720px){
+  .board{ grid-template-columns: 1fr; }
+  .card{ width: 80px; height: 120px; }
+  .card.mini{ width: 64px; height: 96px; }
 }
