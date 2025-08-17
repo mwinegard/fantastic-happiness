@@ -152,6 +152,12 @@
       const who = isMyTurn ? "Your" : (active ? `${active.name}'s` : "Player");
       turnIndicator.textContent = `${who} turn ends in ${secs}s`;
     }
+
+    // Keep the timer label live without waiting for server pushes
+    setInterval(() => {
+      try { renderTimer(); } catch {}
+    }, 250);
+
     function renderPiles(){
       renderTopCard(top);
       renderDrawPile();
@@ -328,6 +334,23 @@
       if (chatInput) chatInput.value = "";
     });
     chatInput?.addEventListener("keydown",(e)=>{ if (e.key==="Enter") chatSend.click(); });
+
+    // Draw pile click → draw when it's your turn, or when you're the stack target on your turn
+    drawPile?.addEventListener("click", () => {
+      if (!started) return;
+
+      // If a penalty stack is pending against you and it's your turn, drawing settles the full total
+      if (penalty && penalty.target === me.id && current === me.id) {
+        socket.emit("drawCard");
+        return;
+      }
+
+      // Normal draw on your own turn
+      if (current === me.id) {
+        socket.emit("drawCard");
+      }
+      // Otherwise ignore; server also ignores
+    });
 
     unoBtn?.addEventListener("click", ()=> socket.emit("callUno"));
   }
