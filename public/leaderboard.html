@@ -1,30 +1,99 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Leaderboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8">
+  <title>UNO Leaderboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body{padding:18px}
-    table{width:100%;border-collapse:collapse;background:#0e2136;border:1px solid #193553;border-radius:14px;overflow:hidden}
-    th,td{padding:12px;border-bottom:1px solid #173a5c}
-    th{text-align:left;background:#102a46}
+    /* Minimal, non-invasive defaults (scoped to this page only) */
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 16px; }
+    h1 { margin: 0 0 12px 0; font-size: 20px; }
+    .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+    .lb-table { width: 100%; border-collapse: collapse; }
+    .lb-table th, .lb-table td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
+    .lb-table th { font-weight: 600; }
+    .muted { color:#666; font-size:12px; }
+    .right { text-align:right; }
   </style>
 </head>
 <body>
-  <h1>Top Scores</h1>
-  <table id="scores"><thead><tr><th>Player</th><th>Wins</th></tr></thead><tbody></tbody></table>
+  <h1>UNO Leaderboard</h1>
+  <div class="toolbar">
+    <button id="refreshBtn">Refresh</button>
+    <label class="muted">Auto-refresh <input id="autoChk" type="checkbox" checked> (10s)</label>
+  </div>
+
+  <table class="lb-table" id="lbTable" aria-describedby="updatedAt">
+    <thead>
+      <tr>
+        <th style="width:60px;">#</th>
+        <th>Name</th>
+        <th class="right" style="width:120px;">Wins</th>
+        <th class="right" style="width:140px;">Points</th>
+      </tr>
+    </thead>
+    <tbody id="lbBody">
+      <tr><td colspan="4" class="muted">Loading…</td></tr>
+    </tbody>
+  </table>
+
+  <div id="updatedAt" class="muted" style="margin-top:8px;"></div>
+
   <script>
-    (async function(){
-      try{
-        const res = await fetch("/scores");
+  (function(){
+    const $body = document.getElementById('lbBody');
+    const $updated = document.getElementById('updatedAt');
+    const $refresh = document.getElementById('refreshBtn');
+    const $auto = document.getElementById('autoChk');
+    let timer = null;
+
+    async function load() {
+      try {
+        const res = await fetch('/leaderboard', { cache: 'no-store' });
         const data = await res.json();
-        const rows = Object.entries(data).sort((a,b)=>b[1]-a[1]);
-        document.querySelector("#scores tbody").innerHTML =
-          rows.map(([n,w])=>`<tr><td>${n}</td><td>${w}</td></tr>`).join("");
-      }catch(e){ console.error(e); }
-    })();
+        render(Array.isArray(data) ? data : []);
+      } catch {
+        render([]);
+      }
+    }
+
+    function render(arr){
+      // Server already sorts (wins desc, then points desc); keep that ordering.
+      if (!arr.length) {
+        $body.innerHTML = '<tr><td colspan="4" class="muted">No games recorded yet.</td></tr>';
+      } else {
+        $body.innerHTML = arr.map((row, i) => `
+          <tr>
+            <td>${i+1}</td>
+            <td>${escapeHtml(row.name || 'Player')}</td>
+            <td class="right">${Number(row.wins||0)}</td>
+            <td class="right">${Number(row.points||0)}</td>
+          </tr>
+        `).join('');
+      }
+      $updated.textContent = 'Updated: ' + new Date().toLocaleString();
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    $refresh.addEventListener('click', load);
+    $auto.addEventListener('change', () => {
+      if ($auto.checked) {
+        if (timer) clearInterval(timer);
+        timer = setInterval(load, 10000);
+      } else if (timer) {
+        clearInterval(timer); timer = null;
+      }
+    });
+
+    // initial
+    load();
+    timer = setInterval(load, 10000);
+  })();
   </script>
 </body>
 </html>
