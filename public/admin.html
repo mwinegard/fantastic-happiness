@@ -2,287 +2,73 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>UNO Admin Hub</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UNO Admin</title>
   <link rel="stylesheet" href="style.css" />
-  <style>
-    .admin-grid{
-      display:grid;gap:12px;
-      grid-template-columns: 1fr 1fr 1fr;
-      padding:16px;
-    }
-    .cardbox{
-      background:#0e2136;border:1px solid #193553;border-radius:12px;padding:12px;
-    }
-    .cardbox h2{margin:0 0 8px;font-size:16px}
-    .kv{display:grid;grid-template-columns:140px 1fr;gap:6px;font-size:14px}
-    .list{max-height:260px;overflow:auto;border:1px solid #173a5c;border-radius:8px;padding:8px}
-    .row{display:flex;gap:8px;align-items:center;margin:6px 0}
-    .row input,.row select{padding:8px;border-radius:8px;border:1px solid #28425f;background:#0e2136;color:#e9eef5}
-    .row button{padding:8px 10px;border-radius:8px;border:0;background:#1b5fd1;color:#fff;cursor:pointer}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#13375d;margin-left:6px;font-size:12px}
-    .warn{color:#ffdf6e}
-    .danger{background:#a13535}
-    @media (max-width: 1100px){ .admin-grid{grid-template-columns:1fr} }
-  </style>
 </head>
 <body>
-  <div class="topbar">
-    <div><strong>UNO Admin Hub</strong></div>
-    <div class="info" style="display:flex; gap:8px; align-items:center;">
-      <button id="a-refresh">Refresh</button>
-      <span id="admin-status">Connecting…</span>
-    </div>
-  </div>
+  <div class="panel">
+    <h1>Admin</h1>
 
-  <div class="admin-grid">
-    <!-- Game State -->
-    <div class="cardbox">
-      <h2>Game State</h2>
-      <div class="kv">
-        <div>Started</div><div id="g-started">—</div>
-        <div>Direction</div><div id="g-dir">—</div>
-        <div>Color</div><div id="g-color">—</div>
-        <div>Current Turn</div><div id="g-current">—</div>
-        <div>Turn Ends</div><div id="g-turnends">—</div>
-        <div>Deck Size</div><div id="g-deck">—</div>
-        <div>Discard Size</div><div id="g-discard">—</div>
-        <div>Penalty</div><div id="g-penalty">—</div>
-        <div>Round Flags</div><div id="g-flags">—</div>
-      </div>
+    <div class="row" style="margin-bottom:8px;">
+      <select id="lobby-select"></select>
+      <button id="refresh-lobbies">Refresh</button>
+      <a href="/leaderboard.html" style="margin-left:auto;">Open Leaderboard ↗</a>
     </div>
 
-    <!-- Players -->
-    <div class="cardbox">
-      <h2>Players</h2>
-      <div id="p-list" class="list"></div>
+    <div class="row">
+      <input id="admin-msg" placeholder="Send announcement to selected lobby" />
+      <button id="admin-send">Send</button>
     </div>
 
-    <!-- Recent Announcements -->
-    <div class="cardbox">
-      <h2>Log</h2>
-      <div id="log" class="list"></div>
-    </div>
+    <hr />
+    <div id="admin-status"></div>
 
-    <!-- Top Discard -->
-    <div class="cardbox">
-      <h2>Top Discard</h2>
-      <div id="topcard-wrap" style="display:flex;align-items:center;gap:10px;">
-        <div class="admin-topcard card" style="width:80px;height:120px;">
-          <img id="g-topcard" alt="Top card" />
-        </div>
-        <div id="g-topmeta" class="info">—</div>
-      </div>
-    </div>
-
-    <!-- Table Chat (Admin) -->
-    <div class="cardbox">
-      <h2>Table Chat (Admin)</h2>
-      <div class="list" id="admin-chat-log" style="max-height:200px;"></div>
-      <div class="row">
-        <input id="admin-chat-input" placeholder="Message as Admin…" maxlength="200" />
-        <button id="admin-chat-send">Send</button>
-      </div>
-    </div>
-
-    <!-- Admin Actions -->
-    <div class="cardbox">
-      <h2>Admin Actions</h2>
-
-      <div class="row">
-        <button id="a-start">Start New Game</button>
-        <button id="a-end" class="danger">End Round</button>
-      </div>
-
-      <div class="row">
-        <button id="a-toggle-happy">Toggle HAPPY</button>
-        <button id="a-rotate-left">Rotate Hands ◀︎</button>
-        <button id="a-rotate-right">Rotate Hands ▶︎</button>
-      </div>
-
-      <div class="row">
-        <select id="sel-player"></select>
-        <button id="a-kick" class="danger">Kick</button>
-        <button id="a-draw1">Draw 1</button>
-        <button id="a-give-wild">Give WILD</button>
-      </div>
-
-      <div class="row">
-        <select id="sel-color">
-          <option value="red">RED</option>
-          <option value="yellow">YELLOW</option>
-          <option value="green">GREEN</option>
-          <option value="blue">BLUE</option>
-        </select>
-        <button id="a-set-color">Set Table Color</button>
-      </div>
-
-      <div class="row">
-        <button id="a-force-relax">Force RELAX (cancel penalty)</button>
-        <span class="pill warn">Use only if a penalty is active</span>
-      </div>
-    </div>
-
-    <!-- Hands (counts only) -->
-    <div class="cardbox">
-      <h2>Hands (counts)</h2>
-      <div id="hand-counts" class="list"></div>
-      <div class="info">For privacy, counts only. We can add an “Admin Peek” later (opt-in).</div>
-    </div>
-
-    <!-- Prompts / Pending -->
-    <div class="cardbox">
-      <h2>Prompts / Pending</h2>
-      <div id="prompts" class="list"></div>
-      <div class="info">Shows players who owe selections (color pick, look order, shopping, rainbow, etc.).</div>
-    </div>
-
-    <!-- Penalty / Stack Monitor -->
-    <div class="cardbox">
-      <h2>Penalty Monitor</h2>
-      <div id="penalty-monitor" class="list"></div>
-      <div class="info">Narrates stack totals and RELAX state.</div>
-    </div>
-
-    <!-- Leaderboard (embedded) -->
-    <div class="cardbox">
-      <h2>Leaderboard</h2>
-      <!-- This container is auto-filled by /admin-leaderboard.js -->
-      <div id="adminLeaderboard">
-        <div style="padding:8px;color:#c9d6e3;">Loading…</div>
-      </div>
-    </div>
+    <hr />
+    <h3>Global Leaderboard</h3>
+    <div id="admin-leaderboard"></div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <!-- Embedded leaderboard widget -->
-  <script src="/admin-leaderboard.js"></script>
-
+  <script src="admin-leaderboard.js"></script>
   <script>
-    const el = (id)=>document.getElementById(id);
-    const s = io({ transports:["polling","websocket"] });
+    const socket = io();
+    const sel = document.getElementById("lobby-select");
+    const btnRef = document.getElementById("refresh-lobbies");
+    const adminMsg = document.getElementById("admin-msg");
+    const adminSend = document.getElementById("admin-send");
+    const statusDiv = document.getElementById("admin-status");
 
-    // Buffers & helpers
-    function pushLog(text){
-      const box = el("log"); if (!box) return;
-      const div = document.createElement("div");
-      div.textContent = text;
-      div.style.cursor = "copy";
-      div.onclick = ()=>navigator.clipboard.writeText(text);
-      box.appendChild(div); box.scrollTop = box.scrollHeight;
-    }
-    function pushAdminChat(line){
-      const box = el("admin-chat-log"); if (!box) return;
-      const div = document.createElement("div");
-      div.textContent = line;
-      box.appendChild(div); box.scrollTop = box.scrollHeight;
-    }
+    btnRef.onclick = loadLobbies;
+    adminSend.onclick = () => {
+      if (!sel.value) return;
+      // join selected lobby (temporary socket room) then send admin message
+      socket.emit("join", { name: "Admin", lobby: sel.value });
+      setTimeout(() => socket.emit("admin:chat", { text: adminMsg.value }), 200);
+      adminMsg.value = "";
+    };
 
-    // State rendering
-    s.on("connect", ()=> el("admin-status").textContent = "Connected");
-    s.on("disconnect", ()=> el("admin-status").textContent = "Disconnected");
-
-    s.on("announce", (t)=> pushLog(t));
-    s.on("chat", (m)=> {
-      pushLog(`${m.fromName}: ${m.msg}`);
-      pushAdminChat(`${m.fromName}: ${m.msg}`);
-    });
-
-    function renderState(state){
-      el("g-started").textContent = state.started ? "Yes" : "No";
-      el("g-dir").textContent = state.direction === 1 ? "→" : "←";
-      el("g-color").textContent = state.color ? state.color.toUpperCase() : "—";
-      el("g-current").textContent = state.current || "—";
-      el("g-turnends").textContent = state.turnEndsAt ? new Date(state.turnEndsAt).toLocaleTimeString() : "—";
-      el("g-penalty").textContent = state.penalty ? `+${state.penalty.total} (${state.penalty.type}) → target ${state.penalty.target}` : "—";
-      el("g-flags").textContent = state.roundFlags?.happy ? "HAPPY=ON" : "—";
-      el("g-deck").textContent = "— (server hidden)";
-      el("g-discard").textContent = state.top ? "≥1" : "0";
-
-      const list = el("p-list"); list.innerHTML = "";
-      const sel = el("sel-player"); sel.innerHTML = "";
-      (state.players||[]).forEach(p=>{
-        const row = document.createElement("div");
-        row.textContent = `${p.name} — ${p.spectator?"spectator":p.handCount+" cards"} ${state.current===p.id?" (TURN)":""}`;
-        list.appendChild(row);
-        const opt = document.createElement("option");
-        opt.value = p.id; opt.textContent = p.name; sel.appendChild(opt);
-      });
-
-      const counts = el("hand-counts"); counts.innerHTML="";
-      (state.players||[]).forEach(p=>{
-        const li = document.createElement("div");
-        li.textContent = `${p.name}: ${p.handCount} cards`;
-        counts.appendChild(li);
-      });
-
-      el("penalty-monitor").textContent = state.penalty ? `Active: +${state.penalty.total} (${state.penalty.type}) → target ${state.penalty.target}` : "None";
-
-      // Top discard preview
-      const top = state.top;
-      const img = el("g-topcard");
-      const meta = el("g-topmeta");
-      if (img){
-        if (top && top.img){
-          img.src = `assets/cards/${top.img}`;
-          img.alt = `${top.color} ${top.type}`;
-          meta.textContent = top.type==="number" ? `${top.color} ${top.value}` : `${top.color} ${top.type}`;
-        } else {
-          img.src = "assets/cards/back.png";
-          img.alt = "No discard";
-          meta.textContent = "—";
-        }
+    async function loadLobbies() {
+      try {
+        const res = await fetch("/lobbies", { cache: "no-store" });
+        const data = await res.json();
+        sel.innerHTML = (data || [])
+          .map(x => `<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)} (${x.players}P/${x.spectators}S${x.started ? "; live" : ""})</option>`)
+          .join("");
+        if (!data || !data.length) sel.innerHTML = `<option value="default">default (0P/0S)</option>`;
+      } catch {
+        sel.innerHTML = `<option value="default">default</option>`;
       }
     }
+    function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+    loadLobbies();
 
-    s.on("state", renderState);
-
-    // Emit helpers (align with server: 'admin:newRound', 'admin:endRound', and 'admin:cmd')
-    function cmd(type, data){ s.emit("admin:cmd", { type, ...(data||{}) }); }
-
-    // Refresh snapshot
-    el("a-refresh").onclick = ()=> s.emit("admin:refresh");
-
-    // Start/end round
-    el("a-start").onclick = ()=> s.emit("admin:newRound");     // start countdown if enough players
-    el("a-end").onclick   = ()=> s.emit("admin:endRound");
-
-    // Toggles / actions
-    el("a-toggle-happy").onclick = ()=> cmd("toggleHappy");
-    el("a-rotate-left").onclick  = ()=> cmd("rotateHands", { dir:-1 });
-    el("a-rotate-right").onclick = ()=> cmd("rotateHands", { dir:1 });
-
-    el("a-kick").onclick = ()=> {
-      const sid = el("sel-player").value;
-      if (sid) cmd("kick", { sid });
-    };
-    el("a-draw1").onclick = ()=> {
-      const sid = el("sel-player").value;
-      if (sid) cmd("drawOne", { sid });
-    };
-    el("a-give-wild").onclick = ()=> {
-      const sid = el("sel-player").value;
-      if (sid) cmd("giveCard", { sid, card:{ color:"wild", type:"wild", img:"wild.png" } });
-    };
-
-    el("a-set-color").onclick = ()=> {
-      const color = el("sel-color").value;
-      cmd("setColor", { color });
-    };
-
-    el("a-force-relax").onclick = ()=> {
-      cmd("forceRelax");
-    };
-
-    // Admin chat send
-    el("admin-chat-send").onclick = ()=>{
-      const inp = el("admin-chat-input");
-      const msg = (inp.value || "").trim();
-      if (!msg) return;
-      s.emit("admin:chat", { msg });
-      inp.value = "";
-    };
-    el("admin-chat-input").addEventListener("keydown", (e)=>{ if (e.key==="Enter") el("admin-chat-send").click(); });
+    socket.on("announce", (text) => {
+      const d = document.createElement("div");
+      d.textContent = text;
+      statusDiv.appendChild(d);
+      statusDiv.scrollTop = statusDiv.scrollHeight;
+    });
   </script>
 </body>
 </html>
