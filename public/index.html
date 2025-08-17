@@ -14,70 +14,56 @@
   <div id="join-screen" class="panel">
     <h1>Join the Table</h1>
     <div class="row">
-      <input id="name" placeholder="Your name (optional)" maxlength="24" />
-      <button id="join-btn">Join</button>
+      <input id="name" placeholder="Your name" maxlength="24" />
+      <input id="lobby" placeholder="Lobby (e.g. default)" maxlength="24" />
+      <button id="joinbtn">Join</button>
     </div>
-    <div class="note">A name is optional — we’ll generate one if you leave it blank.</div>
+    <div class="note">Name & lobby will be remembered for next time.</div>
   </div>
 
   <!-- Game screen -->
-  <div id="game-screen" style="display:none;">
+  <div id="game-screen" class="panel" style="display:none;">
     <div class="topbar">
-      <div id="dir-label">Direction: →</div>
-      <div class="timer-display" id="turn-indicator">—</div>
-      <div id="color-label">Color: —</div>
+      <div id="turn-indicator">—</div>
+      <div class="right">
+        <span>Color: <b id="color-badge">—</b></span>
+        <button id="uno-btn" disabled>UNO!</button>
+        <button id="relax-btn" disabled>RELAX</button>
+        <button id="mute-toggle">🔊 Sound On</button>
+      </div>
     </div>
 
-    <!-- Prompts container (non-overlay; stays under the timer) -->
-    <div id="prompt-dock"></div>
-
     <div class="board">
-      <!-- Left: players -->
-      <aside class="sidebar">
-        <h3>Players</h3>
-        <ul id="player-list"></ul>
-        <div class="info">
-          <button id="uno-btn" disabled>UNO!</button>
-        </div>
-      </aside>
+      <div class="piles">
+        <img id="draw-pile" class="pile" src="assets/cards/back.png" alt="Draw pile" />
+        <img id="discard-top" class="pile" src="assets/cards/back.png" alt="Discard pile" />
+      </div>
 
-      <!-- Center: table -->
-      <main class="table">
-        <div class="piles">
-          <div class="pile discard">
-            <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
-            <div id="discard-top" class="card back"></div>
+      <div id="player-hand" class="hand"></div>
+
+      <div class="sidebar">
+        <div class="players">
+          <h3>Players</h3>
+          <div id="player-list"></div>
+        </div>
+        <div class="chat">
+          <h3>Chat</h3>
+          <div id="chat-log" class="chatlog"></div>
+          <div class="row">
+            <input id="chat-input" placeholder="Type message…" maxlength="200" />
+            <button id="chat-send">Send</button>
           </div>
-          <div class="pile draw">
-            <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
-            <div id="draw-pile" class="card back"></div>
-          </div>
         </div>
+      </div>
+    </div>
 
-        <div id="player-hand" class="hand"></div>
-
-        <!-- (Fallback) wild color picker; main picker shown via prompt dock -->
-        <div id="wild-buttons" class="wild-picker" style="display:none;">
-          <button data-color="red">RED</button>
-          <button data-color="yellow">YELLOW</button>
-          <button data-color="green">GREEN</button>
-          <button data-color="blue">BLUE</button>
-        </div>
-      </main>
-
-      <!-- Right: chat -->
-      <section class="chat">
-        <h3>Table Talk</h3>
-        <div id="chat-log" class="chatlog"></div>
-        <div class="chatform">
-          <input id="chat-input" placeholder="Say something nice…" maxlength="200" />
-          <button id="chat-send">Send</button>
-        </div>
-      </section>
+    <hr />
+    <div id="leaderboard-block">
+      <h3>Global Leaderboard</h3>
+      <div id="leaderboard"></div>
     </div>
   </div>
 
-  <!-- Socket.IO + client -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
