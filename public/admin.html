@@ -127,7 +127,7 @@
     <div class="cardbox">
       <h2>Hands (counts)</h2>
       <div id="hand-counts" class="list"></div>
-      <div class="info">For privacy, counts only. We can add an “Admin Peek” later (opt‑in).</div>
+      <div class="info">For privacy, counts only. We can add an “Admin Peek” later (opt-in).</div>
     </div>
 
     <!-- Prompts / Pending -->
@@ -143,9 +143,21 @@
       <div id="penalty-monitor" class="list"></div>
       <div class="info">Narrates stack totals and RELAX state.</div>
     </div>
+
+    <!-- Leaderboard (embedded) -->
+    <div class="cardbox">
+      <h2>Leaderboard</h2>
+      <!-- This container is auto-filled by /admin-leaderboard.js -->
+      <div id="adminLeaderboard">
+        <div style="padding:8px;color:#c9d6e3;">Loading…</div>
+      </div>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <!-- Embedded leaderboard widget -->
+  <script src="/admin-leaderboard.js"></script>
+
   <script>
     const el = (id)=>document.getElementById(id);
     const s = io({ transports:["polling","websocket"] });
@@ -225,15 +237,19 @@
 
     s.on("state", renderState);
 
-    // ACTION hooks
-    function cmd(type, data){ s.emit("admin:command", { type, ...(data||{}) }); }
+    // Emit helpers (align with server: 'admin:newRound', 'admin:endRound', and 'admin:cmd')
+    function cmd(type, data){ s.emit("admin:cmd", { type, ...(data||{}) }); }
+
+    // Refresh snapshot
     el("a-refresh").onclick = ()=> s.emit("admin:refresh");
 
-    el("a-start").onclick = ()=> cmd("start");
-    el("a-end").onclick = ()=> cmd("endRound");
+    // Start/end round
+    el("a-start").onclick = ()=> s.emit("admin:newRound");     // start countdown if enough players
+    el("a-end").onclick   = ()=> s.emit("admin:endRound");
 
+    // Toggles / actions
     el("a-toggle-happy").onclick = ()=> cmd("toggleHappy");
-    el("a-rotate-left").onclick = ()=> cmd("rotateHands", { dir:-1 });
+    el("a-rotate-left").onclick  = ()=> cmd("rotateHands", { dir:-1 });
     el("a-rotate-right").onclick = ()=> cmd("rotateHands", { dir:1 });
 
     el("a-kick").onclick = ()=> {
