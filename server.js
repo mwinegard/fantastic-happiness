@@ -1,5 +1,5 @@
 // UNO server with specialty cards, stacking (draw2/+4), wild_relax interrupt, rich announcements,
-// HAPPY chat emoji moderation, Look/Shopping/Rainbow flows, Admin commands, and house rules.
+// HAPPY moderation, Look/Shopping/Rainbow flows, Admin commands, house rules, and persistent scoring by clientId.
 const express = require("express");
 const http = require("http");
 const fs = require("fs");
@@ -11,22 +11,74 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static("public"));
+app.use(express.json());
 app.get("/healthz", (_req, res) => res.type("text").send("ok"));
 
-/* ---------- Scores (ephemeral) ---------- */
+/* ---------- Persistent scores (by clientId) ---------- */
 const SCORE_PATH = "./scores.json";
-let scores = {};
-try {
-  if (fs.existsSync(SCORE_PATH)) {
-    scores = JSON.parse(fs.readFileSync(SCORE_PATH, "utf8") || "{}");
+/*
+  File format (new):
+  {
+    "profiles": {
+      "<clientId>": { "name":"DisplayName", "wins": 3, "points": 120 }
+    }
   }
-} catch {}
+
+  Legacy (old): { "Matt": 5, "Lori": 2 }  -> auto-migrated to new format on load.
+*/
+let scoreDB = { profiles: {} };
+
+function loadScores() {
+  try {
+    if (!fs.existsSync(SCORE_PATH)) return;
+    const raw = JSON.parse(fs.readFileSync(SCORE_PATH, "utf8") || "{}");
+    if (raw && raw.profiles && typeof raw.profiles === "object") {
+      scoreDB = { profiles: raw.profiles };
+      return;
+    }
+    // Legacy migrate: name -> wins
+    if (raw && typeof raw === "object") {
+      const profiles = {};
+      for (const [name, wins] of Object.entries(raw)) {
+        const cid = "legacy_" + Math.random().toString(36).slice(2);
+        profiles[cid] = { name, wins: Number(wins) || 0, points: 0 };
+      }
+      scoreDB = { profiles };
+      saveScores();
+    }
+  } catch { /* ignore */ }
+}
 function saveScores() {
   try {
-    fs.writeFileSync(SCORE_PATH, JSON.stringify(scores, null, 2));
-  } catch {}
+    fs.writeFileSync(SCORE_PATH, JSON.stringify(scoreDB, null, 2));
+  } catch { /* ignore */ }
 }
-app.get("/scores", (_req, res) => res.json(scores));
+loadScores();
+
+/* Back-compat: /scores -> aggregate name -> wins */
+app.get("/scores", (_req, res) => {
+  const byName = {};
+  for (const p of Object.values(scoreDB.profiles)) {
+    const nm = p.name || "Player";
+    byName[nm] = (byName[nm] || 0) + (p.wins || 0);
+  }
+  res.json(byName);
+});
+/* New: /leaderboard -> sorted array of { clientId, name, wins, points } */
+app.get("/leaderboard", (_req, res) => {
+  const arr = Object.entries(scoreDB.profiles).map(([clientId, v]) => ({
+    clientId, name: v.name || "Player", wins: v.wins || 0, points: v.points || 0
+  }));
+  arr.sort((a,b) => (b.wins - a.wins) || (b.points - a.points) || a.name.localeCompare(b.name));
+  res.json(arr);
+});
+/* Optional reset (POST) */
+app.post("/scores/reset", (_req, res) => {
+  scoreDB = { profiles: {} };
+  saveScores();
+  announce("📊 Leaderboard reset.");
+  res.json({ ok: true });
+});
 
 /* ---------- Game state ---------- */
 const MAX_PLAYERS = 10;
@@ -50,7 +102,7 @@ function uniqueName(base) {
   const taken = new Set(players.map(p => p.name.toLowerCase()));
   if (!taken.has(name.toLowerCase())) return name;
   let n = 2; while (taken.has(`${name} ${n}`.toLowerCase())) n++;
-  return `${name} ${n}`;
+  return `${name} ${n}`; // ensures in-table uniqueness without breaking identity (clientId) for scoring
 }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
 function sample(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
@@ -58,7 +110,7 @@ function activeOrder(){ return players.filter(p=>!p.spectator).map(p=>p.sid); }
 function nextIdx(idx, dir, order){ return (idx + dir + order.length) % order.length; }
 
 function cardImageName(card) {
-  if (card.color === "wild") return `${card.type}.png`; // wild.png or wild_draw4.png / wild_* specials
+  if (card.color === "wild") return `${card.type}.png`;
   if (card.type === "number") return `${card.color}_${card.value}.png`;
   if (card.type === "draw2") return `${card.color}_draw.png`;
   return `${card.color}_${card.type}.png`;
@@ -79,12 +131,11 @@ function deckNew(){
       d.push({color:c,type:"draw2",   img:`${c}_draw.png`});
     }
   }
-  // Standard wilds (4 each)
   for (let i=0;i<4;i++){
     d.push({color:"wild",type:"wild",       img:`wild.png`});
     d.push({color:"wild",type:"wild_draw4", img:`wild_draw4.png`});
   }
-  // Specialty (1 copy each per deck)
+  // Specialty
   d.push({color:"red",   type:"it",                img:"red_it.png"});
   d.push({color:"red",   type:"noc",               img:"red_noc.png"});
   d.push({color:"blue",  type:"moon",              img:"blue_moon.png"});
@@ -107,19 +158,18 @@ function emptyGame() {
     deck:[],
     discard:[],
     color:null,
-    value:null, // number value or action type string
+    value:null,
     dir:1,
     turnIdx:0,
     current:null,
-    hands:{}, // sid -> cards[]
+    hands:{},
     countdownEndsAt:null,
     turnEndsAt:null,
-    pendingPenalty:null, // { total, type: "draw2"|"wild_draw4", targetSid, lastFromSid }
+    pendingPenalty:null, // { total, type, targetSid, lastFromSid }
     relaxLock:false,
     roundFlags:{ happy:false },
     _happyFlagged: new Set(),
-    // Session house rules (all ON by default)
-    rules: { stacking:true, relax:true, points:true },
+    rules: { stacking:true, relax:true, points:true, unoPoints:false }, // ← NEW unoPoints toggle
   };
 }
 
@@ -132,19 +182,16 @@ function restockDeckIfNeeded(nNeeded=1){
       const top = game.discard.pop();
       const rest = game.discard.splice(0);
       shuffle(rest);
-      // place rest at the BOTTOM of the draw pile
       if (!game.deck) game.deck = [];
       game.deck = rest.concat(game.deck);
       game.discard = [top];
     }
   }
 }
-
 function drawOne(sid){
   if (!game) return null;
   restockDeckIfNeeded(1);
   if (game.deck.length === 0) {
-    // fallback: last resort rebuild
     if (game.discard.length > 1) {
       const top = game.discard.pop();
       game.deck = shuffle(game.discard);
@@ -158,8 +205,6 @@ function drawOne(sid){
   game.hands[sid].push(card);
   return card;
 }
-
-/* Give one random card from fromSid to toSid */
 function giveRandomCard(fromSid, toSid){
   if (!game || !fromSid || !toSid || fromSid === toSid) return null;
   const from = game.hands[fromSid] || [];
@@ -171,17 +216,12 @@ function giveRandomCard(fromSid, toSid){
   game.hands[toSid].push(c);
   return c;
 }
-
 function winnerIfAny(){
   if (!game) return null;
-  const actives = new Set(activeOrder()); // ignore spectators
-  for (const sid of actives) {
-    if ((game.hands[sid] || []).length === 0) return sid;
-  }
+  const actives = new Set(activeOrder());
+  for (const sid of actives) if ((game.hands[sid] || []).length === 0) return sid;
   return null;
 }
-
-/* settle if actor emptied hand or any winner exists; returns boolean */
 function checkAndSettleWin(actorSid){
   const w = actorSid && (game?.hands?.[actorSid]?.length === 0 ? actorSid : null) || winnerIfAny();
   if (!w) return false;
@@ -189,48 +229,30 @@ function checkAndSettleWin(actorSid){
   return true;
 }
 
-function settleWinIf(anySid){
-  const name = players.find(p=>p.sid===anySid)?.name || "Player";
-  announce(`🏆 ${name} wins the round!`);
-  // Points only if rule 'points' is ON (default)
-  if (!game || game.rules.points !== false) {
-    scores[name] = (scores[name]||0)+1;
-    saveScores();
+/* ---------- UNO classic points ---------- */
+function cardPointValue(card){
+  if (!card) return 0;
+  if (card.type === "number") return Number(card.value) || 0;
+  if (card.type === "skip" || card.type === "reverse" || card.type === "draw2") return 20;
+  if (String(card.type||"").startsWith("wild")) return 50;
+  // Specialty suggestions: mild=20, swingy=30
+  const t = card.type;
+  if (["moon","look","happy","recycle","shopping"].includes(t)) return 20;
+  if (["pinky","it","noc"].includes(t)) return 30;
+  // unknown specialty -> 20 by default
+  return 20;
+}
+function sumOpponentPoints(winnerSid){
+  const order = activeOrder();
+  let sum = 0;
+  for (const sid of order) {
+    if (sid === winnerSid) continue;
+    for (const c of (game.hands[sid] || [])) sum += cardPointValue(c);
   }
-
-  // Prepare next game and countdown
-  game = emptyGame();
-  game.started = false;
-  let endsAt = Date.now() + 60000;
-  game.countdownEndsAt = endsAt;
-  announce("⏳ Next round in 60s… promoting spectators if space is available.");
-
-  // Promote spectators to players until we reach MAX_PLAYERS
-  const actives = players.filter(p=>!p.spectator);
-  const specs = players.filter(p=>p.spectator);
-  const available = Math.max(0, MAX_PLAYERS - actives.length);
-  for (let i=0;i<Math.min(available, specs.length); i++){
-    specs[i].spectator = false;
-    announce(`🎟️ ${specs[i].name} moved to players for next round.`);
-  }
-  emitState();
-
-  clearInterval(countdownTimer);
-  countdownTimer = setInterval(()=>{
-    const enough = players.filter(p=>!p.spectator).length >= 2;
-    if (Date.now() >= endsAt) {
-      if (enough) { clearInterval(countdownTimer); countdownTimer=null; initGame(); }
-      else {
-        announce("⏳ Waiting for at least 2 players to start the next round…");
-        endsAt = Date.now() + 60000; // extend by 60s chunks until enough players
-        game.countdownEndsAt = endsAt;
-        emitState();
-      }
-    }
-  }, 300);
+  return sum;
 }
 
-/* ---------- Build state snapshot for clients ---------- */
+/* ---------- Build state ---------- */
 function buildState(){
   return {
     started: !!game?.started,
@@ -254,7 +276,7 @@ function emitState(){
   }
 }
 
-/* ---------- Countdown -> Init ---------- */
+/* ---------- Countdown / Init ---------- */
 function startCountdown(){
   if (game?.started || countdownTimer) return;
   if (players.filter(p=>!p.spectator).length < 2) return;
@@ -269,18 +291,12 @@ function startCountdown(){
     if (Date.now() >= endsAt) { clearInterval(countdownTimer); countdownTimer=null; initGame(); }
   }, 300);
 }
-
 function initGame(){
-  // Only truthy SIDs (defensive)
   const order = activeOrder().filter(Boolean);
-
   const deck = deckNew();
   const hands = {};
-  // Deal 7 per active player (robust)
   for (const sid of order) hands[sid] = [];
   for (let r=0; r<7; r++) for (const sid of order) { const c = deck.pop(); if (c) hands[sid].push(c); }
-
-  // Flip a number to start
   let first = deck.pop();
   let safety = 0;
   while (first && first.type !== "number" && safety < 50) { deck.unshift(first); shuffle(deck); first = deck.pop(); safety++; }
@@ -303,7 +319,6 @@ function initGame(){
   announce("🎉 Game started!");
   emitState();
 }
-
 function endGameIfNeeded(){
   const order = activeOrder();
   if (order.length <= 1 && game) {
@@ -312,21 +327,16 @@ function endGameIfNeeded(){
     emitState();
   }
 }
-
 function advanceTurn(skips=1){
   const order = activeOrder();
   if (!order.length) { endGameIfNeeded(); return; }
   let idx = order.indexOf(game.current);
   if (idx<0) idx = 0;
-  for (let s=0; s<skips; s++){
-    idx = nextIdx(idx, game.dir, order);
-  }
+  for (let s=0; s<skips; s++) idx = nextIdx(idx, game.dir, order);
   game.current = order[idx];
   game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
 }
-
 function onTurnTick(){
-  // Between-turn winner check
   if (game?.started) {
     const w = winnerIfAny();
     if (w) { settleWinIf(w); return; }
@@ -337,19 +347,16 @@ function onTurnTick(){
   const curSid = game.current;
   const p = players.find(x=>x.sid===curSid);
   if (p && !p.spectator) {
-    // If penalty pending and target timed out: settle penalty
     if (game.pendingPenalty && game.pendingPenalty.targetSid === curSid) {
       const total = game.pendingPenalty.total;
       restockDeckIfNeeded(total);
       for (let i=0;i<total;i++) drawOne(curSid);
       announce(`${p.name} drew ${total} (stack ended).`);
-      game.pendingPenalty = null;
-      game.relaxLock = false;
+      game.pendingPenalty = null; game.relaxLock = false;
       advanceTurn(1);
       emitState();
       return;
     }
-    // Normal timeout: draw 1 and pass
     drawOne(p.sid);
     announce(`⏰ ${p.name} ran out of time and drew 1.`);
   }
@@ -357,11 +364,9 @@ function onTurnTick(){
   emitState();
 }
 
-/* ---------- Chat buffer for HAPPY ---------- */
+/* ---------- Chat / announcers ---------- */
 let chatCounter = 1;
-let chatBuffer = []; // last 200 messages
-
-/* ---------- Announcer helpers ---------- */
+let chatBuffer = [];
 function faceString(card){
   const color = card.color;
   const t = card.type;
@@ -394,24 +399,19 @@ function rotateHands(direction){
   const order = activeOrder();
   if (order.length <= 1) return;
   let hands = order.map(sid=> game.hands[sid] || []);
-  if (direction === -1) { // left
-    hands.push(hands.shift());
-  } else { // right
-    hands.unshift(hands.pop());
-  }
+  if (direction === -1) hands.push(hands.shift());
+  else hands.unshift(hands.pop());
   order.forEach((sid,i)=> game.hands[sid] = hands[i]);
 }
 function isWild(type){ return String(type||"").startsWith("wild"); }
 function cardMatchesTop(card, color, value) {
   if (isWild(card.type)) return true;
   if (card.type === "number") return card.color === color || card.value === value;
-  // any action type can match action type (including specialties)
   return card.color === color || card.type === value;
 }
 
-/* ---------- Admin + rules helpers ---------- */
+/* ---------- Admin/Rules helpers ---------- */
 function isActiveSid(sid){ return activeOrder().includes(sid); }
-
 function forceSettlePenalty(){
   if (!game?.pendingPenalty) return false;
   const { total, targetSid } = game.pendingPenalty;
@@ -422,19 +422,16 @@ function forceSettlePenalty(){
   advanceTurn(1);
   return true;
 }
-
 function addTurnSeconds(sec){
   if (!game?.started) return false;
   game.turnEndsAt = (game.turnEndsAt || Date.now()) + Math.max(1, sec)*1000;
   return true;
 }
-
 function addCountdownSeconds(sec){
   if (!game || !game.countdownEndsAt) return false;
   game.countdownEndsAt += Math.max(1, sec)*1000;
   return true;
 }
-
 function adminStartNow(){
   if (game?.started) { announce("Admin: cannot start — round already active."); return false; }
   const enough = players.filter(p=>!p.spectator).length >= 2;
@@ -443,24 +440,21 @@ function adminStartNow(){
   initGame();
   return true;
 }
-
 function burnTop(){
   if (!game) return false;
   if ((game.discard?.length || 0) <= 1) return false;
   const top = game.discard.pop();
-  // put old top to bottom of draw pile
   game.deck.unshift(top);
   const newTop = game.discard[game.discard.length-1] || null;
   if (newTop) { game.color = newTop.color || game.color; game.value = newTop.value ?? newTop.type ?? game.value; }
   return true;
 }
 
-/* ---------- Penalty management (stacking; respects rules) ---------- */
+/* ---------- Penalty management ---------- */
 function beginPenalty(fromSid, type){
   const add = (type==="draw2") ? 2 : 4;
   const fromName = sidToName(fromSid);
 
-  // Stacking disabled → immediate draw for next player and skip them
   if (game?.rules && game.rules.stacking === false) {
     const targetSid = nextActiveSid(fromSid);
     if (!targetSid) return;
@@ -474,24 +468,21 @@ function beginPenalty(fromSid, type){
     return;
   }
 
-  // Normal stacking flow (ON)
   if (!game.pendingPenalty) {
     const nextSid = nextActiveSid(fromSid);
     const nextName = sidToName(nextSid);
     game.pendingPenalty = { total:add, type: (type==="draw2"?"draw2":"wild_draw4"), targetSid: nextSid, lastFromSid: fromSid };
-    game.current = nextSid; // target's turn
+    game.current = nextSid;
     game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
     announce(`${fromName} started a +${add} stack → ${nextName}. ${nextName} can draw +${add} or stack.`);
     return;
   }
 
-  // Adding to an existing stack
   const stackType = (type==="draw2"?"draw2":"wild_draw4");
   if (game.pendingPenalty.type !== stackType) return;
 
   game.pendingPenalty.total += add;
   game.pendingPenalty.lastFromSid = fromSid;
-
   const newTargetSid = nextActiveSid(fromSid);
   game.pendingPenalty.targetSid = newTargetSid;
   game.current = newTargetSid;
@@ -501,7 +492,6 @@ function beginPenalty(fromSid, type){
   const targetName = sidToName(newTargetSid);
   announce(`${fromName} added +${add} — ${targetName} can draw +${total} or stack.`);
 }
-
 function cancelPenaltyByRelax(actorSid, chosenColor){
   if (!game.pendingPenalty || game.relaxLock) return false;
   game.relaxLock = true;
@@ -515,7 +505,7 @@ function cancelPenaltyByRelax(actorSid, chosenColor){
   return true;
 }
 
-/* ---------- Prompt helper with cleanup ---------- */
+/* ---------- Prompt helper ---------- */
 function requireChoice(sid, kind, data, timeoutMs, onOk, onTimeout){
   const sock = players.find(p=>p.sid===sid)?.id;
   if (!sock) { onTimeout && onTimeout(); return; }
@@ -545,24 +535,39 @@ io.on("connection", (socket) => {
   socket.emit("helloAck", { ok:true, you:socket.id, at:Date.now() });
   socket.emit("state", buildState());
 
-  // JOIN
+  // JOIN (persist identity by clientId)
   socket.on("join", (payload) => {
     let name = ""; let clientId = "";
     if (typeof payload === "string") { name = payload; }
     else if (payload && typeof payload === "object") { name = payload.name || ""; clientId = payload.clientId || ""; }
-    name = uniqueName(name);
 
     let me = clientId && players.find(p => p.clientId === clientId);
     if (me) {
+      // returning user (persistent)
       me.id = socket.id;
       me.sid = me.sid || socket.id;
-      me.name = name || me.name;
+      if (name) me.name = uniqueName(name); // allow rename but keep in-table uniqueness
     } else {
+      name = uniqueName(name);
       const spectator = !!(game?.started) || players.filter(p=>!p.spectator).length >= MAX_PLAYERS;
-      me = { id:socket.id, sid:socket.id, clientId: clientId || (`c_${Math.random().toString(36).slice(2)}`), name, spectator, misses:0, lastChatAt:0 };
+      me = {
+        id:socket.id,
+        sid:socket.id,
+        clientId: clientId || (`c_${Math.random().toString(36).slice(2)}`),
+        name,
+        spectator,
+        misses:0, lastChatAt:0
+      };
       players.push(me);
       announce(`👤 ${me.name} ${me.spectator?"joined as spectator.":"joined the game."}`);
     }
+
+    // Keep score profile synced to latest display name
+    const prof = scoreDB.profiles[me.clientId] || { name: me.name, wins: 0, points: 0 };
+    prof.name = me.name; // update latest name label
+    scoreDB.profiles[me.clientId] = prof;
+    saveScores();
+
     socket.emit("me", { id: me.sid, name: me.name, spectator: me.spectator, clientId: me.clientId });
 
     if (!game?.started && players.filter(p=>!p.spectator).length >= 2) startCountdown();
@@ -574,7 +579,7 @@ io.on("connection", (socket) => {
     const me = players.find(p=>p.id===socket.id);
     if (!me) return;
     const now = Date.now();
-    if (now - (me.lastChatAt || 0) < 500) return; // rate limit
+    if (now - (me.lastChatAt || 0) < 500) return;
     me.lastChatAt = now;
     const id = chatCounter++;
     const payload = { id, fromSid: me.sid, fromName: me.name, msg: String(msg||""), at: now };
@@ -607,7 +612,7 @@ io.on("connection", (socket) => {
     announce(`📣 ${me.name} called UNO!`);
   });
 
-  // DRAW (normal or penalty settle)
+  // DRAW
   socket.on("drawCard", ()=>{
     const me = players.find(p=>p.id===socket.id);
     if (!me || !game?.started) return;
@@ -633,10 +638,10 @@ io.on("connection", (socket) => {
     emitState();
   });
 
-  // WILD RELAX (out-of-turn interrupt) — always get a color choice; respect rule
+  // WILD RELAX (out-of-turn)
   socket.on("playRelax", ({ index, color })=>{
     if (!game?.started || !game.pendingPenalty) return;
-    if (game?.rules && game.rules.relax === false) return; // Relax disabled
+    if (game?.rules && game.rules.relax === false) return;
     const me = players.find(p=>p.id===socket.id);
     if (!me) return;
     const hand = game.hands[me.sid] || [];
@@ -670,22 +675,20 @@ io.on("connection", (socket) => {
     if (typeof index !== "number" || index<0 || index>=hand.length) return;
     const card = hand[index];
 
-    // if you're the target of a stack, you may only stack same type or draw (or forbidden if stacking off)
     if (game.pendingPenalty && game.pendingPenalty.targetSid === me.sid) {
       const pType = game.pendingPenalty.type; // "draw2" or "wild_draw4"
-      if (game.rules && game.rules.stacking === false) return; // stacking disabled -> must draw
+      if (game.rules && game.rules.stacking === false) return;
       if (card.type !== pType) return;
     }
     if (game.current !== me.sid) return;
     if (!card || !cardMatchesTop(card, game.color, game.value)) return;
 
-    // play the card
     hand.splice(index,1);
     game.discard.push(card);
     announce(`${sidToName(me.sid)}: played a ${faceString(card)}.`);
     if (checkAndSettleWin(me.sid)) return;
 
-    /* -------- WILDS (always choose color) -------- */
+    // Wilds (always choose a color)
     const resetPromptTimer = ()=>{ game.turnEndsAt = Date.now()+TURN_SECONDS*1000; emitState(); };
     if (isWild(card.type)) {
       if (card.type === "wild") {
@@ -703,7 +706,7 @@ io.on("connection", (socket) => {
         socket.once("colorChosen", ({ color })=>{
           const chosen = COLORS.includes(color)?color:sample(COLORS);
           game.color = chosen; game.value = "wild_draw4";
-          beginPenalty(me.sid, "wild_draw4"); // target becomes current (or settles if stacking off)
+          beginPenalty(me.sid, "wild_draw4");
           emitState();
         });
         return;
@@ -802,16 +805,12 @@ io.on("connection", (socket) => {
       }
     }
 
-    /* -------- NUMBERS & COLORED ACTIONS -------- */
+    // Numbers & colored actions
     if (card.type === "number") {
       game.color = card.color; game.value = card.value;
       if (checkAndSettleWin(me.sid)) return;
-      advanceTurn(1);
-      emitState();
-      return;
+      advanceTurn(1); emitState(); return;
     }
-
-    // Specialty colored actions
     if (card.type === "it" && card.color==="red") {
       game.color = "red"; game.value = "it";
       const prev = previousActiveSid(me.sid);
@@ -824,7 +823,6 @@ io.on("connection", (socket) => {
       if (checkAndSettleWin(me.sid)) return;
       advanceTurn(1); emitState(); return;
     }
-
     if (card.type === "noc" && card.color==="red") {
       game.color = "red"; game.value = "noc";
       const actives = activeOrder().filter(sid=>sid!==me.sid);
@@ -836,7 +834,6 @@ io.on("connection", (socket) => {
       if (checkAndSettleWin(me.sid)) return;
       advanceTurn(1); emitState(); return;
     }
-
     if (card.type === "moon" && card.color==="blue") {
       game.color = "blue"; game.value = "moon";
       const order = activeOrder();
@@ -846,7 +843,6 @@ io.on("connection", (socket) => {
       if (checkAndSettleWin(me.sid)) return;
       advanceTurn(1); emitState(); return;
     }
-
     if (card.type === "look" && card.color==="blue") {
       game.color = "blue"; game.value = "look";
       const top4 = [];
@@ -864,7 +860,6 @@ io.on("connection", (socket) => {
       });
       return;
     }
-
     if (card.type === "happy" && card.color==="green") {
       game.color = "green"; game.value = "happy";
       game.roundFlags.happy = true;
@@ -872,7 +867,6 @@ io.on("connection", (socket) => {
       if (checkAndSettleWin(me.sid)) return;
       advanceTurn(1); emitState(); return;
     }
-
     if (card.type === "recycle" && card.color==="green") {
       game.color = "green"; game.value = "recycle";
       const actives = activeOrder();
@@ -888,7 +882,6 @@ io.on("connection", (socket) => {
       if (checkAndSettleWin(me.sid)) return;
       advanceTurn(1); emitState(); return;
     }
-
     if (card.type === "pinky" && card.color==="yellow") {
       game.color = "yellow"; game.value = "pinky";
       const targets = activeOrder().filter(sid=>sid!==me.sid).map(sid=>({ sid, name: sidToName(sid) }));
@@ -911,7 +904,6 @@ io.on("connection", (socket) => {
       game.turnEndsAt = Date.now()+TURN_SECONDS*1000; emitState();
       return;
     }
-
     if (card.type === "shopping" && card.color === "yellow") {
       game.color = "yellow"; game.value = "shopping";
       const targetSid = nextActiveSid(me.sid);
@@ -958,8 +950,6 @@ io.on("connection", (socket) => {
       game.turnEndsAt = Date.now()+TURN_SECONDS*1000; emitState();
       return;
     }
-
-    // Standard base actions
     if (card.type === "skip") {
       game.color = card.color; game.value = "skip";
       announce(`⛔ Skip next`);
@@ -976,15 +966,14 @@ io.on("connection", (socket) => {
     }
     if (card.type === "draw2") {
       game.color = card.color; game.value = "draw2";
-      beginPenalty(me.sid, "draw2"); // target becomes current (or settles if stacking off)
+      beginPenalty(me.sid, "draw2");
       emitState(); return;
     }
 
-    // default fallback
     advanceTurn(1); emitState();
   });
 
-  // Admin utilities (no auth gating per your request)
+  /* ---------- Admin utilities (no UI changes) ---------- */
   socket.on("admin:refresh", ()=> socket.emit("state", buildState()));
 
   socket.on("admin:newRound", ()=>{
@@ -1003,7 +992,6 @@ io.on("connection", (socket) => {
     game = null; emitState();
   });
 
-  // Admin chat (broadcast as Admin)
   socket.on("admin:chat", ({ msg })=>{
     const text = String(msg||"").trim();
     if (!text) return;
@@ -1011,7 +999,6 @@ io.on("connection", (socket) => {
     io.emit("chat", payload);
   });
 
-  /* ---------- Admin Hub commands (simple, no auth) ---------- */
   socket.on("admin:cmd", (data={})=>{
     switch (data.type) {
       case "toggleHappy":
@@ -1032,7 +1019,6 @@ io.on("connection", (socket) => {
         if (i>=0) {
           announce(`Admin kicked ${players[i].name}.`);
           if (game?.hands) delete game.hands[players[i].sid];
-          // If they were target of a stack, cancel it safely
           if (game?.pendingPenalty && game.pendingPenalty.targetSid === players[i].sid) {
             announce(`Penalty against ${players[i].name} canceled due to kick.`);
             game.pendingPenalty = null; game.relaxLock = false;
@@ -1077,26 +1063,23 @@ io.on("connection", (socket) => {
         break;
       }
 
-      /* === New admin QoL actions === */
+      /* QoL controls */
       case "extendCountdown": {
         const sec = Number(data.seconds) || 30;
         if (addCountdownSeconds(sec)) { announce(`Admin: extended start countdown by ${sec}s.`); emitState(); }
         else announce("Admin: no active countdown to extend.");
         break;
       }
-
       case "startNow": {
         const ok = adminStartNow(); if (ok) emitState();
         break;
       }
-
       case "skipTurn": {
         if (!game?.started) { announce("Admin: no active round to skip turn."); break; }
         announce("Admin: skipped current player's turn.");
         advanceTurn(1); emitState();
         break;
       }
-
       case "extendTurn": {
         if (!game?.started) { announce("Admin: no active round to extend turn."); break; }
         const sec = Number(data.seconds) || 10;
@@ -1105,7 +1088,6 @@ io.on("connection", (socket) => {
         emitState();
         break;
       }
-
       case "setCurrent": {
         const sid = data.sid;
         if (!game?.started || !sid || !isActiveSid(sid)) { announce("Admin: invalid player for setCurrent."); break; }
@@ -1115,20 +1097,17 @@ io.on("connection", (socket) => {
         emitState();
         break;
       }
-
       case "forceSettleStack": {
         if (!game?.pendingPenalty) { announce("Admin: no stack to settle."); break; }
         const ok = forceSettlePenalty(); if (ok) emitState();
         break;
       }
-
       case "burnTop": {
         const ok = burnTop();
         announce(ok ? "Admin: burned top discard and flipped next." : "Admin: cannot burn — need more cards in discard.");
         emitState();
         break;
       }
-
       case "forceDrawN": {
         const n = Math.max(1, Number(data.n) || 1);
         const sid = data.sid;
@@ -1139,14 +1118,14 @@ io.on("connection", (socket) => {
         emitState();
         break;
       }
-
       case "setRule": {
-        const key = String(data.key||"").toLowerCase(); // 'stacking' | 'relax' | 'points'
+        const key = String(data.key||"").toLowerCase(); // 'stacking'|'relax'|'points'|'unopoints'
+        let k = key === "unopoints" ? "unoPoints" : key;
         const val = !!data.value;
         if (!game) { announce("Admin: no session to set rule on."); break; }
-        if (!["stacking","relax","points"].includes(key)) { announce("Admin: unknown rule key."); break; }
-        game.rules[key] = val;
-        announce(`Admin: rule '${key}' → ${val ? "ON" : "OFF"}.`);
+        if (!["stacking","relax","points","unoPoints"].includes(k)) { announce("Admin: unknown rule key."); break; }
+        game.rules[k] = val;
+        announce(`Admin: rule '${k}' → ${val ? "ON" : "OFF"}.`);
         emitState();
         break;
       }
@@ -1157,5 +1136,65 @@ io.on("connection", (socket) => {
   });
 
 });
+
+/* ---------- Round end & scoring ---------- */
+function settleWinIf(anySid){
+  const winner = players.find(p=>p.sid===anySid);
+  const winnerName = winner?.name || "Player";
+  const winnerCid = winner?.clientId || null;
+
+  announce(`🏆 ${winnerName} wins the round!`);
+
+  // Record wins (if enabled)
+  const recordWins = !game || game.rules.points !== false;
+  // UNO points (optional)
+  const recordUNO = !!(game && game.rules.unoPoints);
+
+  if (winnerCid && (recordWins || recordUNO)) {
+    const prof = scoreDB.profiles[winnerCid] || { name:winnerName, wins:0, points:0 };
+    prof.name = winnerName; // latest label
+
+    if (recordWins) prof.wins = (prof.wins || 0) + 1;
+
+    if (recordUNO) {
+      const roundPts = sumOpponentPoints(anySid);
+      prof.points = (prof.points || 0) + roundPts;
+      announce(`📊 Points: ${winnerName} earns ${roundPts} this round (total ${prof.points}).`);
+    }
+
+    scoreDB.profiles[winnerCid] = prof;
+    saveScores();
+  }
+
+  // Prepare next game and countdown (+ spectator promotion)
+  game = emptyGame();
+  game.started = false;
+  let endsAt = Date.now() + 60000;
+  game.countdownEndsAt = endsAt;
+  announce("⏳ Next round in 60s… promoting spectators if space is available.");
+
+  const actives = players.filter(p=>!p.spectator);
+  const specs = players.filter(p=>p.spectator);
+  const available = Math.max(0, MAX_PLAYERS - actives.length);
+  for (let i=0;i<Math.min(available, specs.length); i++){
+    specs[i].spectator = false;
+    announce(`🎟️ ${specs[i].name} moved to players for next round.`);
+  }
+  emitState();
+
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(()=>{
+    const enough = players.filter(p=>!p.spectator).length >= 2;
+    if (Date.now() >= endsAt) {
+      if (enough) { clearInterval(countdownTimer); countdownTimer=null; initGame(); }
+      else {
+        announce("⏳ Waiting for at least 2 players to start the next round…");
+        endsAt = Date.now() + 60000;
+        game.countdownEndsAt = endsAt;
+        emitState();
+      }
+    }
+  }, 300);
+}
 
 server.listen(PORT, () => console.log("🚀 listening on", PORT));
