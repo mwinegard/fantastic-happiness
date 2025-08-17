@@ -1,5 +1,5 @@
 // Client with specialty flows, stacking narration via announcements, HAPPY emoji moderation,
-// Look/Shopping/Rainbow modals, Relax interrupt, and improved timer label.
+// Look/Shopping/Rainbow prompts, Relax interrupt, and improved timer label.
 (function boot(){
   function ensureClientId(){
     try{
@@ -35,39 +35,28 @@
     const dirLabel = document.getElementById("dir-label");
     const colorLabel = document.getElementById("color-label");
 
-    // Inline prompt dock, injected just below the top timer area
-    const promptDock = (function(){
-      const gs = document.getElementById("game-screen");
-      const dock = document.createElement("div");
-      dock.id = "prompt-dock";
-      dock.style.margin = "8px 16px";
-      gs && gs.insertBefore(dock, gs.querySelector(".board"));
-      return dock;
-    })();
+    // Use the existing prompt dock (no injected styling)
+    const promptDock = document.getElementById("prompt-dock");
 
-    // Inline prompt “modal-card” (no overlay), reusing existing .modal-card styles
-    // so nothing layers over gameplay and prompts live under the timer as requested.
-    let modalDiv;
-    function ensureModal(){
-      if (modalDiv) return modalDiv;
-      modalDiv = document.createElement("div");
-      modalDiv.className = "modal-card"; // reuse card styling
-      return modalDiv;
-    }
-    function closeModal(){
+    // Simple prompt helpers (unstyled blocks under the timer)
+    let promptNode;
+    function closePrompt(){ if (promptDock) promptDock.innerHTML=""; promptNode=null; }
+    function openPrompt(title, bodyNode, actions=[]){
       if (!promptDock) return;
-      promptDock.innerHTML = "";
-    }
-    function openModal(title, bodyNode, actions=[]) {
-      const card = ensureModal();
-      card.innerHTML = "";
-      const t = document.createElement("div"); t.className="modal-title"; t.textContent = title || "";
-      const body = document.createElement("div"); body.className="modal-body";
+      const wrap = document.createElement("div");
+      wrap.className = "prompt";
+      const t = document.createElement("strong");
+      t.textContent = title || "";
+      const body = document.createElement("div");
       if (bodyNode) body.appendChild(bodyNode);
-      const acts = document.createElement("div"); acts.className="modal-actions";
+      const acts = document.createElement("div");
       actions.forEach(a=>{ const b=document.createElement("button"); b.textContent=a.label; b.onclick=()=>a.onClick && a.onClick(); acts.appendChild(b); });
-      card.appendChild(t); card.appendChild(body); card.appendChild(acts);
-      promptDock.innerHTML = ""; promptDock.appendChild(card);
+      wrap.appendChild(t);
+      wrap.appendChild(body);
+      wrap.appendChild(acts);
+      promptDock.innerHTML="";
+      promptDock.appendChild(wrap);
+      promptNode = wrap;
     }
 
     function openColorPicker(onPick){
@@ -75,11 +64,11 @@
       const row = document.createElement("div"); row.className="wild-picker";
       ["red","yellow","green","blue"].forEach(c=>{
         const b=document.createElement("button"); b.textContent=c.toUpperCase(); b.dataset.color=c;
-        b.onclick=()=>{ onPick && onPick(c); closeModal(); };
+        b.onclick=()=>{ onPick && onPick(c); closePrompt(); };
         row.appendChild(b);
       });
       body.appendChild(row);
-      openModal("Choose a color", body, []);
+      openPrompt("Choose a color", body, []);
     }
 
     function renderPlayers(list, cur){
@@ -94,21 +83,19 @@
     }
     function renderTopCard(card){
       discardTop.innerHTML = "";
-      discardTop.className = "card";
       const img = document.createElement("img");
       if (!card) { img.src = "assets/cards/back.png"; img.alt = "Empty Pile"; }
       else { img.src = `assets/cards/${card.img}`; img.alt = `${card.color} ${card.type}`; }
+      discardTop.classList.add("card");
       discardTop.appendChild(img);
     }
     function renderDrawPile(){
       drawPile.innerHTML = "";
-      const back = document.createElement("div");
-      back.className = "card back";
       const img = document.createElement("img");
       img.src = "assets/cards/back.png";
       img.alt = "Draw Pile";
-      back.appendChild(img);
-      drawPile.appendChild(back);
+      drawPile.classList.add("card","back");
+      drawPile.appendChild(img);
     }
 
     // State (from server)
@@ -142,9 +129,7 @@
         if (clickable) {
           d.classList.add("playable");
           if (!isMyTurn && penalty && c.type==="wild_relax") {
-            d.addEventListener("click", ()=>{
-              openColorPicker((chosen)=> socket.emit("playRelax", { index:i, color: chosen }));
-            });
+            d.addEventListener("click", ()=> openColorPicker((chosen)=> socket.emit("playRelax", { index:i, color: chosen })));
           } else {
             d.addEventListener("click",()=>socket.emit("playCard",{index:i}));
           }
@@ -175,7 +160,7 @@
     }
 
     // socket streams
-    socket.on("helloAck", ()=>{ /* no-op */ });
+    socket.on("helloAck", ()=>{});
 
     socket.on("me", (p)=>{
       if (!p?.id) return;
@@ -234,75 +219,64 @@
       chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
     });
 
-    socket.on("happyFlagApplied", ()=>{
-      const btns = chatLog.querySelectorAll(".happy-btn:not([disabled])");
-      if (btns.length){ const btn = btns[btns.length-1]; btn.textContent="😼"; btn.disabled=true; btn.title="Already flagged"; }
-    });
-
     // Color picker generic
-    socket.on("chooseColor", ()=>{
-      openColorPicker((c)=> socket.emit("colorChosen", { color:c }));
-    });
+    socket.on("chooseColor", ()=> openColorPicker((c)=> socket.emit("colorChosen", { color:c })));
 
     // PROMPTS (now shown inline in the prompt dock below the timer)
     socket.on("prompt", ({ kind, data, timeoutMs })=>{
       if (kind==="targetPicker"){
-        const body = document.createElement("div"); body.className="target-list";
+        const body = document.createElement("div");
         (data.targets||[]).forEach(t=>{
           const b = document.createElement("button");
           b.textContent = t.name;
-          b.onclick = ()=>{ socket.emit("promptChoice", { kind, targetSid: t.sid }); closeModal(); };
+          b.onclick = ()=>{ socket.emit("promptChoice", { kind, targetSid: t.sid }); closePrompt(); };
           body.appendChild(b);
         });
-        openModal("Choose a player", body, []);
-        setTimeout(()=>closeModal(), timeoutMs||15000);
+        openPrompt("Choose a player", body, []);
+        setTimeout(()=>closePrompt(), timeoutMs||15000);
       }
       if (kind==="lookOrder"){
-        const body = document.createElement("div"); body.className="look4";
-        // simple reorder UX: choose the order by clicking 1..4
+        const body = document.createElement("div");
         const order=[], cards=(data.top4||[]);
         cards.forEach((c,i)=>{
-          const d = document.createElement("div"); d.className="card mini";
+          const d = document.createElement("div"); d.className="card";
           const img = document.createElement("img"); img.src = `assets/cards/${c.img}`; d.appendChild(img);
-          d.onclick=()=>{
-            if (order.includes(i)) return;
-            order.push(i); d.classList.add("picked");
-          };
+          d.onclick=()=>{ if (!order.includes(i)) { order.push(i); d.style.outline='2px solid #1b5fd1'; } };
           body.appendChild(d);
         });
         const confirmBtn = document.createElement("button"); confirmBtn.textContent="Confirm order";
-        confirmBtn.onclick=()=>{ if (order.length===4){ socket.emit("promptChoice", { kind, order }); closeModal(); } };
-        openModal("Look: reorder the next 4 cards (top to bottom)", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
-        setTimeout(()=>closeModal(), timeoutMs||15000);
+        confirmBtn.onclick=()=>{ if (order.length===4){ socket.emit("promptChoice", { kind, order }); closePrompt(); } };
+        openPrompt("Look: reorder the next 4 cards (top to bottom)", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
+        setTimeout(()=>closePrompt(), timeoutMs||15000);
       }
       if (kind==="shoppingTrade"){
-        const body = document.createElement("div"); body.className="shopping";
-        const wrap = document.createElement("div"); wrap.style.display="flex"; wrap.style.gap="10px"; wrap.style.flexWrap="wrap";
+        const body = document.createElement("div");
 
         const mineSel = new Set(); let theirSel = null;
 
-        const secMine = document.createElement("div"); secMine.className="handsec";
+        const secMine = document.createElement("div");
         const titleMine = document.createElement("div"); titleMine.textContent="Pick TWO of yours";
         secMine.appendChild(titleMine);
         (data.mine||[]).forEach(c=>{
-          const d=document.createElement("div"); d.className="card mini";
+          const d=document.createElement("div"); d.className="card";
           const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
           d.onclick=()=>{
-            if (mineSel.has(c.idx)) { mineSel.delete(c.idx); d.classList.remove("picked"); }
-            else if (mineSel.size<2){ mineSel.add(c.idx); d.classList.add("picked"); }
+            if (mineSel.has(c.idx)) { mineSel.delete(c.idx); d.style.outline=""; }
+            else if (mineSel.size<2){ mineSel.add(c.idx); d.style.outline="2px solid #1b5fd1"; }
           };
           secMine.appendChild(d);
         });
 
-        const secTheirs = document.createElement("div"); secTheirs.className="handsec";
+        const secTheirs = document.createElement("div");
         const titleTheirs = document.createElement("div"); titleTheirs.textContent="Pick ONE of theirs";
         secTheirs.appendChild(titleTheirs);
         (data.theirs||[]).forEach(c=>{
-          const d=document.createElement("div"); d.className="card mini";
+          const d=document.createElement("div"); d.className="card";
           const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
           d.onclick=()=>{
-            if (theirSel===c.idx){ theirSel=null; d.classList.remove("picked"); }
-            else { theirSel=c.idx; [...secTheirs.querySelectorAll(".card")].forEach(x=>x.classList.remove("picked")); d.classList.add("picked"); }
+            [...secTheirs.querySelectorAll(".card")].forEach(x=>x.style.outline="");
+            if (theirSel===c.idx){ theirSel=null; d.style.outline=""; }
+            else { theirSel=c.idx; d.style.outline="2px solid #1b5fd1"; }
           };
           secTheirs.appendChild(d);
         });
@@ -311,32 +285,32 @@
         confirmBtn.onclick=()=>{
           if (mineSel.size===2 && typeof theirSel==="number") {
             socket.emit("promptChoice", { kind, myTwo: Array.from(mineSel), theirOne: theirSel });
-            closeModal();
+            closePrompt();
           }
         };
-        wrap.append(secMine, secTheirs, confirmBtn);
-        openModal("Shopping: trade 2 for 1", wrap, []);
-        setTimeout(()=>closeModal(), timeoutMs||20000);
+        body.append(secMine, secTheirs);
+        openPrompt("Shopping: trade 2 for 1", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
+        setTimeout(()=>closePrompt(), timeoutMs||20000);
       }
       if (kind==="rainbowSelects"){
-        const body = document.createElement("div"); body.className="rainbow";
-        const info = document.createElement("div"); info.className="muted"; info.textContent="Pick one RED, YELLOW, GREEN, and BLUE card from your hand.";
+        const body = document.createElement("div");
+        const info = document.createElement("div"); info.textContent="Pick one RED, YELLOW, GREEN, and BLUE card from your hand.";
         body.appendChild(info);
         const picks = new Set();
         (data.hand||[]).forEach(c=>{
           if (!["red","yellow","green","blue"].includes(c.color)) return;
-          const d=document.createElement("div"); d.className="card mini";
+          const d=document.createElement("div"); d.className="card";
           const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
           d.onclick=()=>{
-            if (picks.has(c.idx)){ picks.delete(c.idx); d.classList.remove("picked"); }
-            else if (picks.size<4){ picks.add(c.idx); d.classList.add("picked"); }
+            if (picks.has(c.idx)){ picks.delete(c.idx); d.style.outline=""; }
+            else if (picks.size<4){ picks.add(c.idx); d.style.outline="2px solid #1b5fd1"; }
           };
           body.appendChild(d);
         });
         const confirm = document.createElement("button"); confirm.textContent="Confirm 4";
-        confirm.onclick=()=>{ if (picks.size===4){ socket.emit("promptChoice", { kind, picks: Array.from(picks) }); closeModal(); } };
-        openModal("Rainbow: choose one of each color", body, [ {label:"Confirm", onClick:()=>confirm.onclick()} ]);
-        setTimeout(()=>closeModal(), timeoutMs||20000);
+        confirm.onclick=()=>{ if (picks.size===4){ socket.emit("promptChoice", { kind, picks: Array.from(picks) }); closePrompt(); } };
+        openPrompt("Rainbow: choose one of each color", body, [{label:"Confirm", onClick:()=>confirm.onclick()}]);
+        setTimeout(()=>closePrompt(), timeoutMs||20000);
       }
     });
 
