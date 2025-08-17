@@ -1,204 +1,310 @@
-// Client with specialty flows, stacking narration via announcements, HAPPY emoji moderation,
-// Look/Shopping/Rainbow prompts, Relax interrupt, and improved timer label.
-(function boot(){
-  function ensureClientId(){
-    try{
-      const k="unoClientId"; let id = localStorage.getItem(k);
-      if (!id) { id = "c_"+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem(k, id); }
-      return id;
-    }catch{ return "c_"+Math.random().toString(36).slice(2); }
+// public/game.js
+(function () {
+  const socket = io();
+
+  // ---------- DOM ----------
+  const joinScreen = document.getElementById("join-screen");
+  const gameScreen = document.getElementById("game-screen");
+
+  const nameInput = document.getElementById("name");
+  const lobbyInput = document.getElementById("lobby");
+  const joinBtn = document.getElementById("joinbtn");
+
+  const drawPile = document.getElementById("draw-pile");
+  const discardTop = document.getElementById("discard-top");
+  const colorBadge = document.getElementById("color-badge");
+  const playerList = document.getElementById("player-list");
+  const handDiv = document.getElementById("player-hand");
+  const turnIndicator = document.getElementById("turn-indicator");
+
+  const chatLog = document.getElementById("chat-log");
+  const chatInput = document.getElementById("chat-input");
+  const chatSend = document.getElementById("chat-send");
+
+  const unoBtn = document.getElementById("uno-btn");
+  const relaxBtn = document.getElementById("relax-btn");
+  const muteBtn = document.getElementById("mute-toggle");
+
+  const leaderboardDiv = document.getElementById("leaderboard");
+
+  // ---------- Persisted ----------
+  try {
+    nameInput.value = localStorage.getItem("uno_name") || "";
+    lobbyInput.value = localStorage.getItem("uno_lobby") || "default";
+  } catch {}
+
+  // ---------- Sounds (lightweight; inherits default button look) ----------
+  const sounds = {
+    draw: safeAudio("assets/sounds/draw.mp3"),
+    skip: safeAudio("assets/sounds/skip.mp3"),
+    reverse: safeAudio("assets/sounds/reverse.mp3"),
+    wild: safeAudio("assets/sounds/wild.mp3"),
+    win: safeAudio("assets/sounds/win.mp3"),
+    joined: safeAudio("assets/sounds/joined.mp3"),
+    uno: safeAudio("assets/sounds/uno.mp3"),
+  };
+  let muted = false;
+  function safeAudio(src) {
+    const a = new Audio();
+    a.src = src;
+    return a;
   }
-  function waitIO(tries=0){
-    if (window.io) return start();
-    if (tries>200) { console.error("Socket.IO failed to load"); return; }
-    setTimeout(()=>waitIO(tries+1), 25);
+  function playSound(name) {
+    if (muted) return;
+    const a = sounds[name];
+    if (!a) return;
+    try { a.currentTime = 0; a.play(); } catch {}
   }
-
-  function start(){
-    const socket = io();
-    const me = { clientId: ensureClientId(), id:null, name:null };
-
-    // DOM
-    const joinBtn = document.getElementById("join-btn");
-    const nameInput = document.getElementById("name");
-    const joinScreen = document.getElementById("join-screen");
-    const gameScreen = document.getElementById("game-screen");
-    const playerList = document.getElementById("player-list");
-    const drawPile = document.getElementById("draw-pile");
-    const discardTop = document.getElementById("discard-top");
-    const colorBadge = document.getElementById("color-badge");
-    const turnIndicator = document.getElementById("turn-indicator");
-    const handDiv = document.getElementById("player-hand");
-    const unoBtn = document.getElementById("uno-btn");
-    const chatLog = document.getElementById("chat-log");
-    const chatInput = document.getElementById("chat-input");
-    
-    // Local state
-    let started=false, countdownEndsAt=null, turnEndsAt=null, current=null, dir=1, color=null, top=null, penalty=null;
-    let playersState=[], myHand=[], isMyTurn=false;
-
-    // Join
-    if (joinBtn) joinBtn.onclick = ()=>{
-      const name = (nameInput?.value||"").trim();
-      socket.emit("join", { name, clientId: me.clientId });
+  if (muteBtn) {
+    muteBtn.onclick = () => {
+      muted = !muted;
+      muteBtn.textContent = muted ? "🔇 Sound Off" : "🔊 Sound On";
     };
-
-    socket.on("me", (m)=>{ me.id = m.id; me.name = m.name; me.spectator = !!m.spectator; });
-
-    // Basic render helpers
-    function legal(c){
-      if (!top || !color) return true;
-      if (String(c.type||"").startsWith("wild")) return true;
-      if (c.type === "number") return (c.color===color || c.value===top.value);
-      return (c.color===color || c.type===top.type);
-    }
-
-    // State updates
-    socket.on("connected", ()=>{
-      if (joinScreen) joinScreen.style.display = "none";
-      if (gameScreen) gameScreen.style.display = "block";
-    });
-
-    socket.on("state", (s)=>{
-      started = !!s.started;
-      countdownEndsAt = s.countdownEndsAt;
-      turnEndsAt = s.turnEndsAt;
-      current = s.current;
-      dir = s.direction;
-      color = s.color;
-      top = s.top;
-      penalty = s.penalty;
-      roundFlags = s.roundFlags || { happy:false };
-      playersState = s.players || [];
-      isMyTurn = (current === me.id);
-
-      if (colorBadge) colorBadge.textContent = color ? color.toUpperCase() : "—";
-      if (discardTop) discardTop.src = top ? `assets/cards/${top.img}` : `assets/cards/back.png`;
-
-      renderPlayers(s.players, current);
-      renderPiles();
-      renderTimer();
-      renderHand();
-    });
-
-    socket.on("handSnapshot", (hand)=>{ myHand = hand || []; renderHand(); });
-
-    // Announce & chat
-    socket.on("announce", (text)=>{
-      const div = document.createElement("div");
-      div.textContent = text; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight;
-    });
-
-    socket.on("chat", ({ fromName, text })=>{
-      const div = document.createElement("div");
-      div.textContent = `${fromName}: ${text}`; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight;
-    });
-
-    function renderPlayers(players, cur){
-      if (!playerList) return;
-      playerList.innerHTML = "";
-      (players||[]).forEach(p=>{
-        const row = document.createElement("div");
-        row.className = "row";
-        const s = document.createElement("span");
-        s.textContent = p.name + (p.sid===cur ? " ←" : "");
-        row.appendChild(s);
-        playerList.appendChild(row);
-      });
-    }
-
-    function renderPiles(){
-      if (drawPile) drawPile.src = "assets/cards/back.png";
-      if (discardTop) discardTop.src = top ? `assets/cards/${top.img}` : "assets/cards/back.png";
-      if (colorBadge) colorBadge.textContent = color ? color.toUpperCase() : "—";
-    }
-
-    // prompts
-    function openColorPicker(cb){
-      // Minimal prompt: just choose via built-in prompt (no UI change)
-      const c = prompt("Pick a color (red, blue, green, yellow):","");
-      cb((c||"").trim().toLowerCase());
-    }
-
-    // Action hooks
-    if (unoBtn) unoBtn.onclick = ()=> socket.emit("callUno");
-    if (drawPile) drawPile.onclick = ()=> socket.emit("drawCard");
-
-    function renderHand(){
-      handDiv.innerHTML="";
-      if (me.spectator || !started) return;
-      myHand.forEach((c, i)=>{
-        const d = document.createElement("div");
-        d.className = "card";
-        const img = document.createElement("img");
-        img.src = `assets/cards/${c.img}`; img.alt = `${c.color} ${c.type}`;
-        d.appendChild(img);
-
-        let clickable = false;
-        if (isMyTurn) {
-          if (penalty && penalty.target === me.id) { clickable = (c.type === (penalty.type)); }
-          else { clickable = legal(c); }
-        }
-        if (!isMyTurn && penalty && c.type==="wild_relax") clickable = true;
-
-        if (clickable) {
-          d.classList.add("playable");
-          if (!isMyTurn && penalty && c.type==="wild_relax") {
-            d.addEventListener("click", ()=> openColorPicker((chosen)=> socket.emit("playRelax", { index:i, color: chosen })));
-          } else {
-            d.addEventListener("click",()=>socket.emit("playCard",{index:i}));
-          }
-        } else {
-          d.classList.add("unplayable");
-        }
-        handDiv.appendChild(d);
-      });
-      unoBtn && (unoBtn.disabled = !(myHand.length===1 && started && !me.spectator));
-    }
-    function msToSec(ms){ return Math.max(0, Math.ceil(ms/1000)); }
-    function renderTimer(){
-      if (countdownEndsAt && !started) {
-        turnIndicator.textContent = `Game starts in ${msToSec(countdownEndsAt - Date.now())}s`;
-        return;
-      }
-      if (!started || !turnEndsAt) { turnIndicator.textContent = "—"; return; }
-      const secs = msToSec(turnEndsAt - Date.now());
-      turnIndicator.textContent = `Your move: ${secs}s`;
-    }
-
-    // Happy flag
-    chatLog?.addEventListener("click", (e)=>{
-      const t = e.target;
-      if (t?.dataset?.msgId) {
-        socket.emit("flagHappy", { messageId: t.dataset.msgId });
-      }
-    });
-
-    // Send chat
-    const chatSend = document.getElementById("chat-send");
-    if (chatSend) chatSend.onclick = ()=>{
-      const text = (chatInput?.value||"").trim();
-      if (!text) return;
-      const id = "m_"+Math.random().toString(36).slice(2);
-      socket.emit("chat", { text, id });
-      chatInput.value="";
-    };
-    chatInput?.addEventListener("keydown", (e)=>{ if (e.key==="Enter") chatSend?.click(); });
-
-    // Connect the UI
-    window.addEventListener("load", ()=>{
-      if (joinScreen) joinScreen.style.display = "block";
-      if (gameScreen) gameScreen.style.display = "none";
-    });
-
-    socket.on("players", ()=>{}); // no-op for now
-
-    socket.on("connect", ()=>{
-      socket.emit("join", { name: (nameInput?.value||"").trim(), clientId: me.clientId });
-      if (joinScreen) joinScreen.style.display = "none";
-      if (gameScreen) gameScreen.style.display = "block";
-    });
   }
 
-  waitIO();
+  // ---------- State ----------
+  let me = { id: null, name: null, lobby: null, spectator: true };
+  let state = {
+    started: false,
+    countdownEndsAt: null,
+    turnEndsAt: null,
+    color: null,
+    value: null,
+    current: null,
+    direction: 1,
+    top: null,
+    penalty: null,
+    players: [],
+  };
+
+  // NOTE: Hands are server-authoritative and not mirrored here.
+  // We leave visual hand rendering minimal to preserve look & feel.
+
+  // ---------- Join ----------
+  function doJoin() {
+    const name = nameInput.value.trim() || "Player";
+    const lobby = (lobbyInput.value.trim() || "default").slice(0, 24);
+    try {
+      localStorage.setItem("uno_name", name);
+      localStorage.setItem("uno_lobby", lobby);
+    } catch {}
+    socket.emit("join", { name, lobby });
+  }
+  joinBtn.onclick = doJoin;
+  nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
+  lobbyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
+
+  // ---------- Socket events ----------
+  socket.on("me", (m) => {
+    me = m || me;
+    joinScreen.style.display = "none";
+    gameScreen.style.display = "block";
+    playSound("joined");
+  });
+
+  socket.on("announce", (text) => {
+    appendLog(text);
+    // sound cues
+    if (/Round Winner/i.test(text)) playSound("win");
+    if (/called UNO/i.test(text)) playSound("uno");
+    if (/Skip/i.test(text)) playSound("skip");
+    if (/reversed/i.test(text)) playSound("reverse");
+    if (/Color →/i.test(text)) playSound("wild");
+    if (/drew 1 card/i.test(text) || /drew \d+ \(stack ended\)/i.test(text)) playSound("draw");
+  });
+
+  socket.on("warn", (msg) => {
+    appendLog(String(msg || "⚠️").replace(/^/, "⚠️ "));
+  });
+
+  socket.on("chat", ({ fromName, text }) => {
+    const d = document.createElement("div");
+    d.textContent = `${fromName}: ${text}`;
+    chatLog.appendChild(d);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  });
+
+  socket.on("state", (s) => {
+    state = s || state;
+    render();
+  });
+
+  // ------ COLOR selection (for all wild specials; server calls this AFTER the effect) ------
+  socket.on("chooseColor", () => {
+    const c = (prompt("Pick a color (red, blue, green, yellow):", "") || "").trim().toLowerCase();
+    socket.emit("colorChosen", { color: c });
+  });
+
+  // ------ SPECIAL prompts (client inputs; server authoritative) ------
+  // LOOK (top 4 order)
+  socket.on("lookTop", ({ cards }) => {
+    // cards: [{i,color,type,value}]
+    const list = (cards || []).map(c => `${c.i}:${c.color} ${c.type}${c.value != null ? " " + c.value : ""}`).join(", ");
+    const def = (cards || []).map(c => c.i).join(",");
+    const ans = prompt(`Reorder TOP cards by indices (comma separated).\nTop-most is LAST in list.\nAvailable: ${list}`, def);
+    const order = String(ans || "").split(",").map(x => Number(x.trim())).filter(Number.isInteger);
+    socket.emit("lookTopOrder", { order });
+  });
+
+  // SHOPPING (target -> give two -> take one)
+  socket.on("shoppingChooseTarget", ({ targets }) => {
+    // targets: [{sid,name}]
+    const label = (targets || []).map(t => `${t.sid}:${t.name}`).join(", ");
+    const sid = prompt(`Pick target SID for Shopping:\n${label}`, (targets && targets[0] && targets[0].sid) || "");
+    socket.emit("shoppingTargetChosen", { sid });
+  });
+  socket.on("shoppingPickGive", ({ hand }) => {
+    // hand: my hand snapshot [{i,color,type,value}]
+    const label = (hand || []).map(h => `${h.i}:${h.color} ${h.type}${h.value != null ? " " + h.value : ""}`).join(", ");
+    const ans = prompt(`Pick TWO indices from your hand to GIVE (comma separated):\n${label}`, "");
+    const parts = String(ans || "").split(",").map(x => Number(x.trim()));
+    const [idx1, idx2] = parts;
+    socket.emit("shoppingGiveChosen", { idx1, idx2 });
+  });
+  socket.on("shoppingPickTake", ({ hand }) => {
+    // hand: target's hand snapshot
+    const label = (hand || []).map(h => `${h.i}:${h.color} ${h.type}${h.value != null ? " " + h.value : ""}`).join(", ");
+    const ans = prompt(`Pick ONE index from target's hand to TAKE:\n${label}`, "");
+    const idx = Number(ans);
+    socket.emit("shoppingTakeChosen", { idx });
+  });
+
+  // RECYCLE pick (if you later expose options; currently server redistributes globally)
+  socket.on("recyclePick", ({ cards }) => {
+    // For your current server implementation, this is not used (global redistribute).
+    // Left here for compatibility if you ever switch to a "choose from discard" variant.
+    const label = (cards || []).map(c => `${c.idx}:${c.color} ${c.type}${c.value != null ? " " + c.value : ""}`).join(", ");
+    const def = (cards && cards[cards.length - 1] && cards[cards.length - 1].idx) || 0;
+    const ans = prompt(`Pick one card from discard to take back:\n${label}`, def);
+    socket.emit("recycleChosen", { idx: Number(ans) });
+  });
+
+  // PINKY PROMISE target
+  socket.on("promiseChooseTarget", ({ targets }) => {
+    const label = (targets || []).map(t => `${t.sid}:${t.name}`).join(", ");
+    const sid = prompt(`Pick target SID for Pinky Promise:\n${label}`, (targets && targets[0] && targets[0].sid) || "");
+    socket.emit("promiseTargetChosen", { sid });
+  });
+
+  // IT target (seat-relative is server-side; this is here if you ever expose manual override)
+  socket.on("itChooseTarget", ({ targets }) => {
+    const label = (targets || []).map(t => `${t.sid}:${t.name}`).join(", ");
+    const sid = prompt(`Pick IT target (optional flow):\n${label}`, (targets && targets[0] && targets[0].sid) || "");
+    socket.emit("itTargetChosen", { sid });
+  });
+
+  // RAINBOW picks (indices of 1 card per color)
+  socket.on("rainbowPick", ({ hand }) => {
+    const label = (hand || []).map(h => `${h.i}:${h.color} ${h.type}${h.value != null ? " " + h.value : ""}`).join(", ");
+    const ans = prompt(
+      `Pick indices for one of each color (comma separated; order doesn't matter):\n${label}`,
+      ""
+    );
+    const indices = String(ans || "")
+      .split(",")
+      .map(x => Number(x.trim()))
+      .filter(Number.isInteger);
+    socket.emit("rainbowChosen", { indices });
+  });
+
+  // ---------- UI Actions ----------
+  drawPile.onclick = () => socket.emit("drawCard");
+  unoBtn.onclick = () => socket.emit("callUno");
+  relaxBtn.onclick = () => socket.emit("playRelaxRequested");
+
+  chatSend.onclick = sendChat;
+  chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
+
+  function sendChat() {
+    const txt = chatInput.value.trim();
+    if (!txt) return;
+    socket.emit("chat", { text: txt });
+    chatInput.value = "";
+  }
+
+  // ---------- Render ----------
+  function render() {
+    const { started, countdownEndsAt, turnEndsAt, color, current, top, players, penalty } = state;
+
+    // color + top card
+    colorBadge.textContent = color ? color.toUpperCase() : "—";
+    discardTop.src = top ? `assets/cards/${top.img}` : "assets/cards/back.png";
+    drawPile.src = "assets/cards/back.png";
+
+    // timer / turn indicator
+    if (!started && countdownEndsAt) {
+      turnIndicator.textContent = `Game starts in ${secs(countdownEndsAt - Date.now())}s`;
+    } else if (started && turnEndsAt) {
+      const mine = current === me.id;
+      const t = secs(turnEndsAt - Date.now());
+      turnIndicator.textContent = mine ? `Your move: ${t}s` : `Waiting…`;
+    } else {
+      turnIndicator.textContent = "—";
+    }
+
+    // players list
+    playerList.innerHTML = "";
+    (players || []).forEach((p) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      const s = document.createElement("span");
+      s.textContent = p.name + (p.sid === current ? " ←" : "");
+      const m = document.createElement("span");
+      m.textContent = p.spectator ? "👀" : "";
+      row.appendChild(s);
+      row.appendChild(m);
+      playerList.appendChild(row);
+    });
+
+    // hand area is intentionally minimal (no card sprites for hands to preserve current UX)
+    handDiv.innerHTML = ""; // keep empty / reserved
+
+    // button enables (server is authoritative; client just hints)
+    const myTurn = started && current === me.id;
+    unoBtn.disabled = !myTurn; // server enforces real UNO rule
+    const penaltyActive = !!penalty;
+    relaxBtn.disabled = !(started && (myTurn || penaltyActive));
+
+    // leaderboard
+    refreshLeaderboard();
+  }
+
+  // ---------- Helpers ----------
+  function appendLog(text) {
+    const d = document.createElement("div");
+    d.textContent = String(text || "");
+    chatLog.appendChild(d);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+  function secs(ms) {
+    return Math.max(0, Math.ceil((+ms || 0) / 1000));
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+  }
+
+  // ---------- Leaderboard ----------
+  let lastLeaderboardAt = 0;
+  async function refreshLeaderboard(force = false) {
+    const now = Date.now();
+    if (!force && now - lastLeaderboardAt < 3000) return;
+    lastLeaderboardAt = now;
+    try {
+      const res = await fetch("/leaderboard", { cache: "no-store" });
+      const data = await res.json();
+      leaderboardDiv.innerHTML = renderLeaderboard(data || []);
+    } catch {
+      // ignore
+    }
+  }
+  function renderLeaderboard(rows) {
+    const cells = (r) =>
+      `<tr><td>${escapeHtml(r.name)}</td><td>${Number(r.wins || 0)}</td><td>${Number(r.points || 0)}</td></tr>`;
+    return `<table><thead><tr><th>Name</th><th>Wins</th><th>Points</th></tr></thead><tbody>${rows
+      .map(cells)
+      .join("")}</tbody></table>`;
+  }
+
+  // warm initial leaderboard
+  refreshLeaderboard(true);
 })();
