@@ -1,43 +1,73 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UNO Leaderboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Reuse the site styles for a consistent look with Admin/Index -->
+  <link rel="stylesheet" href="style.css" />
   <style>
-    /* Minimal, non-invasive defaults (scoped to this page only) */
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 16px; }
-    h1 { margin: 0 0 12px 0; font-size: 20px; }
-    .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
-    .lb-table { width: 100%; border-collapse: collapse; }
-    .lb-table th, .lb-table td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
-    .lb-table th { font-weight: 600; }
-    .muted { color:#666; font-size:12px; }
-    .right { text-align:right; }
+    /* Mirror admin layout tokens so this page looks the same */
+    .admin-grid{
+      display:grid;gap:12px;
+      grid-template-columns: 1fr;
+      padding:16px;
+    }
+    .cardbox{
+      background:#0e2136;border:1px solid #193553;border-radius:12px;padding:12px;
+    }
+    .cardbox h2{margin:0 0 8px;font-size:16px}
+    .row{display:flex;gap:8px;align-items:center;margin:6px 0}
+    .row button{padding:8px 10px;border-radius:8px;border:0;background:#1b5fd1;color:#fff;cursor:pointer}
+    .muted{color:#9db2c7;font-size:12px}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#13375d;margin-left:6px;font-size:12px}
+    .lb-table{width:100%;border-collapse:collapse}
+    .lb-table th,.lb-table td{padding:10px 8px;border-bottom:1px solid #173a5c}
+    .lb-table th{font-weight:600;color:#e9eef5;text-align:left}
+    .lb-table td{color:#d7e3ef}
+    .right{text-align:right}
+    .rank{width:64px}
+    .wins{width:120px}
+    .points{width:140px}
   </style>
 </head>
 <body>
-  <h1>UNO Leaderboard</h1>
-  <div class="toolbar">
-    <button id="refreshBtn">Refresh</button>
-    <label class="muted">Auto-refresh <input id="autoChk" type="checkbox" checked> (10s)</label>
+  <!-- Top bar matches Admin/Index -->
+  <div class="topbar">
+    <div><strong>UNO Leaderboard</strong></div>
+    <div class="info" style="display:flex; gap:8px; align-items:center;">
+      <button id="refreshBtn">Refresh</button>
+      <label class="muted" style="display:flex; gap:6px; align-items:center;">
+        Auto-refresh <input id="autoChk" type="checkbox" checked />
+      </label>
+      <span id="updatedAt" class="muted"></span>
+    </div>
   </div>
 
-  <table class="lb-table" id="lbTable" aria-describedby="updatedAt">
-    <thead>
-      <tr>
-        <th style="width:60px;">#</th>
-        <th>Name</th>
-        <th class="right" style="width:120px;">Wins</th>
-        <th class="right" style="width:140px;">Points</th>
-      </tr>
-    </thead>
-    <tbody id="lbBody">
-      <tr><td colspan="4" class="muted">Loading…</td></tr>
-    </tbody>
-  </table>
+  <div class="admin-grid">
+    <div class="cardbox">
+      <h2>Standings <span class="pill">Wins &amp; Points</span></h2>
 
-  <div id="updatedAt" class="muted" style="margin-top:8px;"></div>
+      <table class="lb-table" id="lbTable" aria-describedby="updatedAt">
+        <thead>
+          <tr>
+            <th class="rank">#</th>
+            <th>Name</th>
+            <th class="right wins">Wins</th>
+            <th class="right points">Points</th>
+          </tr>
+        </thead>
+        <tbody id="lbBody">
+          <tr><td colspan="4" class="muted" style="padding:14px 8px;">Loading…</td></tr>
+        </tbody>
+      </table>
+
+      <div class="row" style="justify-content:space-between; margin-top:8px;">
+        <div class="muted">Sorted by Wins, then Points.</div>
+        <!-- Optional reset button could go here if you decide to expose POST /scores/reset -->
+      </div>
+    </div>
+  </div>
 
   <script>
   (function(){
@@ -58,9 +88,8 @@
     }
 
     function render(arr){
-      // Server already sorts (wins desc, then points desc); keep that ordering.
       if (!arr.length) {
-        $body.innerHTML = '<tr><td colspan="4" class="muted">No games recorded yet.</td></tr>';
+        $body.innerHTML = '<tr><td colspan="4" class="muted" style="padding:14px 8px;">No games recorded yet.</td></tr>';
       } else {
         $body.innerHTML = arr.map((row, i) => `
           <tr>
