@@ -10,34 +10,35 @@
   <link rel="preload" as="image" href="assets/cards/wild.png" />
 </head>
 <body>
-  <!-- Join screen -->
-  <div id="join-screen" class="panel">
+  <!-- Join screen (acts as joinOverlay for game.js) -->
+  <div id="joinOverlay" class="panel">
     <h1>Join the Table</h1>
-    <div class="row">
-      <input id="name" placeholder="Your name (optional)" maxlength="24" />
-      <button id="joinbtn">Join</button>
-    </div>
+    <form id="joinForm" class="row" style="gap:8px;">
+      <input id="nameInput" placeholder="Your name (optional)" maxlength="24" />
+      <button id="joinBtn" type="submit">Join</button>
+    </form>
     <div class="note">A name is optional — we’ll generate one if you leave it blank.</div>
+    <div id="status" class="note"></div>
   </div>
 
   <!-- Game screen -->
   <div id="game-screen" style="display:none;">
     <div class="topbar">
       <div id="dir-label">Direction: →</div>
-      <div class="timer-display" id="turn-indicator">—</div>
+      <div class="timer-display" id="timer">—</div>
       <div id="color-label">Color: —</div>
     </div>
 
-    <!-- Prompts container (non-overlay; stays under the timer) -->
-    <div id="prompt-dock"></div>
+    <!-- Prompts container (non-overlay; below timer) -->
+    <div id="prompts"></div>
 
     <div class="board">
       <!-- Left: players -->
       <aside class="sidebar">
         <h3>Players</h3>
-        <ul id="player-list"></ul>
+        <ul id="players"></ul>
         <div class="info">
-          <button id="uno-btn" disabled>UNO!</button>
+          <button id="btnUno" disabled>UNO!</button>
         </div>
       </aside>
 
@@ -46,15 +47,17 @@
         <div class="piles">
           <div class="pile discard">
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
-            <div id="discard-top" class="card back"></div>
+            <!-- game.js will inject an <img> here -->
+            <div id="discardPile" class="card back"></div>
           </div>
           <div class="pile draw">
             <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
-            <div id="draw-pile" class="card back"></div>
+            <!-- game.js will inject an <img> here and handle clicks -->
+            <div id="drawPile" class="card back"></div>
           </div>
         </div>
 
-        <div id="player-hand" class="hand"></div>
+        <div id="hand" class="hand"></div>
 
         <!-- (Fallback) wild color picker; main picker shown via prompt dock -->
         <div id="wild-buttons" class="wild-picker" style="display:none;">
@@ -68,10 +71,10 @@
       <!-- Right: chat -->
       <section class="chat">
         <h3>Table Talk</h3>
-        <div id="chat-log" class="chatlog"></div>
+        <div id="chatLog" class="chatlog"></div>
         <div class="chatform">
-          <input id="chat-input" placeholder="Say something nice…" maxlength="200" />
-          <button id="chat-send">Send</button>
+          <input id="chatInput" placeholder="Say something nice…" maxlength="200" />
+          <button id="sendChat">Send</button>
         </div>
       </section>
     </div>
@@ -80,5 +83,30 @@
   <!-- Socket.IO + client -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
+  <script>
+    // Show game screen after the client identifies ("me" event sets local me.id).
+    // If your existing game.js already handles toggling visibility, you can remove this.
+    (function(){
+      const s = io();
+      let shown = false;
+      s.on('me', ()=> {
+        if (shown) return;
+        shown = true;
+        const join = document.getElementById('joinOverlay');
+        const game = document.getElementById('game-screen');
+        if (join) join.style.display = 'none';
+        if (game) game.style.display = '';
+      });
+      // Also reveal once we see state (fallback)
+      s.on('state', ()=> {
+        if (shown) return;
+        shown = true;
+        const join = document.getElementById('joinOverlay');
+        const game = document.getElementById('game-screen');
+        if (join) join.style.display = 'none';
+        if (game) game.style.display = '';
+      });
+    })();
+  </script>
 </body>
 </html>
