@@ -1,50 +1,84 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>UNO</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fantastic Happiness — UNO</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Optional: light preloads for snappier first render -->
+  <link rel="preload" as="image" href="assets/cards/back.png" />
+  <link rel="preload" as="image" href="assets/cards/red_0.png" />
+  <link rel="preload" as="image" href="assets/cards/wild.png" />
 </head>
 <body>
-  <!-- Join Screen -->
-  <div id="join-screen">
-    <h1>UNO</h1>
-    <input id="name" type="text" placeholder="Enter your name">
-    <button id="join-btn">Join Game</button>
+  <!-- Join screen -->
+  <div id="join-screen" class="panel">
+    <h1>Join the Table</h1>
+    <div class="row">
+      <input id="name" placeholder="Your name (optional)" maxlength="24" />
+      <button id="join-btn">Join</button>
+    </div>
+    <div class="note">A name is optional — we’ll generate one if you leave it blank.</div>
   </div>
 
-  <!-- Game Screen -->
+  <!-- Game screen -->
   <div id="game-screen" style="display:none;">
-    <header>
-      <div id="turn-indicator">—</div>
-      <div id="dir-label"></div>
-      <div id="color-label"></div>
-    </header>
+    <div class="topbar">
+      <div id="dir-label">Direction: →</div>
+      <div class="timer-display" id="turn-indicator">—</div>
+      <div id="color-label">Color: —</div>
+    </div>
 
-    <!-- Prompt Dock lives right below timer (populated by game.js) -->
+    <!-- Prompts container (non-overlay; stays under the timer) -->
     <div id="prompt-dock"></div>
 
-    <!-- Board -->
     <div class="board">
-      <div id="draw-pile" class="pile"></div>
-      <div id="discard-top" class="pile"></div>
-    </div>
+      <!-- Left: players -->
+      <aside class="sidebar">
+        <h3>Players</h3>
+        <ul id="player-list"></ul>
+        <div class="info">
+          <button id="uno-btn" disabled>UNO!</button>
+        </div>
+      </aside>
 
-    <!-- Hand -->
-    <div id="player-hand" class="hand"></div>
-    <button id="uno-btn" disabled>UNO!</button>
+      <!-- Center: table -->
+      <main class="table">
+        <div class="piles">
+          <div class="pile discard">
+            <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
+            <div id="discard-top" class="card back"></div>
+          </div>
+          <div class="pile draw">
+            <div class="stack s1"></div><div class="stack s2"></div><div class="stack s3"></div>
+            <div id="draw-pile" class="card back"></div>
+          </div>
+        </div>
 
-    <!-- Player list -->
-    <ul id="player-list"></ul>
+        <div id="player-hand" class="hand"></div>
 
-    <!-- Chat -->
-    <div id="chat">
-      <div id="chat-log"></div>
-      <input id="chat-input" type="text" placeholder="Say something">
-      <button id="chat-send">Send</button>
+        <!-- (Fallback) wild color picker; main picker shown via prompt dock -->
+        <div id="wild-buttons" class="wild-picker" style="display:none;">
+          <button data-color="red">RED</button>
+          <button data-color="yellow">YELLOW</button>
+          <button data-color="green">GREEN</button>
+          <button data-color="blue">BLUE</button>
+        </div>
+      </main>
+
+      <!-- Right: chat -->
+      <section class="chat">
+        <h3>Table Talk</h3>
+        <div id="chat-log" class="chatlog"></div>
+        <div class="chatform">
+          <input id="chat-input" placeholder="Say something nice…" maxlength="200" />
+          <button id="chat-send">Send</button>
+        </div>
+      </section>
     </div>
   </div>
 
+  <!-- Socket.IO + client -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
