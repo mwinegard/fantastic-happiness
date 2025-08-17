@@ -1,29 +1,38 @@
 /* global io */
 (() => {
-  // ---------- Basics ----------
+  // ---------- Socket ----------
   const socket = io();
 
-  // DOM helpers
+  // ---------- DOM lookups ----------
   const byId = (id) => document.getElementById(id);
-  const $players = byId("players");
-  const $draw = byId("drawPile");
-  const $discard = byId("discardPile");
-  const $hand = byId("hand");
-  const $chatLog = byId("chatLog");
-  const $chatInput = byId("chatInput");
-  const $sendChat = byId("sendChat");
-  const $timer = byId("timer");
-  const $prompts = byId("prompts"); // container below timer
 
-  // Static
+  // Game UI
+  const $players  = byId("players");
+  const $draw     = byId("drawPile");
+  const $discard  = byId("discardPile");
+  const $hand     = byId("hand");
+  const $chatLog  = byId("chatLog");
+  const $chatInput= byId("chatInput");
+  const $sendChat = byId("sendChat");
+  const $timer    = byId("timer");
+  const $prompts  = byId("prompts"); // prompt container below timer
+
+  // Join UI (if present in your HTML)
+  const $joinForm    = byId("joinForm");     // <form id="joinForm">
+  const $joinBtn     = byId("joinBtn");      // <button id="joinBtn">
+  const $nameInput   = byId("nameInput");    // <input id="nameInput">
+  const $joinOverlay = byId("joinOverlay");  // wrapper/overlay to hide once joined
+  const $statusText  = byId("status");       // optional status label
+
+  // ---------- Constants ----------
   const COLORS = ["red","yellow","green","blue"];
   const cardImgPath = (img) => `/assets/cards/${img || "back.png"}`;
   const backImg = `/assets/cards/back.png`;
 
-  // Client identity (persistent)
-  let me = { id:null, name:null, spectator:true, clientId: null };
+  // ---------- Client identity ----------
+  let me = { id:null, name:null, spectator:true, clientId:null };
 
-  // State snapshot from server
+  // ---------- Game state snapshot ----------
   let started = false;
   let countdownEndsAt = null;
   let turnEndsAt = null;
@@ -36,33 +45,72 @@
   let playersState = [];
   let myHand = [];
 
-  // Local render interval
+  // ---------- UI ticker ----------
   let uiTicker = null;
 
-  // ---------- Identity: join with persisted clientId ----------
+  // ---------- Prefill saved name (optional) ----------
   try {
-    const savedId = localStorage.getItem("unoClientId");
-    socket.emit("join", { name: "", clientId: savedId || "" });
-  } catch {
-    socket.emit("join", { name: "", clientId: "" });
+    const savedName = localStorage.getItem("unoName") || "";
+    if ($nameInput && savedName) $nameInput.value = savedName;
+  } catch {}
+
+  // ---------- Socket diagnostics (helps spot join issues) ----------
+  socket.on("connect_error", (err) => {
+    console.warn("socket connect_error:", err?.message || err);
+    if ($statusText) $statusText.textContent = "Connection error. Check server.";
+  });
+  socket.on("reconnect", () => {
+    if ($statusText) $statusText.textContent = "Reconnected.";
+  });
+
+  // ---------- Single emitter for Join ----------
+  function emitJoin(nameFromUI) {
+    const name = (nameFromUI ?? ($nameInput?.value || "")).trim();
+    if (name) {
+      try { localStorage.setItem("unoName", name); } catch {}
+    }
+    const savedClientId = (() => {
+      try { return localStorage.getItem("unoClientId") || ""; } catch { return ""; }
+    })();
+
+    if ($joinBtn) { $joinBtn.disabled = true; $joinBtn.textContent = "Joining…"; }
+    if ($statusText) $statusText.textContent = "Joining…";
+
+    socket.emit("join", { name, clientId: savedClientId });
   }
 
+  // ---------- Wire Join button & form ----------
+  if ($joinBtn) {
+    $joinBtn.addEventListener("click", (e) => { e.preventDefault(); emitJoin(); });
+  }
+  if ($joinForm) {
+    $joinForm.addEventListener("submit", (e) => { e.preventDefault(); emitJoin(); });
+  }
+
+  // ---------- Auto-join once on load (keeps identity across refreshes)
+  // Comment this block if you want manual-join-only behavior.
+  (function autoJoinOnce(){
+    const savedClientId = (() => { try { return localStorage.getItem("unoClientId") || ""; } catch { return ""; } })();
+    const savedName = (() => { try { return localStorage.getItem("unoName") || ""; } catch { return ""; } })();
+    socket.emit("join", { name: savedName, clientId: savedClientId });
+  })();
+
+  // ---------- Server: identity ack ----------
   socket.on("me", (info) => {
     me.id = info.id;
     me.name = info.name;
     me.spectator = !!info.spectator;
-    me.clientId = info.clientId || me.clientId;
-    // persist identity for next visit
-    try {
-      if (me.clientId) localStorage.setItem("unoClientId", me.clientId);
-    } catch {}
+    me.clientId = info.clientId;
+
+    try { if (info.clientId) localStorage.setItem("unoClientId", info.clientId); } catch {}
+
+    if ($joinBtn) { $joinBtn.disabled = false; $joinBtn.textContent = "Join"; }
+    if ($statusText) $statusText.textContent = "Joined";
+
+    if ($joinOverlay) $joinOverlay.style.display = "none";
   });
 
-  // ---------- Server pushes ----------
-  socket.on("helloAck", () => {
-    // no-op
-  });
-
+  // ---------- Server: state push ----------
   socket.on("state", (s) => {
     started = !!s.started;
     countdownEndsAt = s.countdownEndsAt;
@@ -75,46 +123,47 @@
     roundFlags = s.roundFlags || { happy:false };
     playersState = s.players || [];
 
-    // Keep local spectator flag synced (important when promoted)
+    // Sync spectator flag in case we were promoted/demoted
     const myRow = playersState.find(p => p.id === me.id);
     if (myRow) me.spectator = !!myRow.spectator;
+
+    // Fallback: hide join overlay once we see ourselves in state
+    if ($joinOverlay && me.id) $joinOverlay.style.display = "none";
 
     renderAll();
   });
 
+  // ---------- Server: hand push ----------
   socket.on("handSnapshot", (cards) => {
-    // This event is sent only to me for my hand
     myHand = Array.isArray(cards) ? cards.slice() : [];
     renderHand();
   });
 
-  socket.on("announce", (t) => {
-    logLine(t);
-  });
+  // ---------- Announcements ----------
+  socket.on("announce", (t) => logLine(t));
 
-  // HAPPY flag result
+  // ---------- HAPPY moderation feedback ----------
   socket.on("happyFlagApplied", ({ messageId }) => {
-    // optional: dim/mark the flagged message in UI if you render IDs
+    // Optional: mark/dim message with data-mid=messageId
   });
 
-  // Color chooser (server enforces for all wilds)
+  // ---------- Wild color chooser (server-driven) ----------
   socket.on("chooseColor", () => {
     showColorPicker("Choose a color", (c) => {
       socket.emit("colorChosen", { color: c });
       clearPrompt();
     }, () => {
-      // If user ignores, do nothing; server will auto-resolve after play flow
       clearPrompt();
     });
   });
 
-  // Generic prompts: lookOrder, rainbowSelects, targetPicker, shoppingTrade
+  // ---------- Prompts: look/rainbow/pinky/shopping ----------
   socket.on("prompt", ({ kind, data, timeoutMs }) => {
     switch(kind) {
-      case "lookOrder": renderLookOrderPrompt(data, timeoutMs); break;
-      case "rainbowSelects": renderRainbowPrompt(data, timeoutMs); break;
-      case "targetPicker": renderTargetPicker(data, timeoutMs); break;
-      case "shoppingTrade": renderShoppingPrompt(data, timeoutMs); break;
+      case "lookOrder":      renderLookOrderPrompt(data, timeoutMs); break;
+      case "rainbowSelects": renderRainbowPrompt(data, timeoutMs);    break;
+      case "targetPicker":   renderTargetPicker(data, timeoutMs);     break;
+      case "shoppingTrade":  renderShoppingPrompt(data, timeoutMs);   break;
       default: /* no-op */ break;
     }
   });
@@ -122,9 +171,7 @@
   // ---------- Chat ----------
   if ($sendChat && $chatInput) {
     $sendChat.addEventListener("click", sendChat);
-    $chatInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendChat();
-    });
+    $chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
   }
   function sendChat() {
     const text = ($chatInput.value || "").trim();
@@ -132,10 +179,7 @@
     socket.emit("chat", text);
     $chatInput.value = "";
   }
-
   socket.on("chat", (payload) => {
-    // payload: { id, fromSid, fromName, msg, at }
-    // Render basic line; HAPPY flagging can be UI-side if desired
     const line = document.createElement("div");
     line.className = "chat-line";
     line.dataset.mid = payload.id;
@@ -143,7 +187,6 @@
     if ($chatLog) $chatLog.appendChild(line);
     if ($chatLog) $chatLog.scrollTop = $chatLog.scrollHeight;
 
-    // HAPPY: if active, show small flag button for player messages (not Admin/Spectators filtered server-side)
     if (roundFlags && roundFlags.happy) {
       const btn = document.createElement("button");
       btn.className = "happy-flag-btn";
@@ -157,7 +200,6 @@
   // ---------- Draw pile click ----------
   if ($draw) {
     $draw.addEventListener("click", () => {
-      // Drawing is allowed on your turn; if you are stack target on your turn, this settles the stack
       if (!started) return;
       if (me.spectator) return;
       if (current !== me.id) return;
@@ -201,16 +243,11 @@
       img.className = "card-img draw-pile";
       $draw.innerHTML = "";
       $draw.appendChild(img);
-      // cursor state
-      if (started && !me.spectator && current === me.id) {
-        $draw.classList.add("clickable");
-      } else {
-        $draw.classList.remove("clickable");
-      }
+      if (started && !me.spectator && current === me.id) $draw.classList.add("clickable");
+      else $draw.classList.remove("clickable");
     }
   }
 
-  // Timer: re-rendered from a local ticker every 250ms
   function renderTimer() {
     if (!$timer) return;
     const now = Date.now();
@@ -224,15 +261,12 @@
     const label = !started ? `Game starts in: ${secs}s` : `Turn time: ${secs}s`;
     $timer.textContent = label;
   }
-
   function ensureTicker() {
     if (uiTicker) return;
-    uiTicker = setInterval(() => {
-      renderTimer();
-    }, 250);
+    uiTicker = setInterval(renderTimer, 250);
   }
 
-  // ---------- Hand & clickability rules ----------
+  // ---------- Hand & clickability ----------
   function renderHand() {
     if (!$hand) return;
     $hand.innerHTML = "";
@@ -246,25 +280,21 @@
       el.alt = c.type || "";
       el.dataset.index = String(idx);
 
-      // Enable/disable logic
       let enabled = false;
 
-      // Out-of-turn RELAX: If a stack is pending, any player holding wild_relax can click it
+      // Out-of-turn RELAX allowed during a stack
       if (penalty && c.type === "wild_relax") {
-        enabled = true; // let server decide legality; we'll route to playRelax
+        enabled = true;
         el.classList.add("relax-card");
         el.title = "Play RELAX to cancel stack";
       }
 
       if (myTurn) {
         if (!penalty) {
-          // Normal turn: optimistic enable (server validates real legality). We gray-out non-matches to help UX.
-          enabled = clientCanMatchTop(c);
+          enabled = clientCanMatchTop(c); // client hint; server validates
         } else if (pendingStackAgainstMe) {
-          // Only same penalty type can be stacked (or draw by clicking draw pile).
-          enabled = (c.type === penalty.type); // draw2 or wild_draw4
+          enabled = (c.type === penalty.type); // must stack same type
         } else {
-          // A stack is happening but it's not my turn → can't play (except relax handled above)
           enabled = false;
         }
       }
@@ -272,19 +302,13 @@
       if (enabled) el.classList.add("clickable");
       else el.classList.remove("clickable");
 
-      // Click handler
       el.onclick = () => {
         if (!enabled) return;
-        // If this is a RELAX play and any stack is pending, use out-of-turn endpoint
         if (penalty && c.type === "wild_relax") {
-          // If server needs a color, it will emit chooseColor
           socket.emit("playRelax", { index: idx });
           return;
         }
-        // Normal in-turn play
-        if (started && current === me.id) {
-          socket.emit("playCard", { index: idx });
-        }
+        if (started && current === me.id) socket.emit("playCard", { index: idx });
       };
 
       $hand.appendChild(el);
@@ -298,11 +322,10 @@
     if (card.type === "number") {
       return (card.color === color) || (card.value === top.value);
     }
-    // actions & specialties: color or type match allowed
     return (card.color === color) || (card.type === top.type);
   }
 
-  // ---------- Prompts ----------
+  // ---------- Prompt helpers ----------
   function clearPrompt() {
     if ($prompts) $prompts.innerHTML = "";
   }
@@ -339,7 +362,7 @@
     $prompts.appendChild(wrap);
   }
 
-  // Look: choose order of top4
+  // Look: order top 4
   function renderLookOrderPrompt(data, timeoutMs) {
     if (!$prompts) return;
     const top4 = (data && data.top4) || []; // [{img, idx}]
@@ -374,7 +397,6 @@
     const ok = document.createElement("button");
     ok.textContent = "Confirm Order";
     ok.onclick = () => {
-      // Server expects order length 4; if not complete, it will default
       socket.emit("promptChoice", { kind: "lookOrder", order: picks });
       clearPrompt();
     };
@@ -397,7 +419,7 @@
     $prompts.appendChild(wrap);
   }
 
-  // Rainbow: select one of each color from your hand
+  // Rainbow: select one of each color
   function renderRainbowPrompt(data, timeoutMs) {
     if (!$prompts) return;
     const hand = (data && data.hand) || []; // [{idx,color,type,img}]
@@ -558,7 +580,6 @@
       img.className = "card-img";
       img.onclick = () => {
         theirPick = t.idx;
-        // visual: highlight only one (lightweight)
         Array.from(theirGrid.querySelectorAll("img")).forEach(x => x.classList.remove("selected"));
         img.classList.add("selected");
       };
@@ -614,21 +635,14 @@
     f();
   }
 
-  // ---------- Convenience actions (buttons you may already have) ----------
+  // ---------- Convenience buttons (if present) ----------
   const btnDraw = byId("btnDraw");
-  if (btnDraw) btnDraw.onclick = () => {
-    if (started && current === me.id) socket.emit("drawCard");
-  };
+  if (btnDraw) btnDraw.onclick = () => { if (started && current === me.id) socket.emit("drawCard"); };
+
   const btnUno = byId("btnUno");
   if (btnUno) btnUno.onclick = () => socket.emit("callUno");
 
-  // ---------- Minimal styles (only class toggles) ----------
-  // NOTE: We’re not injecting CSS; we rely on your existing CSS.
-  // .clickable    -> cursor:pointer handled by your sheet
-  // .selected     -> highlight a chosen card in prompts
-  // .prompt-*     -> whatever default you already have
-
-  // ---------- That’s all ----------
+  // ---------- Log helper ----------
   function logLine(t) {
     if (!$chatLog) return;
     const el = document.createElement("div");
