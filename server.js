@@ -1,5 +1,5 @@
 // UNO server with specialty cards, stacking (draw2/+4), wild_relax interrupt, rich announcements,
-// HAPPY chat emoji moderation, Look/Shopping/Rainbow flows, and Admin Hub commands.
+// HAPPY chat emoji moderation, Look/Shopping/Rainbow flows, Admin commands, and house rules.
 const express = require("express");
 const http = require("http");
 const fs = require("fs");
@@ -118,6 +118,8 @@ function emptyGame() {
     relaxLock:false,
     roundFlags:{ happy:false },
     _happyFlagged: new Set(),
+    // Session house rules (all ON by default)
+    rules: { stacking:true, relax:true, points:true },
   };
 }
 
@@ -190,7 +192,11 @@ function checkAndSettleWin(actorSid){
 function settleWinIf(anySid){
   const name = players.find(p=>p.sid===anySid)?.name || "Player";
   announce(`🏆 ${name} wins the round!`);
-  scores[name] = (scores[name]||0)+1; saveScores();
+  // Points only if rule 'points' is ON (default)
+  if (!game || game.rules.points !== false) {
+    scores[name] = (scores[name]||0)+1;
+    saveScores();
+  }
 
   // Prepare next game and countdown
   game = emptyGame();
@@ -265,12 +271,21 @@ function startCountdown(){
 }
 
 function initGame(){
-  const order = activeOrder();
+  // Only truthy SIDs (defensive)
+  const order = activeOrder().filter(Boolean);
+
   const deck = deckNew();
   const hands = {};
-  for (const sid of order) hands[sid] = [deck.pop(),deck.pop(),deck.pop(),deck.pop(),deck.pop(),deck.pop(),deck.pop()];
+  // Deal 7 per active player (robust)
+  for (const sid of order) hands[sid] = [];
+  for (let r=0; r<7; r++) for (const sid of order) { const c = deck.pop(); if (c) hands[sid].push(c); }
+
+  // Flip a number to start
   let first = deck.pop();
-  while (first.type !== "number") { deck.unshift(first); shuffle(deck); first = deck.pop(); }
+  let safety = 0;
+  while (first && first.type !== "number" && safety < 50) { deck.unshift(first); shuffle(deck); first = deck.pop(); safety++; }
+  if (!first) { first = { color:"red", type:"number", value:0, img:"red_0.png" }; }
+
   game = emptyGame();
   game.started = true;
   game.deck = deck;
@@ -282,6 +297,7 @@ function initGame(){
   game.turnIdx = 0;
   game.current = order[0] || null;
   game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
+
   clearInterval(turnTicker);
   turnTicker = setInterval(onTurnTick, 250);
   announce("🎉 Game started!");
@@ -385,8 +401,6 @@ function rotateHands(direction){
   }
   order.forEach((sid,i)=> game.hands[sid] = hands[i]);
 }
-
-/* ---------- Legality ---------- */
 function isWild(type){ return String(type||"").startsWith("wild"); }
 function cardMatchesTop(card, color, value) {
   if (isWild(card.type)) return true;
@@ -395,36 +409,91 @@ function cardMatchesTop(card, color, value) {
   return card.color === color || card.type === value;
 }
 
-/* ---------- Penalty management (stacking) ---------- */
+/* ---------- Admin + rules helpers ---------- */
+function isActiveSid(sid){ return activeOrder().includes(sid); }
+
+function forceSettlePenalty(){
+  if (!game?.pendingPenalty) return false;
+  const { total, targetSid } = game.pendingPenalty;
+  restockDeckIfNeeded(total);
+  for (let i=0;i<total;i++) drawOne(targetSid);
+  announce(`${sidToName(targetSid)} drew ${total} (stack force-settled).`);
+  game.pendingPenalty = null; game.relaxLock = false;
+  advanceTurn(1);
+  return true;
+}
+
+function addTurnSeconds(sec){
+  if (!game?.started) return false;
+  game.turnEndsAt = (game.turnEndsAt || Date.now()) + Math.max(1, sec)*1000;
+  return true;
+}
+
+function addCountdownSeconds(sec){
+  if (!game || !game.countdownEndsAt) return false;
+  game.countdownEndsAt += Math.max(1, sec)*1000;
+  return true;
+}
+
+function adminStartNow(){
+  if (game?.started) { announce("Admin: cannot start — round already active."); return false; }
+  const enough = players.filter(p=>!p.spectator).length >= 2;
+  if (!enough) { announce("Admin: cannot start — need at least 2 players."); return false; }
+  if (typeof countdownTimer !== "undefined" && countdownTimer) { clearInterval(countdownTimer); countdownTimer=null; }
+  initGame();
+  return true;
+}
+
+function burnTop(){
+  if (!game) return false;
+  if ((game.discard?.length || 0) <= 1) return false;
+  const top = game.discard.pop();
+  // put old top to bottom of draw pile
+  game.deck.unshift(top);
+  const newTop = game.discard[game.discard.length-1] || null;
+  if (newTop) { game.color = newTop.color || game.color; game.value = newTop.value ?? newTop.type ?? game.value; }
+  return true;
+}
+
+/* ---------- Penalty management (stacking; respects rules) ---------- */
 function beginPenalty(fromSid, type){
   const add = (type==="draw2") ? 2 : 4;
   const fromName = sidToName(fromSid);
 
+  // Stacking disabled → immediate draw for next player and skip them
+  if (game?.rules && game.rules.stacking === false) {
+    const targetSid = nextActiveSid(fromSid);
+    if (!targetSid) return;
+    const targetName = sidToName(targetSid);
+    restockDeckIfNeeded(add);
+    for (let i=0;i<add;i++) drawOne(targetSid);
+    announce(`${targetName} drew +${add} (stacking off).`);
+    const afterTarget = nextActiveSid(targetSid);
+    game.current = afterTarget || targetSid;
+    game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
+    return;
+  }
+
+  // Normal stacking flow (ON)
   if (!game.pendingPenalty) {
     const nextSid = nextActiveSid(fromSid);
     const nextName = sidToName(nextSid);
     game.pendingPenalty = { total:add, type: (type==="draw2"?"draw2":"wild_draw4"), targetSid: nextSid, lastFromSid: fromSid };
-
-    // It's now the target's turn
-    game.current = nextSid;
+    game.current = nextSid; // target's turn
     game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
-
     announce(`${fromName} started a +${add} stack → ${nextName}. ${nextName} can draw +${add} or stack.`);
     return;
   }
 
   // Adding to an existing stack
   const stackType = (type==="draw2"?"draw2":"wild_draw4");
-  if (game.pendingPenalty.type !== stackType) {
-    return;
-  }
+  if (game.pendingPenalty.type !== stackType) return;
 
   game.pendingPenalty.total += add;
   game.pendingPenalty.lastFromSid = fromSid;
 
   const newTargetSid = nextActiveSid(fromSid);
   game.pendingPenalty.targetSid = newTargetSid;
-
   game.current = newTargetSid;
   game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
 
@@ -564,9 +633,10 @@ io.on("connection", (socket) => {
     emitState();
   });
 
-  // WILD RELAX (out-of-turn interrupt) — always get a color choice
+  // WILD RELAX (out-of-turn interrupt) — always get a color choice; respect rule
   socket.on("playRelax", ({ index, color })=>{
     if (!game?.started || !game.pendingPenalty) return;
+    if (game?.rules && game.rules.relax === false) return; // Relax disabled
     const me = players.find(p=>p.id===socket.id);
     if (!me) return;
     const hand = game.hands[me.sid] || [];
@@ -600,9 +670,10 @@ io.on("connection", (socket) => {
     if (typeof index !== "number" || index<0 || index>=hand.length) return;
     const card = hand[index];
 
-    // if you're the target of a stack, you may only stack same type or draw
+    // if you're the target of a stack, you may only stack same type or draw (or forbidden if stacking off)
     if (game.pendingPenalty && game.pendingPenalty.targetSid === me.sid) {
       const pType = game.pendingPenalty.type; // "draw2" or "wild_draw4"
+      if (game.rules && game.rules.stacking === false) return; // stacking disabled -> must draw
       if (card.type !== pType) return;
     }
     if (game.current !== me.sid) return;
@@ -632,7 +703,7 @@ io.on("connection", (socket) => {
         socket.once("colorChosen", ({ color })=>{
           const chosen = COLORS.includes(color)?color:sample(COLORS);
           game.color = chosen; game.value = "wild_draw4";
-          beginPenalty(me.sid, "wild_draw4"); // target becomes current
+          beginPenalty(me.sid, "wild_draw4"); // target becomes current (or settles if stacking off)
           emitState();
         });
         return;
@@ -905,7 +976,7 @@ io.on("connection", (socket) => {
     }
     if (card.type === "draw2") {
       game.color = card.color; game.value = "draw2";
-      beginPenalty(me.sid, "draw2"); // target becomes current
+      beginPenalty(me.sid, "draw2"); // target becomes current (or settles if stacking off)
       emitState(); return;
     }
 
@@ -913,16 +984,22 @@ io.on("connection", (socket) => {
     advanceTurn(1); emitState();
   });
 
-  // Admin utilities
+  // Admin utilities (no auth gating per your request)
   socket.on("admin:refresh", ()=> socket.emit("state", buildState()));
+
   socket.on("admin:newRound", ()=>{
-    if (countdownTimer) return;
-    if (!game?.started && players.filter(p=>!p.spectator).length >= 2) startCountdown();
-    else { announce("⏳ Cannot start: round active or insufficient players."); }
+    if (countdownTimer) { announce("Admin requested new round, but countdown already active."); return; }
+    if (!game?.started && players.filter(p=>!p.spectator).length >= 2) {
+      announce("Admin started a new round countdown.");
+      startCountdown();
+    } else {
+      announce("Admin requested new round but round is active or insufficient players.");
+    }
   });
+
   socket.on("admin:endRound", ()=>{
-    if (!game?.started) return;
-    announce("⛔ Round ended by admin.");
+    if (!game?.started) { announce("Admin tried to end round, but no active round."); return; }
+    announce("⛔ Round ended by Admin.");
     game = null; emitState();
   });
 
@@ -942,47 +1019,138 @@ io.on("connection", (socket) => {
         announce(`Admin toggled HAPPY: ${game.roundFlags.happy?"ON":"OFF"}.`);
         emitState();
         break;
+
       case "rotateHands":
         rotateHands(data.dir===-1?-1:1);
         announce(`Admin rotated hands ${data.dir===-1?"◀︎ left":"▶︎ right"}.`);
         emitState();
         break;
+
       case "kick": {
         const sid = data.sid;
         const i = players.findIndex(p=>p.sid===sid);
         if (i>=0) {
           announce(`Admin kicked ${players[i].name}.`);
           if (game?.hands) delete game.hands[players[i].sid];
+          // If they were target of a stack, cancel it safely
+          if (game?.pendingPenalty && game.pendingPenalty.targetSid === players[i].sid) {
+            announce(`Penalty against ${players[i].name} canceled due to kick.`);
+            game.pendingPenalty = null; game.relaxLock = false;
+          }
+          const wasCurrent = game?.current === players[i].sid;
           players.splice(i,1);
+          if (wasCurrent && game?.started) advanceTurn(1);
           endGameIfNeeded();
           emitState();
         }
         break;
       }
+
       case "drawOne": {
         const sid = data.sid; if (!sid) break;
         drawOne(sid); announce(`Admin: forced draw 1 to ${sidToName(sid)}.`);
         emitState();
         break;
       }
+
       case "giveCard": {
         const sid = data.sid; const card = data.card;
         if (sid && card) { if (!game.hands[sid]) game.hands[sid]=[]; game.hands[sid].push(card); announce(`Admin gave a card to ${sidToName(sid)}.`); emitState(); }
         break;
       }
+
       case "setColor": {
         const c = data.color;
         if (COLORS.includes(c)) { game.color = c; announce(`Admin set table color → ${c.toUpperCase()}.`); emitState(); }
+        else announce("Admin setColor: invalid color.");
         break;
       }
+
       case "forceRelax": {
-        if (game.pendingPenalty) {
+        if (game?.pendingPenalty) {
           announce(`Admin forced RELAX: penalty canceled.`);
           game.pendingPenalty = null; game.relaxLock=false;
           advanceTurn(1); emitState();
+        } else {
+          announce(`Admin forceRelax: no penalty to cancel.`);
         }
         break;
       }
+
+      /* === New admin QoL actions === */
+      case "extendCountdown": {
+        const sec = Number(data.seconds) || 30;
+        if (addCountdownSeconds(sec)) { announce(`Admin: extended start countdown by ${sec}s.`); emitState(); }
+        else announce("Admin: no active countdown to extend.");
+        break;
+      }
+
+      case "startNow": {
+        const ok = adminStartNow(); if (ok) emitState();
+        break;
+      }
+
+      case "skipTurn": {
+        if (!game?.started) { announce("Admin: no active round to skip turn."); break; }
+        announce("Admin: skipped current player's turn.");
+        advanceTurn(1); emitState();
+        break;
+      }
+
+      case "extendTurn": {
+        if (!game?.started) { announce("Admin: no active round to extend turn."); break; }
+        const sec = Number(data.seconds) || 10;
+        addTurnSeconds(sec);
+        announce(`Admin: added +${sec}s to the current turn.`);
+        emitState();
+        break;
+      }
+
+      case "setCurrent": {
+        const sid = data.sid;
+        if (!game?.started || !sid || !isActiveSid(sid)) { announce("Admin: invalid player for setCurrent."); break; }
+        game.current = sid;
+        game.turnEndsAt = Date.now()+TURN_SECONDS*1000;
+        announce(`Admin: set current turn to ${sidToName(sid)}.`);
+        emitState();
+        break;
+      }
+
+      case "forceSettleStack": {
+        if (!game?.pendingPenalty) { announce("Admin: no stack to settle."); break; }
+        const ok = forceSettlePenalty(); if (ok) emitState();
+        break;
+      }
+
+      case "burnTop": {
+        const ok = burnTop();
+        announce(ok ? "Admin: burned top discard and flipped next." : "Admin: cannot burn — need more cards in discard.");
+        emitState();
+        break;
+      }
+
+      case "forceDrawN": {
+        const n = Math.max(1, Number(data.n) || 1);
+        const sid = data.sid;
+        if (!sid || !isActiveSid(sid)) { announce("Admin: invalid player for forceDrawN."); break; }
+        restockDeckIfNeeded(n);
+        for (let i=0;i<n;i++) drawOne(sid);
+        announce(`Admin: forced draw ${n} to ${sidToName(sid)}.`);
+        emitState();
+        break;
+      }
+
+      case "setRule": {
+        const key = String(data.key||"").toLowerCase(); // 'stacking' | 'relax' | 'points'
+        const val = !!data.value;
+        if (!game) { announce("Admin: no session to set rule on."); break; }
+        if (!["stacking","relax","points"].includes(key)) { announce("Admin: unknown rule key."); break; }
+        game.rules[key] = val;
+        announce(`Admin: rule '${key}' → ${val ? "ON" : "OFF"}.`);
+        emitState();
+        break;
+      }
+
       default:
         announce(`Admin: unknown command '${data.type}'.`);
     }
