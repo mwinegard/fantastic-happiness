@@ -67,14 +67,23 @@ a{color:#9bd0ff}
 /* Non-overlay prompt dock right under topbar */
 #prompt-dock { margin: 8px 0 12px; }
 
-/* Keep prompts simple; using default text/buttons */
-#prompt-dock .prompt { margin: 0; }
-
-/* Enforce consistent card sizing everywhere while preserving images */
-.card { width: 96px; height: 144px; }
+/* Enforce consistent card sizing everywhere while preserving images (use CSS variables) */
+:root{
+  --card-w: 96px;
+  --card-h: 144px;
+}
+.card { width: var(--card-w); height: var(--card-h); }
 .card img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+/* Make angled stack layers and visible tops identical in size */
+.pile .stack,
+#discard-top.card,
+#draw-pile.card{
+  width: var(--card-w);
+  height: var(--card-h);
+}
 
 /* Responsive: smaller cards on small screens */
 @media (max-width: 720px){
-  .card { width: 80px; height: 120px; }
+  :root{ --card-w: 80px; --card-h: 120px; }
 }
