@@ -26,80 +26,104 @@
     const playerList = document.getElementById("player-list");
     const drawPile = document.getElementById("draw-pile");
     const discardTop = document.getElementById("discard-top");
+    const colorBadge = document.getElementById("color-badge");
+    const turnIndicator = document.getElementById("turn-indicator");
     const handDiv = document.getElementById("player-hand");
     const unoBtn = document.getElementById("uno-btn");
     const chatLog = document.getElementById("chat-log");
     const chatInput = document.getElementById("chat-input");
-    const chatSend = document.getElementById("chat-send");
-    const turnIndicator = document.getElementById("turn-indicator");
-    const dirLabel = document.getElementById("dir-label");
-    const colorLabel = document.getElementById("color-label");
+    
+    // Local state
+    let started=false, countdownEndsAt=null, turnEndsAt=null, current=null, dir=1, color=null, top=null, penalty=null;
+    let playersState=[], myHand=[], isMyTurn=false;
 
-    // prompt dock
-    const promptDock = document.getElementById("prompt-dock");
+    // Join
+    if (joinBtn) joinBtn.onclick = ()=>{
+      const name = (nameInput?.value||"").trim();
+      socket.emit("join", { name, clientId: me.clientId });
+    };
 
-    // prompt helpers
-    function closePrompt(){ if (promptDock) promptDock.innerHTML=""; }
-    function openPrompt(title, bodyNode, actions=[]){
-      if (!promptDock) return;
-      const wrap = document.createElement("div");
-      wrap.className = "prompt";
-      const t = document.createElement("strong"); t.textContent = title || "";
-      const body = document.createElement("div"); if (bodyNode) body.appendChild(bodyNode);
-      const acts = document.createElement("div");
-      actions.forEach(a=>{ const b=document.createElement("button"); b.textContent=a.label; b.onclick=()=>a.onClick && a.onClick(); acts.appendChild(b); });
-      wrap.appendChild(t); wrap.appendChild(body); wrap.appendChild(acts);
-      promptDock.innerHTML=""; promptDock.appendChild(wrap);
-    }
-    function openColorPicker(onPick){
-      const body = document.createElement("div");
-      const row = document.createElement("div"); row.className="wild-picker";
-      ["red","yellow","green","blue"].forEach(c=>{
-        const b=document.createElement("button"); b.textContent=c.toUpperCase(); b.dataset.color=c;
-        b.onclick=()=>{ onPick && onPick(c); closePrompt(); };
-        row.appendChild(b);
-      });
-      body.appendChild(row);
-      openPrompt("Choose a color", body, []);
+    socket.on("me", (m)=>{ me.id = m.id; me.name = m.name; me.spectator = !!m.spectator; });
+
+    // Basic render helpers
+    function legal(c){
+      if (!top || !color) return true;
+      if (String(c.type||"").startsWith("wild")) return true;
+      if (c.type === "number") return (c.color===color || c.value===top.value);
+      return (c.color===color || c.type===top.type);
     }
 
-    function renderPlayers(list, cur){
+    // State updates
+    socket.on("connected", ()=>{
+      if (joinScreen) joinScreen.style.display = "none";
+      if (gameScreen) gameScreen.style.display = "block";
+    });
+
+    socket.on("state", (s)=>{
+      started = !!s.started;
+      countdownEndsAt = s.countdownEndsAt;
+      turnEndsAt = s.turnEndsAt;
+      current = s.current;
+      dir = s.direction;
+      color = s.color;
+      top = s.top;
+      penalty = s.penalty;
+      roundFlags = s.roundFlags || { happy:false };
+      playersState = s.players || [];
+      isMyTurn = (current === me.id);
+
+      if (colorBadge) colorBadge.textContent = color ? color.toUpperCase() : "—";
+      if (discardTop) discardTop.src = top ? `assets/cards/${top.img}` : `assets/cards/back.png`;
+
+      renderPlayers(s.players, current);
+      renderPiles();
+      renderTimer();
+      renderHand();
+    });
+
+    socket.on("handSnapshot", (hand)=>{ myHand = hand || []; renderHand(); });
+
+    // Announce & chat
+    socket.on("announce", (text)=>{
+      const div = document.createElement("div");
+      div.textContent = text; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight;
+    });
+
+    socket.on("chat", ({ fromName, text })=>{
+      const div = document.createElement("div");
+      div.textContent = `${fromName}: ${text}`; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight;
+    });
+
+    function renderPlayers(players, cur){
+      if (!playerList) return;
       playerList.innerHTML = "";
-      (list||[]).forEach(p=>{
-        const li = document.createElement("li");
-        if (p.id===me.id) li.classList.add("me");
-        if (p.id===cur) li.classList.add("turn");
-        li.innerHTML = `<span>${p.name}${p.spectator?" (spectator)":""}</span><span>${p.spectator?"—":p.handCount}</span>`;
-        playerList.appendChild(li);
+      (players||[]).forEach(p=>{
+        const row = document.createElement("div");
+        row.className = "row";
+        const s = document.createElement("span");
+        s.textContent = p.name + (p.sid===cur ? " ←" : "");
+        row.appendChild(s);
+        playerList.appendChild(row);
       });
     }
-    function renderTopCard(card){
-      discardTop.innerHTML = "";
-      const img = document.createElement("img");
-      if (!card) { img.src = "assets/cards/back.png"; img.alt = "Empty Pile"; }
-      else { img.src = `assets/cards/${card.img}`; img.alt = `${card.color} ${card.type}`; }
-      discardTop.classList.add("card");
-      discardTop.appendChild(img);
-    }
-    function renderDrawPile(){
-      drawPile.innerHTML = "";
-      const img = document.createElement("img");
-      img.src = "assets/cards/back.png";
-      img.alt = "Draw Pile";
-      drawPile.classList.add("card","back");
-      drawPile.appendChild(img);
+
+    function renderPiles(){
+      if (drawPile) drawPile.src = "assets/cards/back.png";
+      if (discardTop) discardTop.src = top ? `assets/cards/${top.img}` : "assets/cards/back.png";
+      if (colorBadge) colorBadge.textContent = color ? color.toUpperCase() : "—";
     }
 
-    // State
-    let started=false, countdownEndsAt=null, turnEndsAt=null, current=null, dir=1, color=null, top=null, penalty=null, roundFlags={happy:false};
-    let playersState=[], isMyTurn=false, myHand=[];
-
-    function legal(card){
-      if (!started || !top) return false;
-      if (card.type==="number") return (card.color===color || (typeof top.value!=="undefined" && card.value===top.value));
-      if (card.type.startsWith("wild")) return true;
-      return (card.color===color || card.type===top.type);
+    // prompts
+    function openColorPicker(cb){
+      // Minimal prompt: just choose via built-in prompt (no UI change)
+      const c = prompt("Pick a color (red, blue, green, yellow):","");
+      cb((c||"").trim().toLowerCase());
     }
+
+    // Action hooks
+    if (unoBtn) unoBtn.onclick = ()=> socket.emit("callUno");
+    if (drawPile) drawPile.onclick = ()=> socket.emit("drawCard");
+
     function renderHand(){
       handDiv.innerHTML="";
       if (me.spectator || !started) return;
@@ -129,7 +153,7 @@
         }
         handDiv.appendChild(d);
       });
-      unoBtn && (unoBtn.disabled = !(myHand.length===2 && started && !me.spectator));
+      unoBtn && (unoBtn.disabled = !(myHand.length===1 && started && !me.spectator));
     }
     function msToSec(ms){ return Math.max(0, Math.ceil(ms/1000)); }
     function renderTimer(){
@@ -139,202 +163,42 @@
       }
       if (!started || !turnEndsAt) { turnIndicator.textContent = "—"; return; }
       const secs = msToSec(turnEndsAt - Date.now());
-      const active = playersState.find(p => p.id === current);
-      const who = isMyTurn ? "Your" : (active ? `${active.name}'s` : "Player");
-      turnIndicator.textContent = `${who} turn ends in ${secs}s`;
-    }
-    // Live tick so the label counts down smoothly
-    setInterval(() => { try { renderTimer(); } catch {} }, 250);
-
-    function renderPiles(){
-      renderTopCard(top);
-      renderDrawPile();
-      dirLabel.textContent = `Direction: ${dir===1?"→":"←"}`;
-      colorLabel.textContent = `Color: ${color?color.toUpperCase():"—"}`;
+      turnIndicator.textContent = `Your move: ${secs}s`;
     }
 
-    // socket streams
-    socket.on("helloAck", ()=>{});
+    // Happy flag
+    chatLog?.addEventListener("click", (e)=>{
+      const t = e.target;
+      if (t?.dataset?.msgId) {
+        socket.emit("flagHappy", { messageId: t.dataset.msgId });
+      }
+    });
 
-    socket.on("me", (p)=>{
-      if (!p?.id) return;
-      me.id = p.id; me.name = p.name; me.spectator = !!p.spectator;
+    // Send chat
+    const chatSend = document.getElementById("chat-send");
+    if (chatSend) chatSend.onclick = ()=>{
+      const text = (chatInput?.value||"").trim();
+      if (!text) return;
+      const id = "m_"+Math.random().toString(36).slice(2);
+      socket.emit("chat", { text, id });
+      chatInput.value="";
+    };
+    chatInput?.addEventListener("keydown", (e)=>{ if (e.key==="Enter") chatSend?.click(); });
+
+    // Connect the UI
+    window.addEventListener("load", ()=>{
+      if (joinScreen) joinScreen.style.display = "block";
+      if (gameScreen) gameScreen.style.display = "none";
+    });
+
+    socket.on("players", ()=>{}); // no-op for now
+
+    socket.on("connect", ()=>{
+      socket.emit("join", { name: (nameInput?.value||"").trim(), clientId: me.clientId });
       if (joinScreen) joinScreen.style.display = "none";
       if (gameScreen) gameScreen.style.display = "block";
     });
-
-    socket.on("state", (s)=>{
-      started = !!s.started;
-      countdownEndsAt = s.countdownEndsAt;
-      turnEndsAt = s.turnEndsAt;
-      current = s.current;
-      dir = s.direction;
-      color = s.color;
-      top = s.top;
-      penalty = s.penalty;
-      roundFlags = s.roundFlags || { happy:false };
-      playersState = s.players || [];
-      isMyTurn = (current === me.id);
-
-      renderPlayers(s.players, current);
-      renderPiles();
-      renderTimer();
-      renderHand();
-    });
-
-    socket.on("handSnapshot", (hand)=>{ myHand = hand || []; renderHand(); });
-
-    // Announce & chat
-    socket.on("announce", (text)=>{
-      const div = document.createElement("div");
-      div.textContent = text; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight;
-    });
-
-    socket.on("chat", (m)=>{
-      const line = document.createElement("div");
-      line.className = "chatline";
-      const txt = document.createElement("span");
-      txt.textContent = `${m.fromName}: ${m.msg}`;
-      line.appendChild(txt);
-
-      if (roundFlags.happy) {
-        const sender = (playersState||[]).find(p=>p.id===m.fromSid);
-        const eligible = (m.fromSid!=="admin" && sender && !sender.spectator);
-        if (eligible) {
-          const btn = document.createElement("button");
-          btn.className = "happy-btn";
-          btn.textContent = "🙂";
-          btn.title = "Flag this message (author draws 1)";
-          btn.onclick = ()=> socket.emit("happyFlag", { messageId: m.id });
-          line.appendChild(btn);
-        }
-      }
-
-      chatLog.appendChild(line); chatLog.scrollTop = chatLog.scrollHeight;
-    });
-
-    // Color picker generic
-    socket.on("chooseColor", ()=> openColorPicker((c)=> socket.emit("colorChosen", { color:c })));
-
-    // PROMPTS (shown inline under the timer)
-    socket.on("prompt", ({ kind, data, timeoutMs })=>{
-      if (kind==="targetPicker"){
-        const body = document.createElement("div");
-        (data.targets||[]).forEach(t=>{
-          const b = document.createElement("button");
-          b.textContent = t.name;
-          b.onclick = ()=>{ socket.emit("promptChoice", { kind, targetSid: t.sid }); closePrompt(); };
-          body.appendChild(b);
-        });
-        openPrompt("Choose a player", body, []);
-        setTimeout(()=>closePrompt(), timeoutMs||15000);
-      }
-      if (kind==="lookOrder"){
-        const body = document.createElement("div");
-        const order=[], cards=(data.top4||[]);
-        cards.forEach((c,i)=>{
-          const d = document.createElement("div"); d.className="card";
-          const img = document.createElement("img"); img.src = `assets/cards/${c.img}`; d.appendChild(img);
-          d.onclick=()=>{ if (!order.includes(i)) { order.push(i); d.style.outline='2px solid #1b5fd1'; } };
-          body.appendChild(d);
-        });
-        const confirmBtn = document.createElement("button"); confirmBtn.textContent="Confirm order";
-        confirmBtn.onclick=()=>{ if (order.length===4){ socket.emit("promptChoice", { kind, order }); closePrompt(); } };
-        openPrompt("Look: reorder the next 4 cards (top to bottom)", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
-        setTimeout(()=>closePrompt(), timeoutMs||15000);
-      }
-      if (kind==="shoppingTrade"){
-        const body = document.createElement("div");
-
-        const mineSel = new Set(); let theirSel = null;
-
-        const secMine = document.createElement("div");
-        const titleMine = document.createElement("div"); titleMine.textContent="Pick TWO of yours";
-        secMine.appendChild(titleMine);
-        (data.mine||[]).forEach(c=>{
-          const d=document.createElement("div"); d.className="card";
-          const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
-          d.onclick=()=>{
-            if (mineSel.has(c.idx)) { mineSel.delete(c.idx); d.style.outline=""; }
-            else if (mineSel.size<2){ mineSel.add(c.idx); d.style.outline="2px solid #1b5fd1"; }
-          };
-          secMine.appendChild(d);
-        });
-
-        const secTheirs = document.createElement("div");
-        const titleTheirs = document.createElement("div"); titleTheirs.textContent="Pick ONE of theirs";
-        secTheirs.appendChild(titleTheirs);
-        (data.theirs||[]).forEach(c=>{
-          const d=document.createElement("div"); d.className="card";
-          const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
-          d.onclick=()=>{
-            [...secTheirs.querySelectorAll(".card")].forEach(x=>x.style.outline="");
-            if (theirSel===c.idx){ theirSel=null; d.style.outline=""; }
-            else { theirSel=c.idx; d.style.outline="2px solid #1b5fd1"; }
-          };
-          secTheirs.appendChild(d);
-        });
-
-        const confirmBtn = document.createElement("button"); confirmBtn.textContent="Confirm";
-        confirmBtn.onclick=()=>{
-          if (mineSel.size===2 && typeof theirSel==="number") {
-            socket.emit("promptChoice", { kind, myTwo: Array.from(mineSel), theirOne: theirSel });
-            closePrompt();
-          }
-        };
-        body.append(secMine, secTheirs);
-        openPrompt("Shopping: trade 2 for 1", body, [{label:"Confirm", onClick:()=>confirmBtn.onclick()}]);
-        setTimeout(()=>closePrompt(), timeoutMs||20000);
-      }
-      if (kind==="rainbowSelects"){
-        const body = document.createElement("div");
-        const info = document.createElement("div"); info.textContent="Pick one RED, YELLOW, GREEN, and BLUE card from your hand.";
-        body.appendChild(info);
-        const picks = new Set();
-        (data.hand||[]).forEach(c=>{
-          if (!["red","yellow","green","blue"].includes(c.color)) return;
-          const d=document.createElement("div"); d.className="card";
-          const img=document.createElement("img"); img.src=`assets/cards/${c.img}`; d.appendChild(img);
-          d.onclick=()=>{
-            if (picks.has(c.idx)){ picks.delete(c.idx); d.style.outline=""; }
-            else if (picks.size<4){ picks.add(c.idx); d.style.outline="2px solid #1b5fd1"; }
-          };
-          body.appendChild(d);
-        });
-        const confirm = document.createElement("button"); confirm.textContent="Confirm 4";
-        confirm.onclick=()=>{ if (picks.size===4){ socket.emit("promptChoice", { kind, picks: Array.from(picks) }); closePrompt(); } };
-        openPrompt("Rainbow: choose one of each color", body, [{label:"Confirm", onClick:()=>confirm.onclick()}]);
-        setTimeout(()=>closePrompt(), timeoutMs||20000);
-      }
-    });
-
-    // UI
-    function doJoin(){
-      const name = (nameInput?.value || "").trim();
-      socket.emit("join", { name, clientId: me.clientId });
-    }
-    joinBtn?.addEventListener("click", doJoin);
-    nameInput?.addEventListener("keydown", (e)=>{ if (e.key === "Enter") doJoin(); });
-
-    chatSend?.addEventListener("click", ()=>{
-      const msg = (chatInput?.value || "").trim();
-      if (msg) socket.emit("chat", msg);
-      if (chatInput) chatInput.value = "";
-    });
-    chatInput?.addEventListener("keydown",(e)=>{ if (e.key==="Enter") chatSend.click(); });
-
-    // Draw pile click
-    drawPile?.addEventListener("click", () => {
-      if (!started) return;
-      if (penalty && penalty.target === me.id && current === me.id) {
-        socket.emit("drawCard"); return;
-      }
-      if (current === me.id) {
-        socket.emit("drawCard");
-      }
-    });
-
-    unoBtn?.addEventListener("click", ()=> socket.emit("callUno"));
   }
+
   waitIO();
 })();
