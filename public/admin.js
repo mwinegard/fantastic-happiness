@@ -42,10 +42,19 @@
   const btnResetLobby= document.getElementById("btn-reset-lobby");
   const btnCloseLobby= document.getElementById("btn-close-lobby");
 
+  // Utils
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+    }[m]));
+  }
+  function secs(ms){ return Math.max(0, Math.ceil((+ms || 0)/1000)); }
+  function nameOf(sid, players){ const p=(players||[]).find(x=>x.sid===sid); return p ? p.name : sid; }
+
   // Lobby selection
   btnRef.onclick = loadLobbies;
   loadLobbies();
-  function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+
   async function loadLobbies() {
     try {
       const res = await fetch("/lobbies", { cache: "no-store" });
@@ -104,10 +113,10 @@
   }
 
   // Admin actions
-  btnForceEnd && (btnForceEnd.onclick = () => { if (ensureJoinedLobby()) socket.emit("admin:forceRoundEnd"); });
+  btnForceEnd  && (btnForceEnd.onclick  = () => { if (ensureJoinedLobby()) socket.emit("admin:forceRoundEnd"); });
   btnResetGame && (btnResetGame.onclick = () => { if (ensureJoinedLobby()) socket.emit("admin:resetGame"); });
-  btnResetLobby && (btnResetLobby.onclick = () => { if (ensureJoinedLobby()) socket.emit("admin:lobbyReset"); });
-  btnCloseLobby && (btnCloseLobby.onclick = () => { if (ensureJoinedLobby()) socket.emit("admin:lobbyClose"); });
+  btnResetLobby&& (btnResetLobby.onclick= () => { if (ensureJoinedLobby()) socket.emit("admin:lobbyReset"); });
+  btnCloseLobby&& (btnCloseLobby.onclick= () => { if (ensureJoinedLobby()) socket.emit("admin:lobbyClose"); });
 
   // Live state feed
   socket.on("admin:state", (snap) => { try { renderState(snap || {}); } catch {} });
@@ -165,7 +174,10 @@
   refreshLeaderboard(true);
   setInterval(refreshLeaderboard, 5000);
 
-  // Utils
-  function appendLog(t){ const d=document.createElement("div"); d.textContent=t; adminLog.appendChild(d); adminLog.scrollTop=adminLog.scrollHeight; }
-  function nameOf(sid, players){ const p=(players||[]).find(x=>x.sid===sid); return p ? p.name : sid; }
-  function secs(ms){ return Math.max(0, Math.ceil((+ms || 0)/100
+  function appendLog(t){
+    const d=document.createElement("div");
+    d.textContent=t;
+    adminLog.appendChild(d);
+    adminLog.scrollTop=adminLog.scrollHeight;
+  }
+})();
