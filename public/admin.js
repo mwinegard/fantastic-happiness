@@ -1,4 +1,3 @@
-// public/admin.js — merged dashboard + leaderboard + admin controls
 (function () {
   const socket = io();
 
@@ -7,7 +6,6 @@
   const adminMsg = document.getElementById("admin-msg");
   const adminSend = document.getElementById("admin-send");
 
-  // Game state panel
   const gsStarted = document.getElementById("gs-started");
   const gsDir = document.getElementById("gs-direction");
   const gsColor = document.getElementById("gs-color");
@@ -18,31 +16,25 @@
   const gsPenalty = document.getElementById("gs-penalty");
   const gsFlags = document.getElementById("gs-flags");
 
-  // Players / Log / Discard
   const playersTableBody = document.querySelector("#players-table tbody");
   const adminLog = document.getElementById("admin-log");
   const topImg = document.getElementById("top-discard");
   const topMeta = document.getElementById("top-meta");
 
-  // Admin table chat
   const adminChat = document.getElementById("admin-chat");
   const adminChatSend = document.getElementById("admin-chat-send");
 
-  // Sounds
   const sndBtns = document.querySelectorAll("button.snd");
   const customSound = document.getElementById("custom-sound");
   const triggerCustom = document.getElementById("trigger-custom");
 
-  // Leaderboard
   const leaderboardRoot = document.getElementById("admin-leaderboard");
 
-  // Admin action buttons
   const btnForceEnd  = document.getElementById("btn-force-end");
   const btnResetGame = document.getElementById("btn-reset-game");
   const btnResetLobby= document.getElementById("btn-reset-lobby");
   const btnCloseLobby= document.getElementById("btn-close-lobby");
 
-  // Utils
   function esc(s){
     return String(s).replace(/[&<>"']/g, m => ({
       "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
@@ -51,7 +43,6 @@
   function secs(ms){ return Math.max(0, Math.ceil((+ms || 0)/1000)); }
   function nameOf(sid, players){ const p=(players||[]).find(x=>x.sid===sid); return p ? p.name : sid; }
 
-  // Lobby selection
   btnRef.onclick = loadLobbies;
   loadLobbies();
 
@@ -67,33 +58,32 @@
       sel.innerHTML = `<option value="default">default</option>`;
     }
   }
+
   function joinSelectedLobby() {
     if (!sel.value) return;
-    socket.emit("join", { name: "Admin", lobby: sel.value });
+    socket.emit("join", { name: "Admin", lobby: sel.value, spectator: true });
     setTimeout(() => socket.emit("admin:pullState"), 150);
   }
   sel.addEventListener("change", joinSelectedLobby);
   setTimeout(joinSelectedLobby, 250);
 
-  // Announce
   adminSend.onclick = () => {
     if (!sel.value) return;
-    socket.emit("join", { name: "Admin", lobby: sel.value });
+    socket.emit("join", { name: "Admin", lobby: sel.value, spectator: true });
     setTimeout(() => socket.emit("admin:chat", { text: adminMsg.value }), 150);
     adminMsg.value = "";
   };
-  // Table chat
+
   adminChatSend.onclick = () => {
     if (!sel.value) return;
-    socket.emit("join", { name: "Admin", lobby: sel.value });
+    socket.emit("join", { name: "Admin", lobby: sel.value, spectator: true });
     setTimeout(() => socket.emit("admin:chat", { text: adminChat.value }), 150);
     adminChat.value = "";
   };
 
-  // Sound triggers
   function ensureJoinedLobby() {
     if (!sel.value) return false;
-    socket.emit("join", { name: "Admin", lobby: sel.value });
+    socket.emit("join", { name: "Admin", lobby: sel.value, spectator: true });
     return true;
   }
   sndBtns.forEach(btn => {
@@ -112,13 +102,11 @@
     });
   }
 
-  // Admin actions
   btnForceEnd  && (btnForceEnd.onclick  = () => { if (ensureJoinedLobby()) socket.emit("admin:forceRoundEnd"); });
   btnResetGame && (btnResetGame.onclick = () => { if (ensureJoinedLobby()) socket.emit("admin:resetGame"); });
   btnResetLobby&& (btnResetLobby.onclick= () => { if (ensureJoinedLobby()) socket.emit("admin:lobbyReset"); });
   btnCloseLobby&& (btnCloseLobby.onclick= () => { if (ensureJoinedLobby()) socket.emit("admin:lobbyClose"); });
 
-  // Live state feed
   socket.on("admin:state", (snap) => { try { renderState(snap || {}); } catch {} });
   socket.on("announce", (txt) => appendLog(String(txt || "")));
 
@@ -154,7 +142,6 @@
     }
   }
 
-  // Leaderboard
   let lastLeaderboardAt = 0;
   async function refreshLeaderboard(force=false){
     const now = Date.now();
