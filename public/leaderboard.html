@@ -21,7 +21,7 @@
         document.getElementById("leaderboard").textContent = "Failed to load leaderboard.";
       }
     }
-    function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+    function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;"," >":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
     function renderBoard(rows){
       const tr = r => `<tr><td>${esc(r.name)}</td><td>${Number(r.wins||0)}</td><td>${Number(r.points||0)}</td></tr>`;
       return `<table><thead><tr><th>Name</th><th>Wins</th><th>Points</th></tr></thead><tbody>${(rows||[]).map(tr).join("")}</tbody></table>`;
