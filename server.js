@@ -1,36 +1,34 @@
-// server.js — full copy/paste
-// Node 18+ recommended
-
+// server.js — updated with admin controls, lobby lifecycle, hand rendering, and specials
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const path = require("path");
 const crypto = require("crypto");
 
-// ---------- Server setup ----------
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 const PORT = process.env.PORT || 3000;
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ---------- Data / State ----------
 const COLORS = ["red", "blue", "green", "yellow"];
-const NUM_COPIES = 2; // for standard numeric/action duplicates (tune as you wish)
+const NUM_COPIES = 2;
 const START_HAND = 7;
 const TURN_SECONDS = 25;
 
 const lobbies = new Map(); // name -> { name, room, players[], game, log[] }
 const scores = {}; // name -> { wins, points }
 
-// ---------- Utility ----------
+// ---------- Utils ----------
 function id() { return crypto.randomBytes(8).toString("hex"); }
 function sample(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 function now(){ return Date.now(); }
 
-function ensureLobby(name="default"){
+function ensureLobby(name = "default"){
   if (!lobbies.has(name)) {
     lobbies.set(name, {
       name,
@@ -42,33 +40,30 @@ function ensureLobby(name="default"){
   }
   return lobbies.get(name);
 }
-
+function closeLobby(name){
+  if (lobbies.has(name)) lobbies.delete(name);
+}
 function emptyGame(){
   return {
     started: false,
     deck: [],
     discard: [],
     color: null,
-    value: null, // number value OR action type
-    top: null,   // last played card object for UI
-    hands: {},   // sid -> [cards]
-    current: null, // sid
+    value: null,
+    top: null,
+    hands: {},      // sid -> [cards]
+    current: null,  // sid
     direction: 1,
     turnEndsAt: null,
-    orderSeed: 0,
-    pendingPenalty: null, // { kind:'draw2'|'wild_draw4', amount, targetSid, lastFromSid }
-    roundFlags: {}, // { happy: true, ... }
-    nocTarget: null, // persistent target for NOC until game restart
+    pendingPenalty: null, // { kind, amount, targetSid, lastFromSid }
+    roundFlags: {}, // e.g., { happy: true }
+    nocTarget: null
   };
 }
-
 function sidToPlayer(L, sid){ return L.players.find(p=>p.sid===sid) || null; }
 function sidToName(L, sid){ const p = sidToPlayer(L, sid); return p ? p.name : sid; }
-
-function activeOrder(L){
-  // Seated (non-spectators) in join order; if you prefer stable seat order, preserve on join
-  return L.players.filter(p=>!p.spectator).map(p=>p.sid);
-}
+function seatedPlayers(L){ return L.players.filter(p=>!p.spectator); }
+function activeOrder(L){ return seatedPlayers(L).map(p=>p.sid); }
 function nextActiveSid(L, sid){
   const order = activeOrder(L); if (!order.length) return null;
   const i = order.indexOf(sid); if (i<0) return order[0];
@@ -79,11 +74,10 @@ function previousActiveSid(L, sid){
   const i = order.indexOf(sid); if (i<0) return order[0];
   return order[(i - 1 + order.length) % order.length];
 }
-function seatedPlayers(L){ return L.players.filter(p=>!p.spectator); }
 
 function log(L, txt){
   L.log.push(`[${new Date().toLocaleTimeString()}] ${txt}`);
-  if (L.log.length>500) L.log.shift();
+  if (L.log.length > 500) L.log.shift();
   io.in(L.room).emit("announce", txt);
 }
 const announce = log;
@@ -91,19 +85,16 @@ const announce = log;
 function restockDeckIfNeeded(G, needed=1){
   if (!Array.isArray(G.deck)) G.deck = [];
   if (G.deck.length >= needed) return;
-  // Keep top of discard, shuffle rest back to deck
   if (!Array.isArray(G.discard) || G.discard.length < 2) return;
   const top = G.discard.pop();
   const pool = G.discard;
   G.discard = [top];
-  // shuffle pool back into deck
   for (let i=pool.length-1; i>0; i--){
     const j = Math.floor(Math.random()*(i+1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   G.deck.push(...pool);
 }
-
 function drawCards(G, n){
   const out = [];
   restockDeckIfNeeded(G, n);
@@ -113,17 +104,23 @@ function drawCards(G, n){
   }
   return out;
 }
-
+function reshuffleCardsIntoDeck(G, cards){
+  if (!cards || !cards.length) return;
+  G.deck.push(...cards);
+  for (let i=G.deck.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [G.deck[i], G.deck[j]] = [G.deck[j], G.deck[i]];
+  }
+}
 function putUnderSpecial(G, extras){
   if (!extras || !extras.length) return;
   const top = G.discard.pop();
   G.discard.push(...extras);
   G.discard.push(top);
 }
-
 function secs(ms){ return Math.max(0, Math.ceil((+ms||0)/1000)); }
 
-// Build a compact, admin-safe snapshot for the selected lobby
+// Admin snapshot
 function buildAdminState(L) {
   const G = L?.game || {};
   const players = (L?.players || []).map(p => {
@@ -142,7 +139,6 @@ function buildAdminState(L) {
     targetSid: G.pendingPenalty.targetSid || null,
     lastFromSid: G.pendingPenalty.lastFromSid || null
   } : null;
-
   const roundFlags = G.roundFlags ? Object.keys(G.roundFlags).filter(k => G.roundFlags[k]) : [];
   const top = G.top || (G.discard && G.discard[G.discard.length-1]) || null;
   const topCard = top ? {
@@ -169,7 +165,7 @@ function buildAdminState(L) {
   };
 }
 
-// Wild color choice at END of effect
+// color choose at END of effect
 function endChooseColorAndFinish({ io, L, G, me, specialType, afterColor }){
   const sock = io.sockets.sockets.get(me.id);
   io.to(me.id).emit("chooseColor");
@@ -184,29 +180,26 @@ function endChooseColorAndFinish({ io, L, G, me, specialType, afterColor }){
   sock.once("colorChosen", ({color})=> finalize(color));
 }
 
-// ---------- Cards / Deck ----------
+// ---------- Cards ----------
 function makeDeck(){
   const deck = [];
-  // numbers 0-9, 2 copies each for 1-9, 1 copy of 0
   for (const color of COLORS){
     deck.push({ color, type:"number", value:0, img:`${color}_0.png`});
     for (let v=1; v<=9; v++){
       for (let k=0;k<NUM_COPIES;k++) deck.push({ color, type:"number", value:v, img:`${color}_${v}.png`});
     }
-    // action examples
     for (let k=0;k<NUM_COPIES;k++){
       deck.push({ color, type:"skip", img:`${color}_skip.png`});
       deck.push({ color, type:"reverse", img:`${color}_reverse.png`});
       deck.push({ color, type:"draw2", img:`${color}_draw2.png`});
     }
-    // your color-gated specials
+    // color-gated specials
     deck.push({ color:"yellow", type:"yellow_shopping", img:`yellow_shopping.png`});
     deck.push({ color:"green", type:"green_recycle", img:`green_recycle.png`});
     deck.push({ color:"blue", type:"blue_moon", img:`blue_moon.png`});
     deck.push({ color:"red", type:"red_it", img:`red_it.png`});
     deck.push({ color:"red", type:"red_noc", img:`red_noc.png`});
   }
-  // wilds
   for (let i=0;i<4;i++){
     deck.push({ color:"wild", type:"wild", img:`wild.png`});
     deck.push({ color:"wild", type:"wild_draw4", img:`wild_draw4.png`});
@@ -215,11 +208,9 @@ function makeDeck(){
     deck.push({ color:"wild", type:"wild_boss", img:`wild_boss.png`});
     deck.push({ color:"wild", type:"wild_packyourbags", img:`wild_packyourbags.png`});
   }
-  // look / happy as standalone actions (colorless here, but appear as top meta)
   deck.push({ color:"blue", type:"blue_look", img:`blue_look.png`});
   deck.push({ color:"green", type:"green_happy", img:`green_happy.png`});
 
-  // shuffle
   for (let i=deck.length-1;i>0;i--){
     const j = Math.floor(Math.random()*(i+1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -232,20 +223,17 @@ function deal(L){
   const G = L.game;
   G.deck = makeDeck();
   G.discard = [];
-  // hands
   for (const p of L.players){
     if (p.spectator) continue;
     const cards = drawCards(G, START_HAND);
     G.hands[p.sid] = cards;
   }
-  // flip start card
   const first = drawCards(G,1)[0];
   if (!first) return;
   G.discard.push(first); G.top = first;
   G.color = COLORS.includes(first.color) ? first.color : sample(COLORS);
   G.value = first.type==="number" ? first.value : first.type;
 }
-
 function winnerIfAny(L){
   const G = L.game;
   for (const sid of Object.keys(G.hands)){
@@ -253,12 +241,10 @@ function winnerIfAny(L){
   }
   return null;
 }
-
 function settleAndQueueNext(L, winnerSid){
   const G = L.game;
   const winnerName = sidToName(L, winnerSid);
   announce(L, `🏆 Round Winner: ${winnerName}!`);
-  // simple scoring: everyone else hands contribute to winner points
   let pts = 0;
   for (const sid of Object.keys(G.hands)){
     if (sid===winnerSid) continue;
@@ -266,40 +252,17 @@ function settleAndQueueNext(L, winnerSid){
   }
   scores[winnerName] = scores[winnerName] || { wins:0, points:0 };
   scores[winnerName].wins++; scores[winnerName].points += pts;
-
   G.started = false;
-  // reset persistent round-only flags
   G.nocTarget = null;
   io.in(L.room).emit("announce", `+${pts} points to ${winnerName}`);
   emitState(L);
 }
-
-function emitState(L){
-  const G = L.game;
-  const state = {
-    started: G.started,
-    color: G.color,
-    value: G.value,
-    current: G.current,
-    direction: G.direction,
-    top: G.top,
-    penalty: G.pendingPenalty ? { amount: G.pendingPenalty.amount, kind: G.pendingPenalty.kind, targetSid:G.pendingPenalty.targetSid } : null,
-    players: L.players.map(p=> ({ id: p.id, sid:p.sid, name:p.name, spectator: !!p.spectator })),
-    turnEndsAt: G.turnEndsAt,
-    countdownEndsAt: null
-  };
-  io.in(L.room).emit("state", state);
-  // push admin snapshot too
-  io.in(L.room).emit("admin:state", buildAdminState(L));
-}
-
 function beginTurn(L, sid){
   const G = L.game;
   G.current = sid;
   G.turnEndsAt = now() + TURN_SECONDS*1000;
   emitState(L);
 }
-
 function advanceTurn(L, steps=1){
   const G = L.game;
   const order = activeOrder(L);
@@ -309,31 +272,26 @@ function advanceTurn(L, steps=1){
   idx = (idx + steps*G.direction + order.length) % order.length;
   beginTurn(L, order[idx]);
 }
-
 function beginPenalty(L, fromSid, kind){
   const G = L.game;
-  // set or extend stack, then move turn to target
-  const order = activeOrder(L);
   const targetSid = nextActiveSid(L, fromSid);
   const add = (kind==="wild_draw4") ? 4 : 2;
   if (G.pendingPenalty) {
     G.pendingPenalty.amount += add;
     G.pendingPenalty.lastFromSid = fromSid;
-    G.pendingPenalty.kind = kind; // keep top kind
+    G.pendingPenalty.kind = kind;
   } else {
     G.pendingPenalty = { kind, amount: add, targetSid, lastFromSid: fromSid };
   }
-  // target player's turn
   beginTurn(L, targetSid);
 }
 
-// ---------- Express endpoints ----------
+// ---------- Express ----------
 app.get("/leaderboard", (req,res)=>{
   const rows = Object.keys(scores).map(name => ({ name, wins: scores[name].wins||0, points: scores[name].points||0 }))
     .sort((a,b)=> (b.wins-a.wins) || (b.points-a.points) || a.name.localeCompare(b.name));
   res.json(rows);
 });
-
 app.get("/lobbies", (req,res)=>{
   const data = Array.from(lobbies.values()).map(L=>({
     name: L.name,
@@ -350,7 +308,6 @@ io.on("connection", (socket)=>{
     const playerName = (String(name||"Player").trim() || "Player").slice(0,24);
     const lobbyName = (String(lobby||"default").trim() || "default").slice(0,24);
     const L = ensureLobby(lobbyName);
-    // leave previous rooms
     for (const r of socket.rooms) if (r!==socket.id) socket.leave(r);
     socket.join(L.room);
 
@@ -362,14 +319,13 @@ io.on("connection", (socket)=>{
       p.name = playerName;
     }
 
-    socket.emit("me", { id: socket.id, name: p.name, lobby: lobbyName, spectator: p.spectator });
+    // include sid so client can compare turn ownership
+    socket.emit("me", { id: socket.id, sid: p.sid, name: p.name, lobby: lobbyName, spectator: p.spectator });
     announce(L, `👋 ${p.name} joined ${lobbyName}.`);
 
-    // Start new round if not started and at least 2 players
     if (!L.game.started && seatedPlayers(L).length>=2){
       L.game = emptyGame();
       L.game.started = true;
-      // reset persistent NOC target for a fresh game
       L.game.nocTarget = null;
       deal(L);
       const order = activeOrder(L);
@@ -384,7 +340,6 @@ io.on("connection", (socket)=>{
     const G = L.game; if (!G.started) return;
     const me = L.players.find(p=>p.id===socket.id); if (!me || me.sid!==G.current) return;
 
-    // If there's an active penalty targeting me, I must draw and end stack
     if (G.pendingPenalty && G.pendingPenalty.targetSid===me.sid){
       restockDeckIfNeeded(G, G.pendingPenalty.amount);
       const hand = G.hands[me.sid] || [];
@@ -394,7 +349,6 @@ io.on("connection", (socket)=>{
       advanceTurn(L,1); return emitState(L);
     }
 
-    // draw 1 and pass
     const card = drawCards(G,1)[0];
     (G.hands[me.sid] = G.hands[me.sid] || []).push(card);
     announce(L, `🃏 ${me.name} drew 1 card.`);
@@ -409,7 +363,7 @@ io.on("connection", (socket)=>{
     else { io.to(me.id).emit("warn", "You can only call UNO at 2 cards."); }
   });
 
-  // Out-of-turn RELAX: cancel current stack if any; color at end
+  // Out-of-turn RELAX
   socket.on("playRelaxRequested", ()=>{
     const L = findLobbyBySocket(socket); if (!L?.game?.started) return;
     const G = L.game;
@@ -437,13 +391,11 @@ io.on("connection", (socket)=>{
     });
   });
 
-  // Admin pulls the current snapshot on demand
+  // Admin: pull state, chat, sound
   socket.on("admin:pullState", ()=>{
     const L = findLobbyBySocket(socket); if (!L) return;
     socket.emit("admin:state", buildAdminState(L));
   });
-
-  // Admin chat & sound
   socket.on("admin:chat", ({text})=>{
     const L = findLobbyBySocket(socket); if (!L) return;
     const msg = String(text||"").trim(); if (!msg) return;
@@ -456,13 +408,57 @@ io.on("connection", (socket)=>{
     announce(L, `🔊 Admin triggered sound: ${sound}`);
   });
 
+  // Admin: new controls
+  socket.on("admin:forceRoundEnd", () => {
+    const L = findLobbyBySocket(socket); if (!L) return;
+    const G = L.game; if (!G.started) return;
+    const hands = Object.entries(G.hands).map(([sid,h])=>({sid, n:(h||[]).length}));
+    if (!hands.length) return;
+    hands.sort((a,b)=>a.n-b.n);
+    const best = hands[0].n;
+    const tied = hands.filter(x=>x.n===best);
+    const winnerSid = (tied.length>1) ? tied[(Math.random()*tied.length)|0].sid : tied[0].sid;
+    announce(L, "🛠️ Admin forced round end.");
+    settleAndQueueNext(L, winnerSid);
+  });
+  socket.on("admin:resetGame", () => {
+    const L = findLobbyBySocket(socket); if (!L) return;
+    announce(L, "🛠️ Admin reset the game.");
+    L.game = emptyGame();
+    const seated = seatedPlayers(L);
+    if (seated.length >= 2) {
+      L.game.started = true;
+      deal(L);
+      beginTurn(L, activeOrder(L)[0]);
+    } else {
+      emitState(L);
+    }
+  });
+  socket.on("admin:lobbyReset", () => {
+    const L = findLobbyBySocket(socket); if (!L) return;
+    announce(L, "🛠️ Admin reset the lobby (game cleared).");
+    L.game = emptyGame();
+    emitState(L);
+  });
+  socket.on("admin:lobbyClose", () => {
+    const L = findLobbyBySocket(socket); if (!L) return;
+    announce(L, "🛠️ Admin closed the lobby.");
+    const room = io.sockets.adapter.rooms.get(L.room);
+    if (room) {
+      for (const sid of room) {
+        const s = io.sockets.sockets.get(sid);
+        try { s && s.leave(L.room); } catch {}
+      }
+    }
+    closeLobby(L.name);
+  });
+
   // Chat
   socket.on("chat", ({text})=>{
     const L = findLobbyBySocket(socket); if (!L) return;
     const me = L.players.find(p=>p.id===socket.id); if (!me) return;
     const msg = String(text||"").slice(0,400);
     io.in(L.room).emit("chat", { fromName: me.name, text: msg });
-    // Happy mode: flagged messages can be implemented by clients; we keep server hook simple
   });
 
   // Play a card
@@ -477,7 +473,6 @@ io.on("connection", (socket)=>{
     const card = hand.splice(i,1)[0];
     G.discard.push(card); G.top = card;
 
-    // LEGALITY (basic): match color, number, or symbol; wild always ok.
     function legalPlay(card){
       if (String(card.color)==="wild") return true;
       if (card.type==="number"){
@@ -485,10 +480,8 @@ io.on("connection", (socket)=>{
       }
       return (card.color===G.color) || (card.type===G.value);
     }
-    // Color-gated specials handled inside cases; basic illegal → revert
     if (!String(card.color).startsWith("wild") && !["yellow_shopping","green_recycle","blue_moon","red_it","red_noc","blue_look","green_happy"].includes(card.type)){
       if (!legalPlay(card)){
-        // revert
         G.discard.pop(); G.top = G.discard[G.discard.length-1] || null;
         hand.splice(i,0,card);
         io.to(me.id).emit("warn","Illegal play.");
@@ -497,7 +490,6 @@ io.on("connection", (socket)=>{
       }
     }
 
-    // ----- ACTIONS / SPECIALS -----
     // Standard actions
     if (card.type==="reverse"){
       G.direction *= -1;
@@ -515,9 +507,8 @@ io.on("connection", (socket)=>{
       return emitState(L);
     }
 
-    // LOOK (top 4 reorder)
+    // LOOK (top 4)
     if (card.type==="blue_look"){
-      // no extra legality beyond normal; effect: reorder top 4
       const viewCount = Math.min(4, G.deck.length);
       restockDeckIfNeeded(G, viewCount);
       const peek = G.deck.slice(-viewCount);
@@ -550,7 +541,7 @@ io.on("connection", (socket)=>{
       advanceTurn(L,1); return emitState(L);
     }
 
-    // --- Color-gated specials ---
+    // ---------------- Special color-gated ----------------
     if (card.type==="yellow_shopping"){
       if (G.color!=="yellow"){
         G.discard.pop(); G.top = G.discard[G.discard.length-1] || null; hand.push(card);
@@ -759,7 +750,6 @@ io.on("connection", (socket)=>{
           if (penSeatIdx!=null && penSeatIdx>=0) G.pendingPenalty.targetSid = newOrder[penSeatIdx];
           if (fromSeatIdx!=null && fromSeatIdx>=0) G.pendingPenalty.lastFromSid = newOrder[fromSeatIdx];
         }
-        // UNO window clear would go here if you track it; we rely on hand counts
         const nameAt = sid=>sidToName(L,sid); const pairs=[];
         for (let i=0;i<order.length;i++){ const a=nameAt(order[i]), b=nameAt(newOrder[i]); if (a!==b) pairs.push(`${a} → ${b}`); }
         if (pairs.length) announce(L, `🪑 Seats swapped: ${pairs.join(", ")}.`);
@@ -844,7 +834,7 @@ io.on("connection", (socket)=>{
           }
         }
         putUnderSpecial(G, chosen);
-        announce(L, `🌈 Rainbow! ${me.name} discarded one of each color.`);
+        announce(L, `🌈 Rainbow! ${sidToName(L, me.sid)} discarded one of each color.`);
         endChooseColorAndFinish({
           io, L, G, me, specialType:"wild_rainbow",
           afterColor: ()=>{ advanceTurn(L,1); emitState(L); }
@@ -870,23 +860,90 @@ io.on("connection", (socket)=>{
       });
     }
 
-    // ----- Numbers / default action fallback -----
     if (card.type==="number"){
       G.color = card.color; G.value = card.value; G.top = card;
       advanceTurn(L,1); return emitState(L);
     }
-    // Unhandled action type: just set top/color/value and move on
     G.color = card.color; G.value = card.type; G.top = card;
     advanceTurn(L,1); emitState(L);
   });
 
-  socket.on("disconnect", ()=>{
-    // since we allow rejoin/rooms, we keep the player until lobby ends; could add cleanup later
+  socket.on("disconnect", () => {
+    let foundLobby = null, foundIdx = -1, player = null;
+    for (const L of lobbies.values()) {
+      const i = L.players.findIndex(p => p.id === socket.id);
+      if (i !== -1) {
+        foundLobby = L; foundIdx = i; player = L.players[i]; break;
+      }
+    }
+    if (!foundLobby) return;
+    const L = foundLobby;
+    const G = L.game;
+    const leaving = L.players.splice(foundIdx, 1)[0];
+
+    if (leaving && G && G.hands && G.hands[leaving.sid]) {
+      const giveBack = G.hands[leaving.sid];
+      delete G.hands[leaving.sid];
+      reshuffleCardsIntoDeck(G, giveBack);
+      announce(L, `👋 ${leaving.name} left — their hand returned to the deck.`);
+    } else {
+      announce(L, `👋 ${leaving?.name || "A player"} left.`);
+    }
+
+    if (G && G.started && G.current === (leaving && leaving.sid)) {
+      const order = activeOrder(L);
+      if (order.length) {
+        beginTurn(L, order[0]);
+      } else {
+        G.started = false;
+        emitState(L);
+      }
+    } else {
+      emitState(L);
+    }
+
+    if (L.players.length === 0) { closeLobby(L.name); return; }
+    if (seatedPlayers(L).length === 0) {
+      announce(L, "ℹ️ No seated players remain — lobby game reset.");
+      L.game = emptyGame();
+      emitState(L);
+    }
   });
 });
 
+function emitHands(L){
+  const G = L.game;
+  for (const p of L.players) {
+    if (!p.id) continue;
+    const s = io.sockets.sockets.get(p.id);
+    if (!s) continue;
+    const hand = (G.hands[p.sid] || []).map(c => ({
+      color: c.color, type: c.type, value: (typeof c.value==="number" ? c.value : null), img: c.img
+    }));
+    io.to(p.id).emit("hand", hand);
+  }
+}
+
+function emitState(L){
+  const G = L.game;
+  const state = {
+    started: G.started,
+    color: G.color,
+    value: G.value,
+    current: G.current,            // SID of current turn
+    direction: G.direction,
+    top: G.top,
+    penalty: G.pendingPenalty ? { amount: G.pendingPenalty.amount, kind: G.pendingPenalty.kind, targetSid:G.pendingPenalty.targetSid } : null,
+    players: L.players.map(p=> ({ id: p.id, sid:p.sid, name:p.name, spectator: !!p.spectator })),
+    turnEndsAt: G.turnEndsAt,
+    countdownEndsAt: null
+  };
+  io.in(L.room).emit("state", state);
+  io.in(L.room).emit("admin:state", buildAdminState(L));
+  emitHands(L);
+}
+
 function findLobbyBySocket(socket){
-  // The socket is joined to exactly one room created via join(), besides its own id
   for (const L of lobbies.values()){
     if (io.sockets.adapter.rooms.get(L.room)?.has(socket.id)) return L;
   }
