@@ -6,7 +6,6 @@
   <title>UNO Admin</title>
   <link rel="stylesheet" href="style.css" />
   <style>
-    /* tiny utility styles, keeps existing look & feel */
     .grid { display: grid; gap: 8px; }
     .grid.two { grid-template-columns: 1fr 1fr; }
     .grid.three { grid-template-columns: 1fr 1fr 1fr; }
@@ -36,39 +35,27 @@
         <input id="admin-msg" placeholder="Send announcement to selected lobby" />
         <button id="admin-send">Send</button>
       </div>
+      <div class="row" style="margin-top:8px; flex-wrap:wrap; gap:6px;">
+        <button id="btn-force-end">Force Round End</button>
+        <button id="btn-reset-game">Reset Game</button>
+        <button id="btn-reset-lobby">Reset Lobby</button>
+        <button id="btn-close-lobby">Close Lobby</button>
+      </div>
     </div>
 
     <!-- Game State -->
     <div class="card">
       <h3>Game State</h3>
       <div class="grid three">
-        <div>
-          <div>Started</div><div id="gs-started" class="mono">—</div>
-        </div>
-        <div>
-          <div>Direction</div><div id="gs-direction" class="mono">—</div>
-        </div>
-        <div>
-          <div>Color</div><div id="gs-color" class="mono">—</div>
-        </div>
-        <div>
-          <div>Current Turn</div><div id="gs-current" class="mono">—</div>
-        </div>
-        <div>
-          <div>Turn Ends</div><div id="gs-ends" class="mono">—</div>
-        </div>
-        <div>
-          <div>Deck Size</div><div id="gs-deck" class="mono">—</div>
-        </div>
-        <div>
-          <div>Discard Size</div><div id="gs-discard" class="mono">—</div>
-        </div>
-        <div>
-          <div>Penalty</div><div id="gs-penalty" class="mono">—</div>
-        </div>
-        <div>
-          <div>Round Flags</div><div id="gs-flags" class="mono">—</div>
-        </div>
+        <div><div>Started</div><div id="gs-started" class="mono">—</div></div>
+        <div><div>Direction</div><div id="gs-direction" class="mono">—</div></div>
+        <div><div>Color</div><div id="gs-color" class="mono">—</div></div>
+        <div><div>Current Turn</div><div id="gs-current" class="mono">—</div></div>
+        <div><div>Turn Ends</div><div id="gs-ends" class="mono">—</div></div>
+        <div><div>Deck Size</div><div id="gs-deck" class="mono">—</div></div>
+        <div><div>Discard Size</div><div id="gs-discard" class="mono">—</div></div>
+        <div><div>Penalty</div><div id="gs-penalty" class="mono">—</div></div>
+        <div><div>Round Flags</div><div id="gs-flags" class="mono">—</div></div>
       </div>
     </div>
 
@@ -129,6 +116,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="admin.js"></script> <!-- NEW: admin dashboard wiring -->
+  <script src="admin.js"></script>
 </body>
 </html>
