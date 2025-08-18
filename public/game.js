@@ -1,8 +1,6 @@
-// public/game.js — renders your hand; only playable cards clickable; no scrolling needed
 (function () {
   const socket = io();
 
-  // ---------- DOM ----------
   const joinScreen = document.getElementById("join-screen");
   const gameScreen = document.getElementById("game-screen");
 
@@ -27,13 +25,11 @@
 
   const leaderboardDiv = document.getElementById("leaderboard");
 
-  // ---------- Persisted ----------
   try {
     nameInput.value = localStorage.getItem("uno_name") || "";
     lobbyInput.value = localStorage.getItem("uno_lobby") || "default";
   } catch {}
 
-  // ---------- Sounds ----------
   const sounds = {
     draw: safeAudio("assets/sounds/draw.mp3"),
     skip: safeAudio("assets/sounds/skip.mp3"),
@@ -57,15 +53,13 @@
     };
   }
 
-  // ---------- State ----------
-  let me = { id: null, name: null, lobby: null, spectator: true };
+  let me = { id: null, sid: null, name: null, lobby: null, spectator: true };
   let state = {
     started: false, countdownEndsAt: null, turnEndsAt: null,
     color: null, value: null, current: null, direction: 1, top: null, penalty: null, players: []
   };
   let myHand = [];
 
-  // ---------- Join ----------
   function doJoin() {
     const name = nameInput.value.trim() || "Player";
     const lobby = (lobbyInput.value.trim() || "default").slice(0, 24);
@@ -79,7 +73,6 @@
   nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
   lobbyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
 
-  // ---------- Socket events ----------
   socket.on("me", (m) => {
     me = m || me;
     if (joinScreen) joinScreen.style.display = "none";
@@ -108,19 +101,15 @@
 
   socket.on("state", (s) => { state = s || state; render(); });
 
-  // hands
   socket.on("hand", (cards) => { myHand = Array.isArray(cards) ? cards : []; render(); });
 
-  // admin-triggered sounds
   socket.on("sound", (name) => { try { if (name) playSound(String(name)); } catch {} });
 
-  // wild color chooser
   socket.on("chooseColor", () => {
     const c = (prompt("Pick a color (red, blue, green, yellow):", "") || "").trim().toLowerCase();
     socket.emit("colorChosen", { color: c });
   });
 
-  // specials prompts
   socket.on("lookTop", ({ cards }) => {
     const list = (cards || []).map(c => `${c.i}:${c.color} ${c.type}${c.value != null ? " " + c.value : ""}`).join(", ");
     const def = (cards || []).map(c => c.i).join(",");
@@ -158,7 +147,6 @@
     socket.emit("rainbowChosen", { indices });
   });
 
-  // ---------- UI Actions ----------
   drawPile && (drawPile.onclick = () => socket.emit("drawCard"));
   unoBtn && (unoBtn.onclick = () => socket.emit("callUno"));
   relaxBtn && (relaxBtn.onclick = () => socket.emit("playRelaxRequested"));
@@ -172,7 +160,6 @@
     chatInput.value = "";
   }
 
-  // ---------- Helpers ----------
   function appendLog(text) {
     const d = document.createElement("div");
     d.textContent = String(text || "");
@@ -180,9 +167,7 @@
     chatLog.scrollTop = chatLog.scrollHeight;
   }
   function secs(ms) { return Math.max(0, Math.ceil((+ms || 0) / 1000)); }
-  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])); }
 
-  // legality mirror (server authoritative)
   function canPlay(card, s) {
     if (!s || !card) return false;
     if (card.color === "wild") return true;
@@ -194,9 +179,7 @@
     if (card.type === "number") return (card.color === s.color) || (card.value === s.value);
     return (card.color === s.color) || (card.type === s.value);
   }
-  function playCardAt(index) { socket.emit("playCard", { index }); }
 
-  // ---------- Leaderboard ----------
   let lastLeaderboardAt = 0;
   async function refreshLeaderboard(force = false) {
     const now = Date.now();
@@ -206,17 +189,15 @@
       const res = await fetch("/leaderboard", { cache: "no-store" });
       const data = await res.json();
       leaderboardDiv.innerHTML = renderLeaderboard(data || []);
-    } catch { /* ignore */ }
+    } catch {}
   }
   function renderLeaderboard(rows) {
+    const esc = s => String(s).replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
     const cells = (r) =>
-      `<tr><td>${escapeHtml(r.name)}</td><td>${Number(r.wins || 0)}</td><td>${Number(r.points || 0)}</td></tr>`;
-    return `<table><thead><tr><th>Name</th><th>Wins</th><th>Points</th></tr></thead><tbody>${(rows || [])
-      .map(cells)
-      .join("")}</tbody></table>`;
+      `<tr><td>${esc(r.name)}</td><td>${Number(r.wins || 0)}</td><td>${Number(r.points || 0)}</td></tr>`;
+    return `<table><thead><tr><th>Name</th><th>Wins</th><th>Points</th></tr></thead><tbody>${(rows || []).map(cells).join("")}</tbody></table>`;
   }
 
-  // ---------- Render ----------
   function render() {
     const { started, countdownEndsAt, turnEndsAt, color, current, top, players, penalty } = state;
 
@@ -225,9 +206,9 @@
     drawPile && (drawPile.src = "assets/cards/back.png");
 
     if (!started && countdownEndsAt) {
-      turnIndicator.textContent = `Game starts in ${secs(countdownEndsAt - Date.now())}s`;
+      turnIndicator.textContent = `Starting in ${secs(countdownEndsAt - Date.now())}s`;
     } else if (started && turnEndsAt) {
-      const mine = current === me.id;
+      const mine = current === me.sid;
       const t = secs(turnEndsAt - Date.now());
       turnIndicator.textContent = mine ? `Your move: ${t}s` : `Waiting…`;
     } else {
@@ -246,16 +227,15 @@
       playerList.appendChild(row);
     });
 
-    // My hand (flex-wrap, same size, only legal clickable on my turn)
     handDiv.innerHTML = "";
-    const isMyTurn = started && current === me.id;
+    const isMyTurn = started && current === me.sid;
     (myHand || []).forEach((c, idx) => {
       const img = document.createElement("img");
       img.className = "card-img";
       img.src = c.img ? `assets/cards/${c.img}` : "assets/cards/back.png";
       const legal = isMyTurn && canPlay(c, state);
       if (!legal) img.classList.add("disabled");
-      if (legal) img.onclick = () => playCardAt(idx);
+      if (legal) img.onclick = () => socket.emit("playCard", { index: idx });
       handDiv.appendChild(img);
     });
 
