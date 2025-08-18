@@ -1,229 +1,121 @@
-// public/admin.js
-(function () {
-  const socket = io();
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UNO Admin</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .grid { display: grid; gap: 8px; }
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    .grid.three { grid-template-columns: 1fr 1fr 1fr; }
+    .card { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background:#fff; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .list { max-height: 220px; overflow: auto; }
+    .muted { opacity: .7; }
+    .row { display:flex; align-items:center; gap:8px; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:10px; background:#eee; margin-right:6px; }
+    .topcard { width: 96px; height: auto; border:1px solid #ccc; border-radius:4px; background:#fafafa; }
+    table.compact td, table.compact th { padding:4px 6px; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>Admin</h1>
 
-  // ======== DOM refs ========
-  const sel = document.getElementById("lobby-select");
-  const btnRef = document.getElementById("refresh-lobbies");
-  const adminMsg = document.getElementById("admin-msg");
-  const adminSend = document.getElementById("admin-send");
+    <!-- Lobby Controls -->
+    <div class="card">
+      <div class="row">
+        <select id="lobby-select"></select>
+        <button id="refresh-lobbies">Refresh</button>
+        <span class="muted">Join a lobby to control it.</span>
+        <a href="/leaderboard.html" style="margin-left:auto;">Open Leaderboard ↗</a>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <input id="admin-msg" placeholder="Send announcement to selected lobby" />
+        <button id="admin-send">Send</button>
+      </div>
+      <div class="row" style="margin-top:8px; flex-wrap:wrap; gap:6px;">
+        <button id="btn-force-end">Force Round End</button>
+        <button id="btn-reset-game">Reset Game</button>
+        <button id="btn-reset-lobby">Reset Lobby</button>
+        <button id="btn-close-lobby">Close Lobby</button>
+      </div>
+    </div>
 
-  // Game State panel
-  const gsStarted = document.getElementById("gs-started");
-  const gsDir = document.getElementById("gs-direction");
-  const gsColor = document.getElementById("gs-color");
-  const gsCurrent = document.getElementById("gs-current");
-  const gsEnds = document.getElementById("gs-ends");
-  const gsDeck = document.getElementById("gs-deck");
-  const gsDiscard = document.getElementById("gs-discard");
-  const gsPenalty = document.getElementById("gs-penalty");
-  const gsFlags = document.getElementById("gs-flags");
+    <!-- Game State -->
+    <div class="card">
+      <h3>Game State</h3>
+      <div class="grid three">
+        <div><div>Started</div><div id="gs-started" class="mono">—</div></div>
+        <div><div>Direction</div><div id="gs-direction" class="mono">—</div></div>
+        <div><div>Color</div><div id="gs-color" class="mono">—</div></div>
+        <div><div>Current Turn</div><div id="gs-current" class="mono">—</div></div>
+        <div><div>Turn Ends</div><div id="gs-ends" class="mono">—</div></div>
+        <div><div>Deck Size</div><div id="gs-deck" class="mono">—</div></div>
+        <div><div>Discard Size</div><div id="gs-discard" class="mono">—</div></div>
+        <div><div>Penalty</div><div id="gs-penalty" class="mono">—</div></div>
+        <div><div>Round Flags</div><div id="gs-flags" class="mono">—</div></div>
+      </div>
+    </div>
 
-  // Players
-  const playersTableBody = document.querySelector("#players-table tbody");
+    <!-- Players -->
+    <div class="card">
+      <h3>Players</h3>
+      <div class="list">
+        <table class="compact" id="players-table">
+          <thead><tr><th>Name</th><th>Hand</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
 
-  // Log
-  const adminLog = document.getElementById("admin-log");
+    <!-- Log -->
+    <div class="card">
+      <h3>Log</h3>
+      <div id="admin-log" class="list mono" style="min-height:120px;"></div>
+    </div>
 
-  // Top discard
-  const topImg = document.getElementById("top-discard");
-  const topMeta = document.getElementById("top-meta");
+    <!-- Top Discard -->
+    <div class="card">
+      <h3>Top Discard</h3>
+      <img id="top-discard" class="topcard" src="assets/cards/back.png" alt="Top card" />
+      <div id="top-meta" class="mono muted">—</div>
+    </div>
 
-  // Admin chat (table)
-  const adminChat = document.getElementById("admin-chat");
-  const adminChatSend = document.getElementById("admin-chat-send");
+    <!-- Table Chat (Admin) -->
+    <div class="card">
+      <h3>Table Chat (Admin)</h3>
+      <div class="row">
+        <input id="admin-chat" placeholder="Type a message to the table…" />
+        <button id="admin-chat-send">Send</button>
+      </div>
+    </div>
 
-  // Sounds
-  const sndBtns = document.querySelectorAll("button.snd");
-  const customSound = document.getElementById("custom-sound");
-  const triggerCustom = document.getElementById("trigger-custom");
+    <!-- Sound Triggers -->
+    <div class="card">
+      <h3>Sound Triggers</h3>
+      <div class="row" style="flex-wrap:wrap; gap:8px;">
+        <button class="snd" data-sound="draw">Draw</button>
+        <button class="snd" data-sound="skip">Skip</button>
+        <button class="snd" data-sound="reverse">Reverse</button>
+        <button class="snd" data-sound="wild">Wild</button>
+        <button class="snd" data-sound="win">Win</button>
+        <button class="snd" data-sound="joined">Joined</button>
+        <button class="snd" data-sound="uno">UNO</button>
+        <input id="custom-sound" placeholder="Custom sound key…" style="max-width:220px;" />
+        <button id="trigger-custom">Trigger Custom</button>
+      </div>
+    </div>
 
-  // Leaderboard target (merged from admin-leaderboard.js)
-  const leaderboardRoot = document.getElementById("admin-leaderboard");
+    <!-- Global Leaderboard -->
+    <div class="card">
+      <h3>Global Leaderboard</h3>
+      <div id="admin-leaderboard"></div>
+    </div>
+  </div>
 
-  // ======== Lobby selection & join ========
-  btnRef.onclick = loadLobbies;
-  loadLobbies();
-
-  async function loadLobbies() {
-    try {
-      const res = await fetch("/lobbies", { cache: "no-store" });
-      const data = await res.json();
-      sel.innerHTML = (data || [])
-        .map(
-          (x) =>
-            `<option value="${esc(x.name)}">${esc(x.name)} (${x.players}P/${x.spectators}S${
-              x.started ? "; live" : ""
-            })</option>`
-        )
-        .join("");
-      if (!data || !data.length)
-        sel.innerHTML = `<option value="default">default (0P/0S)</option>`;
-    } catch {
-      sel.innerHTML = `<option value="default">default</option>`;
-    }
-  }
-
-  function joinSelectedLobby() {
-    if (!sel.value) return;
-    socket.emit("join", { name: "Admin", lobby: sel.value }); // idempotent
-    // pull an initial snapshot
-    setTimeout(() => socket.emit("admin:pullState"), 150);
-  }
-
-  sel.addEventListener("change", joinSelectedLobby);
-  setTimeout(joinSelectedLobby, 250); // auto-join first lobby on load
-
-  // ======== Admin announce to lobby ========
-  adminSend.onclick = () => {
-    if (!sel.value) return;
-    socket.emit("join", { name: "Admin", lobby: sel.value });
-    setTimeout(() => socket.emit("admin:chat", { text: adminMsg.value }), 150);
-    adminMsg.value = "";
-  };
-
-  // ======== Admin-only chat to table ========
-  adminChatSend.onclick = () => {
-    if (!sel.value) return;
-    socket.emit("join", { name: "Admin", lobby: sel.value });
-    setTimeout(() => socket.emit("admin:chat", { text: adminChat.value }), 150);
-    adminChat.value = "";
-  };
-
-  // ======== Sound triggers ========
-  function ensureJoinedLobby() {
-    if (!sel.value) return;
-    socket.emit("join", { name: "Admin", lobby: sel.value });
-  }
-  sndBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      ensureJoinedLobby();
-      const sound = btn.getAttribute("data-sound");
-      socket.emit("admin:sound", { name: sound });
-    });
-  });
-  if (triggerCustom) {
-    triggerCustom.addEventListener("click", () => {
-      ensureJoinedLobby();
-      const key = (customSound.value || "").trim();
-      if (!key) return;
-      socket.emit("admin:sound", { name: key });
-    });
-  }
-
-  // ======== Live admin state feed ========
-  socket.on("admin:state", (snap) => {
-    try {
-      renderState(snap || {});
-    } catch {}
-  });
-
-  // Also show lobby announcements in admin log
-  socket.on("announce", (txt) => appendLog(String(txt || "")));
-
-  // ======== Leaderboard (merged) ========
-  let lastLeaderboardAt = 0;
-  async function refreshLeaderboard(force = false) {
-    const now = Date.now();
-    if (!leaderboardRoot) return;
-    if (!force && now - lastLeaderboardAt < 3000) return;
-    lastLeaderboardAt = now;
-    try {
-      const res = await fetch("/leaderboard", { cache: "no-store" });
-      const data = await res.json();
-      leaderboardRoot.innerHTML = renderLeaderboard(data || []);
-    } catch {
-      leaderboardRoot.textContent = "Failed to load leaderboard.";
-    }
-  }
-
-  function renderLeaderboard(rows) {
-    const tr = (r) =>
-      `<tr><td>${esc(r.name)}</td><td>${Number(r.wins || 0)}</td><td>${Number(
-        r.points || 0
-      )}</td></tr>`;
-    return `<table class="compact"><thead><tr><th>Name</th><th>Wins</th><th>Points</th></tr></thead><tbody>${(rows ||
-      [])
-      .map(tr)
-      .join("")}</tbody></table>`;
-  }
-
-  refreshLeaderboard(true);
-  setInterval(refreshLeaderboard, 5000);
-
-  // ======== Renderers ========
-  function renderState(s) {
-    // Game State
-    gsStarted.textContent = s.started ? "Yes" : "No";
-    gsDir.textContent = s.direction || "—";
-    gsColor.textContent = s.color ? s.color.toUpperCase() : "—";
-    gsCurrent.textContent = s.currentName || "—";
-    gsEnds.textContent = s.turnEndsAt ? `${secs(s.turnEndsAt - Date.now())}s` : "—";
-    gsDeck.textContent = s.deckSize ?? "—";
-    gsDiscard.textContent = s.discardSize ?? "—";
-
-    if (s.penalty && s.penalty.amount) {
-      const who = s.penalty.targetSid ? nameOf(s.penalty.targetSid, s.players) : null;
-      gsPenalty.textContent = `+${s.penalty.amount} ${s.penalty.kind}${
-        who ? ` → ${who}` : ""
-      }`;
-    } else {
-      gsPenalty.textContent = "—";
-    }
-
-    gsFlags.innerHTML =
-      s.roundFlags && s.roundFlags.length
-        ? s.roundFlags.map((f) => `<span class="pill">${esc(f)}</span>`).join(" ")
-        : "—";
-
-    // Players
-    playersTableBody.innerHTML = (s.players || [])
-      .map((p) => {
-        const status = p.spectator ? "Spectator" : p.connected ? "Active" : "Disconnected";
-        return `<tr>
-          <td>${esc(p.name)}</td>
-          <td>${Number(p.hand || 0)}</td>
-          <td>${esc(status)}</td>
-        </tr>`;
-      })
-      .join("");
-
-    // Top Discard
-    if (s.topCard && s.topCard.img) {
-      topImg.src = `assets/cards/${s.topCard.img}`;
-      topMeta.textContent = `${s.topCard.color || "?"} ${s.topCard.type || ""}${
-        Number.isFinite(s.topCard.value) ? " " + s.topCard.value : ""
-      }`;
-    } else {
-      topImg.src = `assets/cards/back.png`;
-      topMeta.textContent = "—";
-    }
-  }
-
-  // ======== Utils ========
-  function appendLog(t) {
-    const d = document.createElement("div");
-    d.textContent = t;
-    adminLog.appendChild(d);
-    adminLog.scrollTop = adminLog.scrollHeight;
-  }
-
-  function nameOf(sid, players) {
-    const p = (players || []).find((x) => x.sid === sid);
-    return p ? p.name : sid;
-  }
-
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, (m) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    }[m]));
-  }
-
-  function secs(ms) {
-    return Math.max(0, Math.ceil((+ms || 0) / 1000));
-  }
-})();
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
