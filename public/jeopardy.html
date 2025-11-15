@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Amadeus Jeopardy — v3.6.2 (Two-Window, Timers, Synth Sounds)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root{
+  --am-blue:#005bbb; --am-blue-dark:#004a99; --am-text:#0f172a; --am-muted:#6b7280;
+  --am-bg:#f5f7fb; --card:#ffffff; --tile:#0b3778; --tile2:#072a5c; --tile-text:#ffcc33;
+  --ok:#15803d; --danger:#b91c1c; --lockout:#b91c1c; --answerbar:#ffcc33; --buzzbar:#22c55e;
+  --radius:14px; --shadow:0 14px 34px rgba(3,20,40,.18);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--am-bg);color:var(--am-text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e6ecf6}
+.topbar{max-width:1400px;margin:0 auto;padding:12px 16px;display:flex;gap:12px;align-items:center}
+.brand{font-weight:900;color:var(--am-blue)} .brand small{margin-left:8px;color:#94a3b8}
+.toolbar{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid #dbe3ef;background:#fff;color:#0f172a;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(0,0,0,.1)}
+.btn.primary{background:var(--am-blue);border-color:var(--am-blue);color:#fff}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+a.btn{display:inline-block;text-decoration:none}
+.badge{background:#eef2f9;color:#2a3a5e;border-radius:999px;padding:6px 10px;font-weight:800;font-size:12px;margin-right:6px}
+.help{font-size:12px;color:#6b7280}
+.app{max-width:1400px;margin:18px auto;padding:0 16px;display:grid;grid-template-columns:1.4fr .6fr;gap:16px}
+
+/* Board */
+#board{background:linear-gradient(180deg,var(--tile),var(--tile2));border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:12px;display:grid;gap:12px;grid-template-rows:64px repeat(5,1fr);grid-template-columns:repeat(6,1fr);min-height:680px}
+.cat{background:#103e8f;color:#e6eeff;font-weight:800;text-transform:uppercase;display:flex;align-items:center;justify-content:center;text-align:center;border-radius:10px;padding:8px;letter-spacing:.6px;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.tile{background:#0b3b7f;color:#ffcc33;display:flex;align-items:center;justify-content:center;border-radius:10px;font-weight:900;font-size:32px;cursor:pointer;user-select:none;box-shadow:inset 0 0 0 2px rgba(255,255,255,.06),0 10px 18px rgba(0,0,0,.28);transition:transform .08s,box-shadow .15s}
+.tile:hover{transform:translateY(-1px);box-shadow:0 14px 26px rgba(0,0,0,.32)}
+.tile.used{background:#0a2d5f;color:#234;cursor:not-allowed;opacity:.45;box-shadow:none}
+.tile.locked{opacity:.6;filter:grayscale(.25);cursor:not-allowed}
+.tile:focus-visible{outline:2px solid #1a66ff}
+aside.card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
+.panel-title{font-weight:900;color:var(--am-blue);margin:4px 0 10px}
+
+/* Collapsible (board sidebar only) */
+.card.collapsible{padding:0;overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #e7edf7}
+.card-title{font-weight:900;color:var(--am-blue);margin:0}
+.card-tools{display:flex;gap:8px;align-items:center}
+.card-body{padding:14px;transition:max-height .25s ease, opacity .2s ease;overflow:hidden}
+.card.collapsed .card-body{max-height:0;opacity:.0;padding-top:0;padding-bottom:0}
+.caret{width:28px;height:28px;border:1px solid #dbe3ef;border-radius:8px;background:#fff;display:inline-grid;place-items:center;cursor:pointer}
+.caret svg{transition:transform .18s ease}
+.card.collapsed .caret svg{transform:rotate(-90deg)}
+.playerRow{display:flex;align-items:center;justify-content:space-between;border:1px solid #e5e9f2;border-radius:10px;padding:8px 10px;background:#fff;margin-bottom:8px}
+.muted{color:#6b7280;font-size:13px}
+
+/* Modes */
+.admin-only{display:none} .board-only{display:block}
+body.admin .admin-only{display:block} body.admin .board-only{display:none}
+
+/* Overlay */
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:20}
+.modal.show{display:flex}
+#clueOverlay{background:rgba(0,0,0,.55)}
+#clueCard{background:linear-gradient(180deg,#0c3d85,#072a5c);border-radius:0;box-shadow:none;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 6vw;position:relative}
+#clueText{color:#ffcc33;font-weight:900;font-size:48px;line-height:1.2;text-shadow:0 2px 0 rgba(0,0,0,.4);max-width:1200px}
+#answerLine{margin-top:22px;color:#e6eeff;font-weight:900;display:none}
+#answerLine .label{opacity:.85;margin-right:10px;letter-spacing:.06em;text-transform:uppercase}
+#answerText{font-size:54px}
+#respondentBanner{margin-top:28px;font-weight:900;font-size:32px;color:#003;background:#ffcc33;padding:10px 20px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.35);display:none}
+#respondentBanner.active{display:inline-block;animation:pulseGlow 1.2s ease-in-out infinite}
+@keyframes pulseGlow{0%{box-shadow:0 6px 20px rgba(255,204,51,.35)}50%{box-shadow:0 10px 26px rgba(255,204,51,.55)}100%{box-shadow:0 6px 20px rgba(255,204,51,.35)}}
+#timerBar{position:absolute;left:0;right:0;bottom:0;height:8px;background:rgba(255,255,255,.2)}
+#timerFill{height:100%;width:0;background:var(--answerbar);transition:width .25s linear}
+#timerFill.lockout{background:var(--lockout)} #timerFill.buzz{background:var(--buzzbar)}
+#timerFill.answer{background:var(--answerbar)} #timerFill.reveal{background:#60a5fa}
+#timerNumber{position:absolute;right:16px;bottom:14px;font-weight:900;color:#e6eeff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+
+/* Admin table bits */
+.table{width:100%;border-collapse:separate;border-spacing:0 8px}
+.table th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;text-align:left;padding:0 10px}
+.table td{background:#fff;border:1px solid #e7edf7;padding:10px;border-radius:10px;vertical-align:top}
+.row-disabled td{opacity:.5}
+.pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2f9;color:#334155;font-weight:800;font-size:12px}
+.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.footerbar{position:sticky;bottom:0;background:#fff;border:1px solid #e7edf7;border-radius:10px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+kbd{background:#eef2f9;border:1px solid #dbe3ef;border-bottom-width:2px;border-radius:6px;padding:2px 6px;font-weight:800}
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand">AMADEUS <span>Jeopardy</span> <small>v3.6.2</small></div>
+    <div class="toolbar board-only">
+      <button class="btn primary" id="btnOpenAdmin">Open Admin</button>
+      <a class="btn" id="lnkOpenAdminTab" href="" target="_blank" rel="noopener">Open Admin (new tab)</a>
+      <span class="help">Load CSV/Demo in Admin → select 6 cats × 5 clues → <b>Start Game</b>.</span>
+    </div>
+    <div class="toolbar admin-only">
+      <label class="btn"><input type="file" id="csvInput" accept=".csv,text/csv" />Load CSV</label>
+      <button class="btn" id="btnDemo">Demo Data</button>
+      <button class="btn primary" id="btnStart" disabled>Start Game</button>
+      <button class="btn" id="btnOpenBoard">Open Board</button>
+      <a class="btn" id="lnkOpenBoardTab" href="" target="_blank" rel="noopener">Open Board (new tab)</a>
+      <span class="badge">Rows: <span id="rowCount">0</span></span>
+      <span class="badge">Eligible: <span id="eligibleCount">0</span></span>
+      <span class="badge">Selected: <span id="selectedCount">0</span>/6</span>
+      <span class="badge" id="fileBadge"></span>
+    </div>
+  </div>
+</header>
+
+<!-- BOARD -->
+<main class="app board-only">
+  <section id="board" aria-label="Game Board"></section>
+  <!-- Starts collapsed by default on Board -->
+  <aside class="card collapsible" id="boardSecPlayers" data-default-collapsed="1">
+    <div class="card-head">
+      <h3 class="card-title">Players</h3>
+      <div class="card-tools">
+        <button class="caret" type="button" aria-expanded="false"
+          data-collapse-target="#boardSecPlayers" aria-label="Toggle Players">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="8 4 16 12 8 20"></polyline>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="card-body" data-auto>
+      <div id="players"></div>
+      <div class="help" style="margin-top:8px">Buzz: 1/2/3 • Host: A=reveal, Y=correct, N=incorrect, E=end, Ctrl+Z=undo</div>
+    </div>
+  </aside>
+</main>
+
+<!-- OVERLAY -->
+<div class="modal" id="clueOverlay">
+  <div id="clueCard">
+    <div id="clueText">…</div>
+    <div id="answerLine"><span class="label">Answer:</span><span id="answerText"></span></div>
+    <div id="respondentBanner"></div>
+    <div id="timerBar"><div id="timerFill" class="answer"></div></div>
+    <div id="timerNumber"></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<main class="admin-only" style="max-width:1100px;margin:18px auto;padding:0 16px;display:grid;gap:16px">
+  <aside class="card">
+    <div class="panel-title">Live Controls</div>
+    <div class="flex" style="margin-bottom:8px">
+      <button class="btn" id="ctrlReveal">Reveal Answer (A)</button>
+      <button class="btn ok" id="ctrlCorrect">Correct (Y)</button>
+      <button class="btn danger" id="ctrlIncorrect">Incorrect (N)</button>
+      <button class="btn" id="ctrlEnd">End Question (E)</button>
+      <button class="btn" id="ctrlUndo">Undo (Ctrl+Z)</button>
+    </div>
+    <div class="help">Lockout (red) → opens buzzers • Incorrect adds brief rebound; Reveal disabled while answering</div>
+  </aside>
+
+  <aside class="card">
+    <div class="panel-title">Current Clue</div>
+    <div id="adminClueMeta" class="muted">(no clue open)</div>
+    <div id="adminClueText" style="font-weight:900;margin:6px 0"></div>
+    <div class="badge">Answer: <span id="adminAnswer"></span></div>
+    <div style="margin-top:8px" class="muted">
+      Phase: <span id="adminPhase">—</span> • Timer: <span id="adminTimer">—</span> • Buzzers: <span id="adminBuzz">CLOSED</span> • Respondent: <span id="adminResp">—</span>
+    </div>
+  </aside>
+
+  <!-- Timers -->
+  <aside class="card">
+    <div class="panel-title">Timers</div>
+    <div class="flex" style="flex-wrap:wrap">
+      <label>Lockout <input id="tLock" type="number" min="1" max="60" value="5" class="btn" style="width:90px"></label>
+      <label>Buzz <input id="tBuzz" type="number" min="1" max="60" value="10" class="btn" style="width:90px"></label>
+      <label>Answer <input id="tAns" type="number" min="1" max="60" value="10" class="btn" style="width:90px"></label>
+      <label>Reveal <input id="tRev" type="number" min="1" max="60" value="5" class="btn" style="width:90px"></label>
+      <button class="btn" id="presetClassic">Classic</button>
+      <button class="btn" id="presetFast">Fast</button>
+      <button class="btn" id="presetClassroom">Classroom</button>
+      <span class="help">Changes apply to the <b>next clue</b>.</span>
+    </div>
+  </aside>
+
+  <!-- Sounds -->
+  <aside class="card">
+    <div class="panel-title">Sounds</div>
+    <div class="flex">
+      <label><input type="checkbox" id="sndEnable" checked /> Enable sounds</label>
+      <label>Volume <input id="sndVol" type="range" min="0" max="100" value="60" /></label>
+    </div>
+    <div class="help">Lightweight synthesized cues (no downloads). Plays on the Board window.</div>
+  </aside>
+
+  <!-- Selector -->
+  <aside class="card" id="adminSelector">
+    <div class="panel-title">Category & Clue Selector</div>
+    <div class="flex" style="margin-bottom:8px">
+      <button class="btn" id="btnPickRandom6">Random 6</button>
+      <button class="btn" id="btnClearAll">Clear</button>
+      <button class="btn" id="btnExportSel">Export Selected CSV</button>
+    </div>
+    <div id="selectorMeta" class="help"></div>
+    <div style="max-height:420px;overflow:auto">
+      <table class="table">
+        <thead><tr><th>Use</th><th>Category</th><th>Clues</th><th>Pick 5</th></tr></thead>
+        <tbody id="selectorRows"></tbody>
+      </table>
+    </div>
+    <div class="footerbar"><span id="statusText" class="help">Select 6 categories and 5 clues in each.</span></div>
+  </aside>
+
+  <aside class="card">
+    <div class="panel-title">Categories (in play)</div>
+    <div id="adminCats" class="muted"></div>
+  </aside>
+  <aside class="card">
+    <div class="panel-title">Players</div>
+    <div id="adminPlayers"></div>
+  </aside>
+</main>
+
+<script>
+/* ===== Constants / Defaults ===== */
+const BOARD_COLS=6, BOARD_ROWS=5, POINT_BASE=200;
+const REBOUND_DELAY_MS=300;
+const DEFAULT_TIMERS={ lockout:5, buzz:10, answer:10, reveal:5 };
+
+/* ===== Synth sounds (Board only) ===== */
+let audio={ ctx:null, enabled:true, vol:0.6 };
+function audioInit(){ if(audio.ctx) return; try{ audio.ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch{} }
+function now(){ return audio.ctx ? audio.ctx.currentTime : 0; }
+function outGain(){ if(!audio.ctx) return null; const g=audio.ctx.createGain(); g.gain.value=audio.enabled?audio.vol:0; g.connect(audio.ctx.destination); return g; }
+function tone(freq,dur,type='sine',gain=0.4,attack=0.005,release=0.08){
+  if(!audio.ctx||!audio.enabled) return; const t0=now(), t1=t0+dur;
+  const o=audio.ctx.createOscillator(); o.type=type; o.frequency.value=freq;
+  const g=audio.ctx.createGain(); g.gain.value=0; o.connect(g); g.connect(outGain());
+  g.gain.linearRampToValueAtTime(gain, t0+attack); g.gain.setTargetAtTime(0, t1-release, release);
+  o.start(t0); o.stop(t1+0.05);
+}
+function glide(start,end,dur,type='sine',gain=0.35){
+  if(!audio.ctx||!audio.enabled) return; const t0=now(), t1=t0+dur;
+  const o=audio.ctx.createOscillator(); o.type=type; o.frequency.setValueAtTime(start,t0);
+  o.frequency.exponentialRampToValueAtTime(Math.max(1,end), t1);
+  const g=audio.ctx.createGain(); g.gain.value=gain; o.connect(g); g.connect(outGain());
+  o.start(t0); o.stop(t1+0.02);
+}
+const SFX={
+  buzzer(){ audioInit(); tone(200,0.12,'square',0.45); tone(60,0.12,'sawtooth',0.25); },
+  correct(){ audioInit(); tone(660,0.12,'sine',0.35); setTimeout(()=>tone(880,0.12,'sine',0.35),110); },
+  incorrect(){ audioInit(); glide(440,220,0.18,'triangle',0.35); },
+  reveal(){ audioInit(); tone(784,0.22,'sine',0.28); },
+};
+
+/* ===== Utilities ===== */
+function rid(){ try{ const u=new Uint32Array(2); crypto.getRandomValues(u); return [...u].map(x=>x.toString(36)).join(''); }catch{ return Math.random().toString(36).slice(2); } }
+function escapeHTML(s){ return (s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&gt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }
+function sample(a,n){ const b=a.slice(); for(let i=b.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [b[i],b[j]]=[b[j],b[i]]; } return b.slice(0,n); }
+
+/* ===== Bus (two windows) ===== */
+const CH='amadeus-jeop-v362'; let bc=null; try{ bc=new BroadcastChannel(CH);}catch{}
+let otherWin=null; function busSend(msg){ msg.ts=Date.now(); msg.uuid=rid();
+  if(bc) try{ bc.postMessage(msg);}catch{}; if(otherWin) try{ otherWin.postMessage(msg,'*'); }catch{};
+  try{ localStorage.setItem(CH, JSON.stringify(msg)); }catch{}
+}
+window.addEventListener('message', e=> onBus(e.data||{}));
+if(bc){ bc.onmessage=e=> onBus(e.data||{}); }
+window.addEventListener('storage', e=>{ if(e.key===CH && e.newValue){ try{ onBus(JSON.parse(e.newValue)); }catch{} } });
+
+/* ===== Mode / State ===== */
+const isAdmin=(location.hash||'').toLowerCase().includes('admin');
+if(isAdmin) document.body.classList.add('admin');
+
+const state={
+  categories:[], players:[], controlId:null,
+  current:null, // {r,c,category,value,controllerId,phase,timerRemaining,showAnswer,buzzRemaining}
+  buzzer:{open:false, respondentId:null, tried:[]},
+  history:[],
+  datasetRows:[], selector:{ byCat:{}, chosenCats:[], chosenClues:{}, persistKey:'', fileLabel:'' },
+  timers:{...DEFAULT_TIMERS}, pendingTimers:null,
+  sounds:{ enabled:true, vol:0.6 }
+};
+
+/* ===== Elements ===== */
+const boardEl=document.getElementById('board');
+const playersEl=document.getElementById('players');
+const overlay=document.getElementById('clueOverlay');
+const ovText=document.getElementById('clueText');
+const ansLine=document.getElementById('answerLine');
+const ansText=document.getElementById('answerText');
+const respBanner=document.getElementById('respondentBanner');
+const timerFill=document.getElementById('timerFill');
+const timerNum=document.getElementById('timerNumber');
+
+/* ===== Absolute URL setup for links ===== */
+(function(){
+  const base = location.origin + location.pathname;
+  const aAdmin = document.getElementById('lnkOpenAdminTab');
+  const aBoard = document.getElementById('lnkOpenBoardTab');
+  if (aAdmin) aAdmin.href = base + '#admin';
+  if (aBoard) aBoard.href = base;
+})();
+
+/* ===== Board/Admin open & robust fallback ===== */
+function openOther(){
+  const base = location.origin + location.pathname;  // full path without hash
+  const url  = isAdmin ? base : (base + '#admin');
+  const name = isAdmin ? 'am_board' : 'am_admin';
+  const feat = 'popup,width=1200,height=900';
+
+  let w = null;
+  try { w = window.open(url, name, feat); } catch(_) {}
+  if (!w) { location.href = url; return; } // fallback to same tab
+  otherWin = w;
+  setTimeout(()=> busSend({type:'PING'}), 200);
+}
+document.getElementById('btnOpenAdmin')?.addEventListener('click', openOther);
+document.getElementById('btnOpenBoard')?.addEventListener('click', openOther);
+
+/* ===== Renderers ===== */
+function drawBoard(){
+  if(!boardEl) return; boardEl.innerHTML='';
+  for(let c=0;c<6;c++){
+    const h=document.createElement('div'); h.className='cat'; h.textContent=state.categories[c]?.name||''; boardEl.appendChild(h);
+  }
+  for(let r=0;r<5;r++){
+    for(let c=0;c<6;c++){
+      const t=document.createElement('button'); t.className='tile'; t.setAttribute('data-r',r); t.setAttribute('data-c',c);
+      const cl=state.categories[c]?.clues?.[r];
+      if(!cl){ t.disabled=true; t.textContent='—'; }
+      else{
+        t.textContent = cl.used ? '—' : `$${cl.value}`;
+        if(cl.used){ t.classList.add('used'); t.disabled=true; }
+        else t.addEventListener('click', ()=> onTileClick(r,c));
+      }
+      boardEl.appendChild(t);
+    }
+  }
+}
+function drawPlayers(){
+  if(!playersEl) return; playersEl.innerHTML='';
+  state.players.forEach(p=>{
+    const row=document.createElement('div'); row.className='playerRow';
+    row.innerHTML=`<div><strong>${escapeHTML(p.name)}</strong><div class="muted">${state.controlId===p.id?'Board control':''}</div></div><div style="font-weight:900">$${p.score}</div>`;
+    playersEl.appendChild(row);
+  });
+}
+function showOverlay(clue){ overlay.classList.add('show'); ovText.textContent=clue||''; renderOverlayAnswer(); refreshOverlayPhase(); updateTimerBar(); }
+function hideOverlay(){ overlay.classList.remove('show'); timerFill.style.width='0%'; timerNum.textContent=''; }
+function setRespondentName(name){
+  respBanner.textContent = name ? `✋ ${name}` : '';
+  if(state.current && name){ respBanner.classList.add('active'); respBanner.style.display='inline-block'; }
+  else{ respBanner.classList.remove('active'); respBanner.style.display='none'; }
+}
+function renderOverlayAnswer(){
+  const show = !!(state.current && state.current.showAnswer);
+  ansLine.style.display = show ? 'block' : 'none';
+  if(show){
+    const cl=state.categories?.[state.current.c]?.clues?.[state.current.r];
+    ansText.textContent = cl?.a || '';
+  }
+}
+function refreshOverlayPhase(){
+  if(!state.current) return;
+  const ph = state.current.phase;
+  ovText.style.display = ph==='reveal' ? 'none':'block';
+  ansLine.style.display = ph==='reveal' || state.current.showAnswer ? 'block':'none';
+}
+
+/* ===== Admin HUD ===== */
+const aMeta=document.getElementById('adminClueMeta');
+const aText=document.getElementById('adminClueText');
+const aAns=document.getElementById('adminAnswer');
+const aTimer=document.getElementById('adminTimer');
+const aBuzz=document.getElementById('adminBuzz');
+const aResp=document.getElementById('adminResp');
+const aCats=document.getElementById('adminCats');
+const aPlayers=document.getElementById('adminPlayers');
+const aRowCount=document.getElementById('rowCount');
+const aEligible=document.getElementById('eligibleCount');
+const aSelected=document.getElementById('selectedCount');
+const fileBadge=document.getElementById('fileBadge');
+
+function drawAdmin(){
+  if(!isAdmin) return;
+  aRowCount.textContent=String(state.datasetRows?.length||0);
+  aEligible.textContent=String(Object.keys(state.selector.byCat).filter(k=>(state.selector.byCat[k]?.length||0)>=5).length||0);
+  aSelected.textContent=String(state.selector.chosenCats?.length||0);
+  fileBadge.textContent=state.selector.fileLabel||'';
+  aCats.textContent=(state.categories||[]).map(c=>c.name).join(' • ');
+  aPlayers.innerHTML='';
+  state.players.forEach(p=>{
+    const row=document.createElement('div'); row.className='playerRow';
+    row.innerHTML=`<div><strong>${escapeHTML(p.name)}</strong></div><div style="font-weight:900">$${p.score}</div>`;
+    aPlayers.appendChild(row);
+  });
+  if(state.current){
+    const cl=state.categories?.[state.current.c]?.clues?.[state.current.r];
+    aMeta.textContent=`${state.current.category} — $${state.current.value}`;
+    aText.textContent=cl?.q||''; aAns.textContent=cl?.a||'';
+    aTimer.textContent=(state.current.timerRemaining!=null)? `${state.current.timerRemaining}s`:'—';
+    aBuzz.textContent=state.buzzer.open?'OPEN':'CLOSED';
+    const pmap=new Map(state.players.map(p=>[p.id,p.name]));
+    aResp.textContent=state.buzzer.respondentId ? pmap.get(state.buzzer.respondentId) : '—';
+    document.getElementById('adminPhase').textContent=state.current.phase||'—';
+  }else{
+    aMeta.textContent='(no clue open)'; aText.textContent=''; aAns.textContent='';
+    aTimer.textContent='—'; aBuzz.textContent='CLOSED'; aResp.textContent='—';
+    document.getElementById('adminPhase').textContent='—';
+  }
+}
+
+/* ===== Timer helpers ===== */
+let timerHandle=null;
+function totalForPhase(ph){
+  const t=state.timers;
+  if(ph==='lockout') return t.lockout;
+  if(ph==='buzz-open') return t.buzz;
+  if(ph==='answering') return t.answer;
+  if(ph==='reveal') return t.reveal;
+  return 0;
+}
+function setTimerBarPhase(ph){
+  timerFill.className='';
+  if(ph==='lockout') timerFill.classList.add('lockout');
+  else if(ph==='buzz-open') timerFill.classList.add('buzz');
+  else if(ph==='answering') timerFill.classList.add('answer');
+  else if(ph==='reveal') timerFill.classList.add('reveal');
+}
+function updateTimerBar(){
+  if(!state.current){ timerFill.style.width='0%'; timerNum.textContent=''; return; }
+  const total=totalForPhase(state.current.phase)||0;
+  const rem=Math.max(0, state.current.timerRemaining||0);
+  timerFill.style.width = total? (100*rem/total)+'%' : '0%';
+  timerNum.textContent = total ? `${rem}s` : '';
+}
+function startTimer(sec){ stopTimer(); if(!state.current) return; state.current.timerRemaining=sec; updateTimerBar(); drawAdmin(); timerHandle=setInterval(tick,1000); }
+function stopTimer(){ if(timerHandle){ clearInterval(timerHandle); timerHandle=null; } }
+function tick(){
+  if(!state.current) return stopTimer();
+  if(state.current.timerRemaining>0){
+    state.current.timerRemaining-=1;
+    updateTimerBar(); drawAdmin(); busSend({type:'SNAPSHOT', payload:snapshot()});
+  }else{
+    stopTimer();
+    const ph=state.current.phase;
+    if(ph==='lockout'){ autoOpenBuzzers(); }
+    else if(ph==='buzz-open'){ enterReveal(); SFX.reveal(); }
+    else if(ph==='answering'){ markIncorrect(); }
+    else if(ph==='reveal'){ endQuestion(); }
+  }
+}
+
+/* ===== Gameplay ===== */
+function onTileClick(r,c){
+  const clue=state.categories?.[c]?.clues?.[r]; if(!clue || clue.used) return;
+  resetBuzzer();
+  state.current={ r,c, category: state.categories[c].name, value: clue.value, controllerId: state.controlId,
+    phase:'lockout', timerRemaining:totalForPhase('lockout'), showAnswer:false, buzzRemaining: totalForPhase('buzz-open') };
+  lockTiles(true);
+  showOverlay(clue.q); setTimerBarPhase('lockout'); startTimer(state.current.timerRemaining);
+  busSend({type:'SNAPSHOT', payload:snapshot()});
+}
+function autoOpenBuzzers(){
+  if(!state.current) return;
+  state.buzzer.open=true; state.buzzer.respondentId=null;
+  state.current.phase='buzz-open'; state.current.showAnswer=false;
+  const sec = (typeof state.current.buzzRemaining==='number') ? state.current.buzzRemaining : totalForPhase('buzz-open');
+  state.current.timerRemaining = Math.max(1, sec);
+  setTimerBarPhase('buzz-open'); startTimer(state.current.timerRemaining);
+  busSend({type:'SNAPSHOT', payload:snapshot()});
+}
+function revealAnswer(){
+  if(!state.current) return;
+  if(state.current.phase==='answering') return; // disabled mid-answer
+  enterReveal(); SFX.reveal();
+}
+function markCorrect(){
+  if(!state.current) return;
+  const {c:col, r:row}=state.current; const clue=state.categories?.[col]?.clues?.[row]; if(!clue || clue.used) return;
+  const pid=state.buzzer.respondentId; if(!pid) return;
+  const p=state.players.find(x=>x.id===pid);
+  if(p){ p.score+=clue.value; state.history.push({type:'score',playerId:pid,delta:clue.value,r:row,c:col,ts:Date.now()}); }
+  state.controlId=pid; state.current.controllerId=pid; clue.used=true;
+  enterReveal(); SFX.correct();
+}
+function markIncorrect(){
+  if(!state.current) return;
+  const {c:col, r:row}=state.current; const clue=state.categories?.[col]?.clues?.[row]; if(!clue || clue.used) return;
+  const pid=state.buzzer.respondentId; if(!pid) return;
+  const p=state.players.find(x=>x.id===pid);
+  if(p){ p.score-=clue.value; state.history.push({type:'score',playerId:pid,delta:-clue.value,r:row,c:col,ts:Date.now()}); }
+  if(!state.buzzer.tried.includes(pid)) state.buzzer.tried.push(pid);
+  SFX.incorrect();
+  const allTried = state.buzzer.tried.length>=3;
+  if(allTried){ enterReveal(); SFX.reveal(); }
+  else{
+    setTimeout(()=>{
+      if(!state.current) return;
+      state.buzzer.open=true; state.buzzer.respondentId=null; setRespondentName('');
+      state.current.phase='buzz-open'; state.current.showAnswer=false;
+      const sec = Math.max(1, state.current.buzzRemaining||totalForPhase('buzz-open'));
+      state.current.timerRemaining=sec;
+      setTimerBarPhase('buzz-open'); startTimer(sec);
+      drawPlayers(); drawAdmin(); busSend({type:'SNAPSHOT', payload:snapshot()});
+    }, REBOUND_DELAY_MS);
+  }
+}
+function endQuestion(){
+  if(!state.current) return;
+  const {c:col, r:row}=state.current; const clue=state.categories?.[col]?.clues?.[row];
+  if(clue && !clue.used) clue.used=true;
+  if(state.current.controllerId && state.controlId!==state.current.controllerId){
+    state.controlId = state.current.controllerId;
+  }
+  hideOverlay(); setRespondentName(''); stopTimer();
+  state.current=null; lockTiles(false);
+  drawBoard(); drawPlayers(); drawAdmin(); busSend({type:'SNAPSHOT', payload:snapshot()});
+}
+function enterReveal(){
+  stopTimer();
+  if(!state.current) return;
+  state.buzzer.open=false; state.buzzer.respondentId=null;
+  state.current.phase='reveal'; state.current.showAnswer=true;
+  state.current.timerRemaining=totalForPhase('reveal');
+  renderOverlayAnswer(); refreshOverlayPhase(); updateTimerBar();
+  setTimerBarPhase('reveal'); startTimer(state.current.timerRemaining);
+  drawAdmin(); busSend({type:'SNAPSHOT', payload:snapshot()});
+}
+function lockTiles(locked){
+  document.querySelectorAll('.tile').forEach(t=>{
+    const rr=+t.getAttribute('data-r'), cc=+t.getAttribute('data-c');
+    const cl=state.categories?.[cc]?.clues?.[rr];
+    if(cl && !cl.used){ t.disabled=!!locked; t.classList.toggle('locked', !!locked); }
+  });
+}
+function resetBuzzer(){ state.buzzer={open:false, respondentId:null, tried:[]}; }
+
+/* Buzz from keys */
+function onBuzz(pid){
+  if(!state.current) return;
+  if(state.current.phase==='lockout' || state.current.phase==='reveal') return;
+  if(!state.buzzer.open) return;
+  if(state.buzzer.tried.includes(pid)) return;
+  if(state.buzzer.respondentId) return;
+  // Pause remaining buzz
+  if(state.current.phase==='buzz-open'){
+    state.current.buzzRemaining = Math.max(0, state.current.timerRemaining||0);
+    stopTimer();
+  }
+  state.buzzer.respondentId=pid; state.buzzer.open=false;
+  state.current.phase='answering'; state.current.showAnswer=false;
+  const pname=state.players.find(p=>p.id===pid)?.name||''; setRespondentName(pname);
+  setTimerBarPhase('answering'); state.current.timerRemaining=totalForPhase('answering'); startTimer(state.current.timerRemaining);
+  if(!isAdmin) SFX.buzzer();
+  busSend({type:'SNAPSHOT', payload:snapshot()});
+}
+
+/* Undo (scores only) */
+function undoLast(){
+  for(let i=state.history.length-1;i>=0;i--){
+    const h=state.history[i];
+    if(h.type==='score'){
+      const p=state.players.find(x=>x.id===h.playerId);
+      if(p){ p.score-=h.delta; state.history.splice(i,1); drawPlayers(); drawAdmin(); busSend({type:'SNAPSHOT', payload:snapshot()}); }
+      return;
+    }
+  }
+}
+
+/* ===== Keyboard ===== */
+function isTypingTarget(el){ return el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable); }
+window.addEventListener('keydown', (e)=>{
+  if(isTypingTarget(document.activeElement)) return;
+  const k=(e.key||'').toLowerCase();
+  if(e.ctrlKey && k==='z'){ e.preventDefault(); if(!isAdmin) undoLast(); else busSend({type:'INTENT', payload:{action:'UNDO'}}); return; }
+  if(k==='a'){ e.preventDefault(); if(!isAdmin) revealAnswer(); else busSend({type:'INTENT', payload:{action:'REVEAL'}}); return; }
+  if(k==='y'){ e.preventDefault(); if(!isAdmin) markCorrect(); else busSend({type:'INTENT', payload:{action:'CORRECT'}}); return; }
+  if(k==='n'){ e.preventDefault(); if(!isAdmin) markIncorrect(); else busSend({type:'INTENT', payload:{action:'INCORRECT'}}); return; }
+  if(k==='e'){ e.preventDefault(); if(!isAdmin) endQuestion(); else busSend({type:'INTENT', payload:{action:'END'}}); return; }
+  if(state.current){
+    if(k==='1' || e.code==='Numpad1') onBuzz(state.players[0]?.id);
+    if(k==='2' || e.code==='Numpad2') onBuzz(state.players[1]?.id);
+    if(k==='3' || e.code==='Numpad3') onBuzz(state.players[2]?.id);
+  }
+});
+
+/* ===== INTENT handler (Board executes) ===== */
+function handleIntent(p){
+  if(!p) return;
+  if(p.action==='UNDO') return undoLast();
+  if(p.action==='REVEAL') return revealAnswer();
+  if(p.action==='CORRECT') return markCorrect();
+  if(p.action==='INCORRECT') return markIncorrect();
+  if(p.action==='END') return endQuestion();
+}
+function onBus(msg){
+  if(!msg||!msg.type) return;
+  if(msg.type==='PING') busSend({type:'SNAPSHOT', payload:snapshot()});
+  if(msg.type==='SNAPSHOT' || msg.type==='INIT_SNAPSHOT') adopt(msg.payload);
+  if(msg.type==='INTENT' && !isAdmin) handleIntent(msg.payload||{});
+}
+
+/* ===== Snapshot / Adopt ===== */
+function snapshot(){
+  return {
+    categories: state.categories.map(cat=>({name:cat.name, clues:cat.clues.map(c=>({...c}))})),
+    players: state.players.map(p=>({...p})),
+    controlId: state.controlId,
+    current: state.current?{...state.current}:null,
+    buzzer: {open:state.buzzer.open, respondentId:state.buzzer.respondentId, tried:[...state.buzzer.tried]},
+    timers: {...state.timers}, sounds:{...state.sounds}
+  };
+}
+function adopt(s){
+  if(!s) return;
+  state.categories=(s.categories||[]).map(cat=>({name:cat.name, clues:(cat.clues||[]).map(c=>({...c}))}));
+  state.players=(s.players||[]).map(p=>({...p}));
+  state.controlId=s.controlId||state.players[0]?.id||null;
+  state.current=s.current?{...s.current}:null;
+  state.buzzer={...(s.buzzer||{open:false,respondentId:null,tried:[]})};
+  state.timers={...(s.timers||DEFAULT_TIMERS)};
+  state.sounds={...(s.sounds||{enabled:true,vol:0.6})};
+  audio.enabled=state.sounds.enabled; audio.vol=state.sounds.vol;
+  drawBoard(); drawPlayers(); drawAdmin(); updateTimerBar(); renderOverlayAnswer(); refreshOverlayPhase();
+}
+
+/* ===== CSV load / selector ===== */
+const DEMO=`Category,Clue,Answer
+Business Intelligence,Forward-looking hotel demand tool.,Demand360
+Business Intelligence,Competitive rate tracking tool.,Rate360
+Business Intelligence,Top-producing agencies reports.,Agency360
+Business Intelligence,Suite combining 360 tools.,360 Suite
+Business Intelligence,Comparing OTB to last year is ____,Pace
+Delphi (Sales & Events),Legacy meetings & events platform.,Delphi
+Delphi (Sales & Events),List of space holds pre-contract.,Tentative hold
+Delphi (Sales & Events),Managing website and 3rd-party RFPs.,RFP Management
+Delphi (Sales & Events),Centralized diary of function spaces.,Function Diary
+Delphi (Sales & Events),M in MICE stands for ____,Meetings
+HotSOS (Service Opt.),Common product name.,HotSOS
+HotSOS (Service Opt.),Task for a leaky faucet.,Work order
+HotSOS (Service Opt.),Recurring maintenance tasks.,Preventive
+HotSOS (Service Opt.),Housekeeping assignment module.,Housekeeping
+HotSOS (Service Opt.),Promised resolution times acronym.,SLA
+Central Reservations,Hotel website booking engine.,iHotelier
+Central Reservations,System managing rates/availability (abbr.).,CRS
+Central Reservations,Stay rule like 3-night minimum.,Restriction
+Central Reservations,Discounted fenced price is ____ plan.,Rate
+Central Reservations,Best ____ Guarantee.,Rate
+Distribution,Travel-agent systems acronym.,GDS
+Distribution,Name another GDS.,Sabre or Travelport
+Distribution,Online sellers like Expedia are ____,OTAs
+Distribution,Same price across channels = rate ____,Parity
+Distribution,Brand identifier code in GDS is ____,Chain
+Hospitality Jargon,Average revenue per occupied room.,ADR
+Hospitality Jargon,Revenue per available room.,RevPAR
+Hospitality Jargon,Visitors who complete a booking %,Conversion
+Hospitality Jargon,LOS stands for Length of ____,Stay
+Hospitality Jargon,Occupied/available rooms = ____,Occupancy`;
+
+function parseCSV(text){
+  const clean=text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").replace(/^\uFEFF/,'');
+  const lines=clean.split("\n").filter(l=>l.trim().length>0); if(!lines.length) return [];
+  const delim = [',','\t',';'].map(d=>({d,c:lines[0].split(d).length})).sort((a,b)=>b.c-a.c)[0].d;
+  const head=lines[0].split(delim).map(x=>x.trim());
+  let idxCat=head.findIndex(h=>/cat/i.test(h)), idxQ=head.findIndex(h=>/clue|question|prompt|q/i.test(h)), idxA=head.findIndex(h=>/answer|a|solution/i.test(h));
+  if(idxCat<0||idxQ<0||idxA<0){ idxCat=0; idxQ=1; idxA=2; }
+  const rows=[]; for(let i=1;i<lines.length;i++){ const cols=splitLine(lines[i],delim); const r={Category:cols[idxCat]||'', Clue:cols[idxQ]||'', Answer:cols[idxA]||''}; if(r.Category&&r.Clue&&r.Answer) rows.push(r); }
+  return rows;
+}
+function splitLine(line, delim){
+  const out=[]; let cur='', q=false;
+  for(let i=0;i<line.length;i++){ const ch=line[i], nx=line[i+1];
+    if(ch==='\"'){ if(q && nx==='\"'){ cur+='\"'; i++; } else q=!q; }
+    else if(ch===delim && !q){ out.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  out.push(cur);
+  return out.map(x=>x.replace(/^"|"$/g,'').trim());
+}
+function prepareSelector(rows, fileMeta={name:'',size:0}){
+  const by={}; rows.forEach((r,i)=>{ (by[r.Category]=by[r.Category]||[]).push({id:rid(),q:r.Clue,a:r.Answer,order:i}); });
+  state.selector.byCat=by; state.selector.fileLabel=fileMeta.name||'demo.csv'; state.selector.persistKey=`amjsel/${state.selector.fileLabel}/${rows.length}`;
+  const saved=JSON.parse(localStorage.getItem(state.selector.persistKey)||'null')||{};
+  state.selector.chosenCats=saved.chosenCats||[];
+  state.selector.chosenClues={};
+  state.selector.chosenCats.forEach(cat=>{
+    const pool=by[cat]||[];
+    const idByOrder=new Map(pool.map(x=>[x.order,x.id]));
+    const savedList=(saved.chosenClues?.[cat]||[]);
+    const set=new Set(savedList.map(o=> idByOrder.get(o)).filter(Boolean));
+    state.selector.chosenClues[cat]= set.size? set : new Set(pool.slice(0,5).map(x=>x.id));
+  });
+  renderSelector();
+}
+function persistSelector(){
+  const chosenClues={};
+  for(const [cat,set] of Object.entries(state.selector.chosenClues)){
+    const pool=state.selector.byCat[cat]||[];
+    const orderById=new Map(pool.map(x=>[x.id,x.order]));
+    chosenClues[cat]=Array.from(set).map(id=>orderById.get(id)).filter(v=>v!=null);
+  }
+  const data={ chosenCats: state.selector.chosenCats.slice(), chosenClues };
+  try{ localStorage.setItem(state.selector.persistKey, JSON.stringify(data)); }catch{}
+}
+const selRows=document.getElementById('selectorRows'), statusText=document.getElementById('statusText'), selectorMeta=document.getElementById('selectorMeta');
+function renderSelector(){
+  const by=state.selector.byCat, cats=Object.keys(by).sort((a,b)=>a.localeCompare(b));
+  selectorMeta.textContent=`Eligible (≥5): ${cats.filter(c=>by[c].length>=5).length}/${cats.length}`;
+  selRows.innerHTML='';
+  cats.forEach(cat=>{
+    const clues=by[cat], eligible=clues.length>=5, selected=state.selector.chosenCats.includes(cat);
+    const chosen=new Set(state.selector.chosenClues[cat]||[]);
+    const tr=document.createElement('tr'); if(!eligible) tr.className='row-disabled';
+    tr.innerHTML=`<td><input type="checkbox" class="cb-cat" ${selected?'checked':''} ${eligible?'':'disabled'} data-cat="${escapeHTML(cat)}"/></td>
+      <td><strong>${escapeHTML(cat)}</strong></td>
+      <td><span class="pill">${clues.length} clues</span></td>
+      <td>${clues.slice(0,10).map((cl,i)=>`<label class="pill" style="margin-right:6px"><input type="checkbox" data-cat="${escapeHTML(cat)}" data-id="${cl.id}" ${chosen.has(cl.id)?'checked':''}/> ${i+1}</label>`).join('')} ${clues.length>10?'…':''}</td>`;
+    selRows.appendChild(tr);
+  });
+  selRows.querySelectorAll('.cb-cat').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const cat=cb.getAttribute('data-cat');
+      if(cb.checked){
+        if(state.selector.chosenCats.length>=6){ cb.checked=false; return alert('Pick exactly 6 categories.'); }
+        state.selector.chosenCats.push(cat);
+        if(!state.selector.chosenClues[cat]) state.selector.chosenClues[cat]=new Set((state.selector.byCat[cat]||[]).slice(0,5).map(x=>x.id));
+      }else{
+        state.selector.chosenCats=state.selector.chosenCats.filter(x=>x!==cat);
+        delete state.selector.chosenClues[cat];
+      }
+      persistSelector(); renderSelector(); enforceStartButton();
+    });
+  });
+  selRows.querySelectorAll('input[type="checkbox"][data-id]').forEach(box=>{
+    box.addEventListener('change', ()=>{
+      const cat=box.getAttribute('data-cat'), id=box.getAttribute('data-id');
+      const set=state.selector.chosenClues[cat]||new Set();
+      if(box.checked){
+        if(set.size>=5){ box.checked=false; return alert('Pick 5 clues per category.'); }
+        set.add(id);
+      }else set.delete(id);
+      state.selector.chosenClues[cat]=set; persistSelector(); enforceStartButton();
+    });
+  });
+  const missing = Math.max(0, 6 - state.selector.chosenCats.length);
+  const bad = state.selector.chosenCats.filter(c=> (state.selector.chosenClues[c]?.size||0)!==5);
+  if(missing>0) statusText.textContent=`Select 6 categories (need ${missing} more)`;
+  else if(bad.length>0) statusText.textContent=`Fix selections: ${bad.join(', ')} must have 5 clues`;
+  else statusText.textContent=`Ready: 6 × 5`;
+}
+
+/* Build board from selection; values progressive */
+function buildBoardFromSelection(){
+  const names=state.selector.chosenCats.slice();
+  if(names.length!==6) return alert('Select exactly 6 categories.');
+  const values=[1,2,3,4,5].map(i=>i*POINT_BASE);
+  state.categories=names.map(name=>{
+    const pool=state.selector.byCat[name]||[];
+    const idOrder=new Map(pool.map(x=>[x.id,x.order]));
+    const ids=Array.from(state.selector.chosenClues[name]||[]);
+    if(ids.length!==5) throw new Error('Each category needs 5 clues');
+    ids.sort((a,b)=>(idOrder.get(a)||0)-(idOrder.get(b)||0));
+    return {name, clues: ids.map((id,i)=>{ const it=pool.find(x=>x.id===id); return {id,q:it.q,a:it.a,value:values[i],used:false}; })};
+  });
+  return true;
+}
+
+/* Start button guard */
+function enforceStartButton(){
+  const btn=document.getElementById('btnStart'); if(!btn) return;
+  const ok = state.selector.chosenCats.length===6 && state.selector.chosenCats.every(c=> (state.selector.chosenClues[c]?.size||0)===5);
+  btn.disabled = !ok;
+}
+
+/* ===== Admin hookups ===== */
+(function(){
+  if(!isAdmin) return;
+  const csvInput=document.getElementById('csvInput');
+  const btnDemo=document.getElementById('btnDemo');
+  const btnStart=document.getElementById('btnStart');
+  const btnPickRandom6=document.getElementById('btnPickRandom6');
+  const btnClearAll=document.getElementById('btnClearAll');
+  const btnExportSel=document.getElementById('btnExportSel');
+
+  csvInput.addEventListener('change', e=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      state.datasetRows=parseCSV(ev.target.result||''); aRowCount.textContent=String(state.datasetRows.length);
+      prepareSelector(state.datasetRows, {name:f.name,size:f.size||0}); drawAdmin(); enforceStartButton();
+    };
+    r.readAsText(f);
+  });
+  btnDemo.addEventListener('click', ()=>{
+    state.datasetRows=parseCSV(DEMO); aRowCount.textContent=String(state.datasetRows.length);
+    prepareSelector(state.datasetRows, {name:'amadeus-demo.csv',size:state.datasetRows.length});
+    drawAdmin(); enforceStartButton();
+  });
+  btnPickRandom6.addEventListener('click', ()=>{
+    const elig=Object.keys(state.selector.byCat).filter(k=>state.selector.byCat[k].length>=5);
+    if(elig.length<6) return alert('Need at least 6 eligible categories.');
+    state.selector.chosenCats=sample(elig,6);
+    state.selector.chosenClues={}; state.selector.chosenCats.forEach(c=> state.selector.chosenClues[c]=new Set(state.selector.byCat[c].slice(0,5).map(x=>x.id)));
+    persistSelector(); renderSelector(); enforceStartButton();
+  });
+  btnClearAll.addEventListener('click', ()=>{
+    state.selector.chosenCats=[]; state.selector.chosenClues={}; persistSelector(); renderSelector(); enforceStartButton();
+  });
+  btnExportSel.addEventListener('click', ()=>{
+    const lines=['Category,Clue,Answer'];
+    state.selector.chosenCats.forEach(name=>{
+      const pool=(state.selector.byCat[name]||[]); const idOrder=new Map(pool.map(x=>[x.id,x.order]));
+      const ids=Array.from(state.selector.chosenClues[name]||[]).sort((a,b)=>(idOrder.get(a)||0)-(idOrder.get(b)||0));
+      ids.forEach(id=>{ const it=pool.find(x=>x.id===id); lines.push([name,it.q,it.a].map(csvEsc).join(',')); });
+    });
+    const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=(state.selector.fileLabel||'amadeus')+'-selected.csv'; document.body.appendChild(a); a.click(); a.remove();
+  });
+  function csvEsc(s){ const t=(s??'').replace(/"/g,'""'); return /[,"\n]/.test(t)?`"${t}"`:t; }
+
+  // Timers UI
+  const tLock=document.getElementById('tLock'), tBuzz=document.getElementById('tBuzz'), tAns=document.getElementById('tAns'), tRev=document.getElementById('tRev');
+  const presetClassic=document.getElementById('presetClassic'), presetFast=document.getElementById('presetFast'), presetClassroom=document.getElementById('presetClassroom');
+  const sndEnable=document.getElementById('sndEnable'), sndVol=document.getElementById('sndVol');
+
+  try{
+    const saved=JSON.parse(localStorage.getItem('amj/timers')||'null');
+    if(saved){ state.timers={...DEFAULT_TIMERS, ...saved}; }
+    const sfx=JSON.parse(localStorage.getItem('amj/snd')||'null');
+    if(sfx){ state.sounds={...state.sounds, ...sfx}; audio.enabled=state.sounds.enabled; audio.vol=state.sounds.vol; }
+  }catch{}
+
+  tLock.value=state.timers.lockout; tBuzz.value=state.timers.buzz; tAns.value=state.timers.answer; tRev.value=state.timers.reveal;
+  sndEnable.checked=state.sounds.enabled; sndVol.value=Math.round(state.sounds.vol*100);
+
+  function saveTimers(){
+    const clamp=(v)=>Math.min(60, Math.max(1, (parseInt(v,10)||0)));
+    state.pendingTimers={ lockout:clamp(tLock.value), buzz:clamp(tBuzz.value), answer:clamp(tAns.value), reveal:clamp(tRev.value) };
+    try{ localStorage.setItem('amj/timers', JSON.stringify(state.pendingTimers)); }catch{}
+  }
+  [tLock,tBuzz,tAns,tRev].forEach(inp=> inp.addEventListener('change', saveTimers));
+  presetClassic.addEventListener('click', ()=>{ tLock.value=3; tBuzz.value=4; tAns.value=5; tRev.value=4; saveTimers(); });
+  presetFast.addEventListener('click', ()=>{ tLock.value=2; tBuzz.value=3; tAns.value=4; tRev.value=3; saveTimers(); });
+  presetClassroom.addEventListener('click', ()=>{ tLock.value=6; tBuzz.value=8; tAns.value=10; tRev.value=8; saveTimers(); });
+
+  sndEnable.addEventListener('change', ()=>{ state.sounds.enabled=!!sndEnable.checked; audio.enabled=state.sounds.enabled;
+    try{ localStorage.setItem('amj/snd', JSON.stringify(state.sounds)); }catch{} busSend({type:'SNAPSHOT', payload:snapshot()}); });
+  sndVol.addEventListener('input', ()=>{ state.sounds.vol=(parseInt(sndVol.value,10)||0)/100; audio.vol=state.sounds.vol;
+    try{ localStorage.setItem('amj/snd', JSON.stringify(state.sounds)); }catch{} });
+
+  btnStart.addEventListener('click', ()=>{
+    if(!state.datasetRows?.length) return alert('Load CSV or Demo first.');
+    state.players=[{id:rid(),name:'Player 1',score:0},{id:rid(),name:'Player 2',score:0},{id:rid(),name:'Player 3',score:0}];
+    state.controlId=state.players[0].id; state.history=[]; resetBuzzer();
+    if(!buildBoardFromSelection()) return;
+    if(state.pendingTimers){ state.timers={...state.pendingTimers}; state.pendingTimers=null; }
+    busSend({type:'INIT_SNAPSHOT', payload:snapshot()});
+    busSend({type:'SNAPSHOT', payload:snapshot()});
+    alert('Game started. Switch to the Board and click a tile.');
+  });
+
+  const send=(a)=> busSend({type:'INTENT', payload:{action:a}});
+  document.getElementById('ctrlReveal').addEventListener('click', ()=>send('REVEAL'));
+  document.getElementById('ctrlCorrect').addEventListener('click', ()=>send('CORRECT'));
+  document.getElementById('ctrlIncorrect').addEventListener('click', ()=>send('INCORRECT'));
+  document.getElementById('ctrlEnd').addEventListener('click', ()=>send('END'));
+  document.getElementById('ctrlUndo').addEventListener('click', ()=>send('UNDO'));
+})();
+
+/* ===== Board collapsibles: Board starts collapsed; Admin open ===== */
+(function(){
+  if (document.body.classList.contains('admin')) return; // Admin: all open
+  const CARDS = document.querySelectorAll('.card.collapsible');
+  CARDS.forEach((card, idx) => {
+    const body = card.querySelector('.card-body'); if (!body) return;
+    const key = card.id ? `amj/collapsed/${card.id}` : `amj/collapsed/__idx_${idx}`;
+    let saved = localStorage.getItem(key);
+    if (saved === null) saved = card.getAttribute('data-default-collapsed') === '1' ? '1' : '0';
+    const collapsed = saved === '1';
+    if (collapsed) { card.classList.add('collapsed'); body.style.maxHeight = '0px'; }
+    else { requestAnimationFrame(()=>{ body.style.maxHeight = body.scrollHeight + 'px'; }); }
+    const btn = card.querySelector('[data-collapse-target]');
+    if (btn) btn.setAttribute('aria-expanded', (!collapsed).toString());
+  });
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-collapse-target]'); if (!btn) return;
+    const sel = btn.getAttribute('data-collapse-target');
+    const card = document.querySelector(sel); if (!card) return;
+    const body = card.querySelector('.card-body');
+    const key  = card.id ? `amj/collapsed/${card.id}` : null;
+    const willCollapse = !card.classList.contains('collapsed');
+
+    if (willCollapse) {
+      body.style.maxHeight = body.scrollHeight + 'px';
+      requestAnimationFrame(()=>{
+        body.style.maxHeight = '0px';
+        card.classList.add('collapsed');
+        btn.setAttribute('aria-expanded','false');
+        if (key) localStorage.setItem(key, '1');
+      });
+    } else {
+      card.classList.remove('collapsed');
+      requestAnimationFrame(()=>{
+        body.style.maxHeight = body.scrollHeight + 'px';
+        btn.setAttribute('aria-expanded','true');
+        if (key) localStorage.setItem(key, '0');
+      });
+    }
+  });
+})();
+
+/* ===== Boot / ping ===== */
+if(!isAdmin){ setTimeout(()=> busSend({type:'PING'}), 150); }
+</script>
+</body>
+</html>
