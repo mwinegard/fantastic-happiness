@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Jeopardy — Marine Edition (v3.6.4)</title>
+<title>Jeopardy — Marine Edition (v3.6.6)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 :root{
@@ -78,11 +78,12 @@ body.admin .admin-only{display:block} body.admin .board-only{display:none}
 <body>
 <header>
   <div class="topbar">
-    <div class="brand">Jeopardy <small>Marine Edition • v3.6.4</small></div>
+    <div class="brand">Jeopardy <small>Marine Edition • v3.6.6</small></div>
 
     <!-- BOARD toolbar -->
     <div class="toolbar board-only">
-      <a class="btn primary" id="lnkOpenAdmin" href="#" target="jm_admin" rel="opener">Open Admin</a>
+      <!-- STATIC FALLBACK keeps working even before JS sets absolute href -->
+      <a class="btn primary" id="lnkOpenAdmin" href="#admin" target="jm_admin">Open Admin</a>
       <span class="help">Load CSV/Demo in Admin → select 6 cats × 5 clues → <b>Start Game</b>.</span>
     </div>
 
@@ -91,7 +92,8 @@ body.admin .admin-only{display:block} body.admin .board-only{display:none}
       <label class="btn"><input type="file" id="csvInput" accept=".csv,text/csv" />Load CSV</label>
       <button class="btn" id="btnDemo">Demo Data</button>
       <a class="btn primary" id="btnStart" href="#" aria-disabled="true">Start Game</a>
-      <a class="btn" id="lnkOpenBoard" href="#" target="jm_board" rel="opener">Open Board</a>
+      <!-- STATIC FALLBACK -->
+      <a class="btn" id="lnkOpenBoard" href="#" target="jm_board">Open Board</a>
       <span class="badge">Rows: <span id="rowCount">0</span></span>
       <span class="badge">Eligible: <span id="eligibleCount">0</span></span>
       <span class="badge">Selected: <span id="selectedCount">0</span>/6</span>
@@ -249,7 +251,7 @@ function escapeHTML(s){ return (s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':
 function sample(a,n){ const b=a.slice(); for(let i=b.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [b[i],b[j]]=[b[j],b[i]]; } return b.slice(0,n); }
 
 /* ===== Bus (two windows) ===== */
-const CH='jeop-marine-v364'; let bc=null; try{ bc=new BroadcastChannel(CH);}catch{}
+const CH='jeop-marine-v366'; let bc=null; try{ bc=new BroadcastChannel(CH);}catch{}
 function busSend(msg){ msg.ts=Date.now(); msg.uuid=rid();
   if(bc) try{ bc.postMessage(msg);}catch{}; try{ localStorage.setItem(CH, JSON.stringify(msg)); }catch{} }
 window.addEventListener('storage', e=>{ if(e.key===CH && e.newValue){ try{ onBus(JSON.parse(e.newValue)); }catch{} } });
@@ -280,14 +282,14 @@ const respBanner=document.getElementById('respondentBanner');
 const timerFill=document.getElementById('timerFill');
 const timerNum=document.getElementById('timerNumber');
 
-/* ===== Absolute HREFs for Admin/Board buttons (works on file://) ===== */
-(function(){
-  const base = location.href.split('#')[0]; // robust for file:// and http(s)
+/* ===== Upgrade Admin/Board links to absolute hrefs (works on file://) ===== */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const base = location.href.split('#')[0];
   const lAdmin = document.getElementById('lnkOpenAdmin');
   const lBoard = document.getElementById('lnkOpenBoard');
   if (lAdmin) lAdmin.href = base + '#admin';
   if (lBoard) lBoard.href = base;
-})();
+});
 
 /* ===== Renderers ===== */
 function drawBoard(){
@@ -508,7 +510,7 @@ function lockTiles(locked){
 }
 function resetBuzzer(){ state.buzzer={open:false, respondentId:null, tried:[]}; }
 
-/* Buzz from keys */
+/* Buzz from keys (Board executes locally; Admin sends INTENT to Board) */
 function onBuzz(pid){
   if(!state.current) return;
   if(state.current.phase==='lockout' || state.current.phase==='reveal') return;
@@ -549,10 +551,12 @@ window.addEventListener('keydown', (e)=>{
   if(k==='y'){ e.preventDefault(); if(!isAdmin) markCorrect(); else busSend({type:'INTENT', payload:{action:'CORRECT'}}); return; }
   if(k==='n'){ e.preventDefault(); if(!isAdmin) markIncorrect(); else busSend({type:'INTENT', payload:{action:'INCORRECT'}}); return; }
   if(k==='e'){ e.preventDefault(); if(!isAdmin) endQuestion(); else busSend({type:'INTENT', payload:{action:'END'}}); return; }
-  if(state.current){
-    if(k==='1' || e.code==='Numpad1') onBuzz(state.players[0]?.id);
-    if(k==='2' || e.code==='Numpad2') onBuzz(state.players[1]?.id);
-    if(k==='3' || e.code==='Numpad3') onBuzz(state.players[2]?.id);
+  if(k==='1' || k==='2' || k==='3'){
+    // Board handles buzz locally; Admin forwards to Board
+    if(isAdmin){ busSend({type:'INTENT', payload:{action:'BUZZ', player:(k==='1'?0:k==='2'?1:2)} }); }
+    else{
+      const pid=state.players[k==='1'?0:k==='2'?1:2]?.id; if(pid) onBuzz(pid);
+    }
   }
 });
 
@@ -564,13 +568,11 @@ function handleIntent(p){
   if(p.action==='CORRECT') return markCorrect();
   if(p.action==='INCORRECT') return markIncorrect();
   if(p.action==='END') return endQuestion();
+  if(p.action==='BUZZ'){ const pid=state.players[p.player]?.id; if(pid) onBuzz(pid); return; }
 }
 function onBus(msg){
   if(!msg||!msg.type) return;
-  if(msg.type==='HELLO'){
-    busSend({type:'SNAPSHOT', payload:snapshot()});
-    return;
-  }
+  if(msg.type==='HELLO'){ busSend({type:'SNAPSHOT', payload:snapshot()}); return; }
   if(msg.type==='SNAPSHOT' || msg.type==='INIT_SNAPSHOT') adopt(msg.payload);
   if(msg.type==='INTENT' && !isAdmin) handleIntent(msg.payload||{});
 }
@@ -793,7 +795,7 @@ function enforceStartButton(){
   });
   function csvEsc(s){ const t=(s??'').replace(/"/g,'""'); return /[,"\n]/.test(t)?`"${t}"`:t; }
 
-  // Timers & Sounds (use new localStorage keys)
+  // Timers & Sounds (persist with local keys)
   const tLock=document.getElementById('tLock'), tBuzz=document.getElementById('tBuzz'), tAns=document.getElementById('tAns'), tRev=document.getElementById('tRev');
   const presetClassic=document.getElementById('presetClassic'), presetFast=document.getElementById('presetFast'), presetClassroom=document.getElementById('presetClassroom');
   const sndEnable=document.getElementById('sndEnable'), sndVol=document.getElementById('sndVol');
@@ -889,15 +891,6 @@ function enforceStartButton(){
 
 /* ===== Boot / handshake ===== */
 setTimeout(()=> busSend({type:'HELLO', role: isAdmin ? 'admin':'board'}), 120);
-
-/* ===== Set admin/board links (after DOM ready) ===== */
-(function(){
-  const base = location.href.split('#')[0];
-  const lAdmin = document.getElementById('lnkOpenAdmin');
-  const lBoard = document.getElementById('lnkOpenBoard');
-  if (lAdmin) lAdmin.href = base + '#admin';
-  if (lBoard) lBoard.href = base;
-})();
 </script>
 </body>
 </html>
