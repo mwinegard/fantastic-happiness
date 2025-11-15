@@ -2,28 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Amadeus Jeopardy — v3.6.2 (Two-Window, Timers, Synth Sounds)</title>
+<title>Jeopardy — Marine Edition (v3.6.4)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 :root{
-  --am-blue:#005bbb; --am-blue-dark:#004a99; --am-text:#0f172a; --am-muted:#6b7280;
-  --am-bg:#f5f7fb; --card:#ffffff; --tile:#0b3778; --tile2:#072a5c; --tile-text:#ffcc33;
+  --brand-blue:#0b5fb3; --brand-blue-dark:#094c8d; --text:#0f172a; --muted:#6b7280;
+  --bg:#f5f7fb; --card:#ffffff; --tile:#0b3778; --tile2:#072a5c; --tile-text:#ffcc33;
   --ok:#15803d; --danger:#b91c1c; --lockout:#b91c1c; --answerbar:#ffcc33; --buzzbar:#22c55e;
   --radius:14px; --shadow:0 14px 34px rgba(3,20,40,.18);
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--am-bg);color:var(--am-text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
 header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e6ecf6}
 .topbar{max-width:1400px;margin:0 auto;padding:12px 16px;display:flex;gap:12px;align-items:center}
-.brand{font-weight:900;color:var(--am-blue)} .brand small{margin-left:8px;color:#94a3b8}
+.brand{font-weight:900;color:var(--brand-blue)} .brand small{margin-left:8px;color:#94a3b8}
 .toolbar{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:1px solid #dbe3ef;background:#fff;color:#0f172a;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+.btn{border:1px solid #dbe3ef;background:#fff;color:#0f172a;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:700;text-decoration:none;display:inline-block}
 .btn:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(0,0,0,.1)}
-.btn.primary{background:var(--am-blue);border-color:var(--am-blue);color:#fff}
+.btn.primary{background:var(--brand-blue);border-color:var(--brand-blue);color:#fff}
 .btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
 .btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
-.btn[disabled]{opacity:.5;cursor:not-allowed}
-a.btn{display:inline-block;text-decoration:none}
+.btn[aria-disabled="true"]{opacity:.5;pointer-events:none}
 .badge{background:#eef2f9;color:#2a3a5e;border-radius:999px;padding:6px 10px;font-weight:800;font-size:12px;margin-right:6px}
 .help{font-size:12px;color:#6b7280}
 .app{max-width:1400px;margin:18px auto;padding:0 16px;display:grid;grid-template-columns:1.4fr .6fr;gap:16px}
@@ -38,12 +37,12 @@ a.btn{display:inline-block;text-decoration:none}
 .tile.locked{opacity:.6;filter:grayscale(.25);cursor:not-allowed}
 .tile:focus-visible{outline:2px solid #1a66ff}
 aside.card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
-.panel-title{font-weight:900;color:var(--am-blue);margin:4px 0 10px}
+.panel-title{font-weight:900;color:var(--brand-blue);margin:4px 0 10px}
 
 /* Collapsible (board sidebar only) */
 .card.collapsible{padding:0;overflow:hidden}
 .card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #e7edf7}
-.card-title{font-weight:900;color:var(--am-blue);margin:0}
+.card-title{font-weight:900;color:var(--brand-blue);margin:0}
 .card-tools{display:flex;gap:8px;align-items:center}
 .card-body{padding:14px;transition:max-height .25s ease, opacity .2s ease;overflow:hidden}
 .card.collapsed .card-body{max-height:0;opacity:.0;padding-top:0;padding-bottom:0}
@@ -74,33 +73,25 @@ body.admin .admin-only{display:block} body.admin .board-only{display:none}
 #timerFill.lockout{background:var(--lockout)} #timerFill.buzz{background:var(--buzzbar)}
 #timerFill.answer{background:var(--answerbar)} #timerFill.reveal{background:#60a5fa}
 #timerNumber{position:absolute;right:16px;bottom:14px;font-weight:900;color:#e6eeff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
-
-/* Admin table bits */
-.table{width:100%;border-collapse:separate;border-spacing:0 8px}
-.table th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;text-align:left;padding:0 10px}
-.table td{background:#fff;border:1px solid #e7edf7;padding:10px;border-radius:10px;vertical-align:top}
-.row-disabled td{opacity:.5}
-.pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2f9;color:#334155;font-weight:800;font-size:12px}
-.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.footerbar{position:sticky;bottom:0;background:#fff;border:1px solid #e7edf7;border-radius:10px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-kbd{background:#eef2f9;border:1px solid #dbe3ef;border-bottom-width:2px;border-radius:6px;padding:2px 6px;font-weight:800}
 </style>
 </head>
 <body>
 <header>
   <div class="topbar">
-    <div class="brand">AMADEUS <span>Jeopardy</span> <small>v3.6.2</small></div>
+    <div class="brand">Jeopardy <small>Marine Edition • v3.6.4</small></div>
+
+    <!-- BOARD toolbar -->
     <div class="toolbar board-only">
-      <button class="btn primary" id="btnOpenAdmin">Open Admin</button>
-      <a class="btn" id="lnkOpenAdminTab" href="" target="_blank" rel="noopener">Open Admin (new tab)</a>
+      <a class="btn primary" id="lnkOpenAdmin" href="#" target="jm_admin" rel="opener">Open Admin</a>
       <span class="help">Load CSV/Demo in Admin → select 6 cats × 5 clues → <b>Start Game</b>.</span>
     </div>
+
+    <!-- ADMIN toolbar -->
     <div class="toolbar admin-only">
       <label class="btn"><input type="file" id="csvInput" accept=".csv,text/csv" />Load CSV</label>
       <button class="btn" id="btnDemo">Demo Data</button>
-      <button class="btn primary" id="btnStart" disabled>Start Game</button>
-      <button class="btn" id="btnOpenBoard">Open Board</button>
-      <a class="btn" id="lnkOpenBoardTab" href="" target="_blank" rel="noopener">Open Board (new tab)</a>
+      <a class="btn primary" id="btnStart" href="#" aria-disabled="true">Start Game</a>
+      <a class="btn" id="lnkOpenBoard" href="#" target="jm_board" rel="opener">Open Board</a>
       <span class="badge">Rows: <span id="rowCount">0</span></span>
       <span class="badge">Eligible: <span id="eligibleCount">0</span></span>
       <span class="badge">Selected: <span id="selectedCount">0</span>/6</span>
@@ -112,7 +103,8 @@ kbd{background:#eef2f9;border:1px solid #dbe3ef;border-bottom-width:2px;border-r
 <!-- BOARD -->
 <main class="app board-only">
   <section id="board" aria-label="Game Board"></section>
-  <!-- Starts collapsed by default on Board -->
+
+  <!-- Collapsible, default collapsed on Board -->
   <aside class="card collapsible" id="boardSecPlayers" data-default-collapsed="1">
     <div class="card-head">
       <h3 class="card-title">Players</h3>
@@ -126,7 +118,7 @@ kbd{background:#eef2f9;border:1px solid #dbe3ef;border-bottom-width:2px;border-r
         </button>
       </div>
     </div>
-    <div class="card-body" data-auto>
+    <div class="card-body">
       <div id="players"></div>
       <div class="help" style="margin-top:8px">Buzz: 1/2/3 • Host: A=reveal, Y=correct, N=incorrect, E=end, Ctrl+Z=undo</div>
     </div>
@@ -246,12 +238,10 @@ function glide(start,end,dur,type='sine',gain=0.35){
   const g=audio.ctx.createGain(); g.gain.value=gain; o.connect(g); g.connect(outGain());
   o.start(t0); o.stop(t1+0.02);
 }
-const SFX={
-  buzzer(){ audioInit(); tone(200,0.12,'square',0.45); tone(60,0.12,'sawtooth',0.25); },
-  correct(){ audioInit(); tone(660,0.12,'sine',0.35); setTimeout(()=>tone(880,0.12,'sine',0.35),110); },
-  incorrect(){ audioInit(); glide(440,220,0.18,'triangle',0.35); },
-  reveal(){ audioInit(); tone(784,0.22,'sine',0.28); },
-};
+const SFX={ buzzer(){audioInit();tone(200,0.12,'square',0.45);tone(60,0.12,'sawtooth',0.25);},
+  correct(){audioInit();tone(660,0.12,'sine',0.35);setTimeout(()=>tone(880,0.12,'sine',0.35),110);},
+  incorrect(){audioInit();glide(440,220,0.18,'triangle',0.35);},
+  reveal(){audioInit();tone(784,0.22,'sine',0.28);} };
 
 /* ===== Utilities ===== */
 function rid(){ try{ const u=new Uint32Array(2); crypto.getRandomValues(u); return [...u].map(x=>x.toString(36)).join(''); }catch{ return Math.random().toString(36).slice(2); } }
@@ -259,14 +249,11 @@ function escapeHTML(s){ return (s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':
 function sample(a,n){ const b=a.slice(); for(let i=b.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [b[i],b[j]]=[b[j],b[i]]; } return b.slice(0,n); }
 
 /* ===== Bus (two windows) ===== */
-const CH='amadeus-jeop-v362'; let bc=null; try{ bc=new BroadcastChannel(CH);}catch{}
-let otherWin=null; function busSend(msg){ msg.ts=Date.now(); msg.uuid=rid();
-  if(bc) try{ bc.postMessage(msg);}catch{}; if(otherWin) try{ otherWin.postMessage(msg,'*'); }catch{};
-  try{ localStorage.setItem(CH, JSON.stringify(msg)); }catch{}
-}
-window.addEventListener('message', e=> onBus(e.data||{}));
-if(bc){ bc.onmessage=e=> onBus(e.data||{}); }
+const CH='jeop-marine-v364'; let bc=null; try{ bc=new BroadcastChannel(CH);}catch{}
+function busSend(msg){ msg.ts=Date.now(); msg.uuid=rid();
+  if(bc) try{ bc.postMessage(msg);}catch{}; try{ localStorage.setItem(CH, JSON.stringify(msg)); }catch{} }
 window.addEventListener('storage', e=>{ if(e.key===CH && e.newValue){ try{ onBus(JSON.parse(e.newValue)); }catch{} } });
+if(bc){ bc.onmessage=e=> onBus(e.data||{}); }
 
 /* ===== Mode / State ===== */
 const isAdmin=(location.hash||'').toLowerCase().includes('admin');
@@ -293,30 +280,14 @@ const respBanner=document.getElementById('respondentBanner');
 const timerFill=document.getElementById('timerFill');
 const timerNum=document.getElementById('timerNumber');
 
-/* ===== Absolute URL setup for links ===== */
+/* ===== Absolute HREFs for Admin/Board buttons (works on file://) ===== */
 (function(){
-  const base = location.origin + location.pathname;
-  const aAdmin = document.getElementById('lnkOpenAdminTab');
-  const aBoard = document.getElementById('lnkOpenBoardTab');
-  if (aAdmin) aAdmin.href = base + '#admin';
-  if (aBoard) aBoard.href = base;
+  const base = location.href.split('#')[0]; // robust for file:// and http(s)
+  const lAdmin = document.getElementById('lnkOpenAdmin');
+  const lBoard = document.getElementById('lnkOpenBoard');
+  if (lAdmin) lAdmin.href = base + '#admin';
+  if (lBoard) lBoard.href = base;
 })();
-
-/* ===== Board/Admin open & robust fallback ===== */
-function openOther(){
-  const base = location.origin + location.pathname;  // full path without hash
-  const url  = isAdmin ? base : (base + '#admin');
-  const name = isAdmin ? 'am_board' : 'am_admin';
-  const feat = 'popup,width=1200,height=900';
-
-  let w = null;
-  try { w = window.open(url, name, feat); } catch(_) {}
-  if (!w) { location.href = url; return; } // fallback to same tab
-  otherWin = w;
-  setTimeout(()=> busSend({type:'PING'}), 200);
-}
-document.getElementById('btnOpenAdmin')?.addEventListener('click', openOther);
-document.getElementById('btnOpenBoard')?.addEventListener('click', openOther);
 
 /* ===== Renderers ===== */
 function drawBoard(){
@@ -544,7 +515,6 @@ function onBuzz(pid){
   if(!state.buzzer.open) return;
   if(state.buzzer.tried.includes(pid)) return;
   if(state.buzzer.respondentId) return;
-  // Pause remaining buzz
   if(state.current.phase==='buzz-open'){
     state.current.buzzRemaining = Math.max(0, state.current.timerRemaining||0);
     stopTimer();
@@ -597,7 +567,10 @@ function handleIntent(p){
 }
 function onBus(msg){
   if(!msg||!msg.type) return;
-  if(msg.type==='PING') busSend({type:'SNAPSHOT', payload:snapshot()});
+  if(msg.type==='HELLO'){
+    busSend({type:'SNAPSHOT', payload:snapshot()});
+    return;
+  }
   if(msg.type==='SNAPSHOT' || msg.type==='INIT_SNAPSHOT') adopt(msg.payload);
   if(msg.type==='INTENT' && !isAdmin) handleIntent(msg.payload||{});
 }
@@ -628,36 +601,36 @@ function adopt(s){
 
 /* ===== CSV load / selector ===== */
 const DEMO=`Category,Clue,Answer
-Business Intelligence,Forward-looking hotel demand tool.,Demand360
-Business Intelligence,Competitive rate tracking tool.,Rate360
-Business Intelligence,Top-producing agencies reports.,Agency360
-Business Intelligence,Suite combining 360 tools.,360 Suite
-Business Intelligence,Comparing OTB to last year is ____,Pace
-Delphi (Sales & Events),Legacy meetings & events platform.,Delphi
-Delphi (Sales & Events),List of space holds pre-contract.,Tentative hold
-Delphi (Sales & Events),Managing website and 3rd-party RFPs.,RFP Management
-Delphi (Sales & Events),Centralized diary of function spaces.,Function Diary
-Delphi (Sales & Events),M in MICE stands for ____,Meetings
-HotSOS (Service Opt.),Common product name.,HotSOS
-HotSOS (Service Opt.),Task for a leaky faucet.,Work order
-HotSOS (Service Opt.),Recurring maintenance tasks.,Preventive
-HotSOS (Service Opt.),Housekeeping assignment module.,Housekeeping
-HotSOS (Service Opt.),Promised resolution times acronym.,SLA
-Central Reservations,Hotel website booking engine.,iHotelier
-Central Reservations,System managing rates/availability (abbr.).,CRS
-Central Reservations,Stay rule like 3-night minimum.,Restriction
-Central Reservations,Discounted fenced price is ____ plan.,Rate
-Central Reservations,Best ____ Guarantee.,Rate
-Distribution,Travel-agent systems acronym.,GDS
-Distribution,Name another GDS.,Sabre or Travelport
-Distribution,Online sellers like Expedia are ____,OTAs
-Distribution,Same price across channels = rate ____,Parity
-Distribution,Brand identifier code in GDS is ____,Chain
-Hospitality Jargon,Average revenue per occupied room.,ADR
-Hospitality Jargon,Revenue per available room.,RevPAR
-Hospitality Jargon,Visitors who complete a booking %,Conversion
-Hospitality Jargon,LOS stands for Length of ____,Stay
-Hospitality Jargon,Occupied/available rooms = ____,Occupancy`;
+Sea Turtles,Most common nesting sea turtle on Florida beaches.,Loggerhead
+Sea Turtles,Green sea turtles mainly eat this underwater plant.,Seagrass
+Sea Turtles,This critically endangered turtle is the smallest sea turtle.,Kemp's ridley
+Sea Turtles,Sea turtles breathe air using these.,Lungs
+Sea Turtles,Baby sea turtles head toward this natural light to find the ocean.,Moonlight horizon
+Shorebirds,Large coastal bird that plunges for fish with a throat pouch.,Brown pelican
+Shorebirds,Beach bird with bright orange bill that skims the surface.,Black skimmer
+Shorebirds,This gull is named for its chuckling call.,Laughing gull
+Shorebirds,Small sandpipers that chase waves up and down the beach.,Sanderlings
+Shorebirds,Fish-hunting raptor often called the “sea hawk.”,Osprey
+Marine Mammals,Gentle herbivore that grazes Florida springs and estuaries.,Manatee
+Marine Mammals,Most common coastal dolphin in Florida.,Bottlenose dolphin
+Marine Mammals,Endangered whale that calves off Florida’s east coast in winter.,North Atlantic right whale
+Marine Mammals,Opening on top of a dolphin used for breathing.,Blowhole
+Marine Mammals,Boat strikes leave these visible marks on many manatees.,Propeller scars
+Rays & Sharks,These cartilaginous fishes have skeletons made of ____,Cartilage
+Rays & Sharks,Small hammerhead relative often seen on Florida flats.,Bonnethead
+Rays & Sharks,This ray species has venomous barbs in its tail.,Stingray
+Rays & Sharks,Enormous ray with “wings” that can leap free of the water.,Manta ray
+Rays & Sharks,Common coastal shark with black-tipped fins.,Blacktip shark
+Invertebrates,Ancient “living fossil” with a long tail spine.,Horseshoe crab
+Invertebrates,Mollusk that filters water and can form reefs.,Oyster
+Invertebrates,Echinoderm with five arms (not actually a fish).,Sea star
+Invertebrates,Colorful animals with stinging cells that build reefs.,Corals
+Invertebrates,Common blue-clawed crustacean in Florida estuaries.,Blue crab
+Coastal Habitats,Where fresh water meets salt water.,Estuary
+Coastal Habitats,Underwater flowering plants that stabilize sediment.,Seagrass
+Coastal Habitats,Coastal trees with prop roots that protect shorelines.,Mangroves
+Coastal Habitats,This word describes water that’s a mix of fresh and salt.,Brackish
+Coastal Habitats,Tiny drifting organisms at the base of the food web.,Plankton`;
 
 function parseCSV(text){
   const clean=text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").replace(/^\uFEFF/,'');
@@ -681,7 +654,7 @@ function splitLine(line, delim){
 }
 function prepareSelector(rows, fileMeta={name:'',size:0}){
   const by={}; rows.forEach((r,i)=>{ (by[r.Category]=by[r.Category]||[]).push({id:rid(),q:r.Clue,a:r.Answer,order:i}); });
-  state.selector.byCat=by; state.selector.fileLabel=fileMeta.name||'demo.csv'; state.selector.persistKey=`amjsel/${state.selector.fileLabel}/${rows.length}`;
+  state.selector.byCat=by; state.selector.fileLabel=fileMeta.name||'marine-demo.csv'; state.selector.persistKey=`ocjsel/${state.selector.fileLabel}/${rows.length}`;
   const saved=JSON.parse(localStorage.getItem(state.selector.persistKey)||'null')||{};
   state.selector.chosenCats=saved.chosenCats||[];
   state.selector.chosenClues={};
@@ -771,7 +744,7 @@ function buildBoardFromSelection(){
 function enforceStartButton(){
   const btn=document.getElementById('btnStart'); if(!btn) return;
   const ok = state.selector.chosenCats.length===6 && state.selector.chosenCats.every(c=> (state.selector.chosenClues[c]?.size||0)===5);
-  btn.disabled = !ok;
+  btn.setAttribute('aria-disabled', ok ? 'false':'true');
 }
 
 /* ===== Admin hookups ===== */
@@ -788,14 +761,14 @@ function enforceStartButton(){
     const f=e.target.files?.[0]; if(!f) return;
     const r=new FileReader();
     r.onload=ev=>{
-      state.datasetRows=parseCSV(ev.target.result||''); aRowCount.textContent=String(state.datasetRows.length);
+      state.datasetRows=parseCSV(ev.target.result||''); document.getElementById('rowCount').textContent=String(state.datasetRows.length);
       prepareSelector(state.datasetRows, {name:f.name,size:f.size||0}); drawAdmin(); enforceStartButton();
     };
     r.readAsText(f);
   });
   btnDemo.addEventListener('click', ()=>{
-    state.datasetRows=parseCSV(DEMO); aRowCount.textContent=String(state.datasetRows.length);
-    prepareSelector(state.datasetRows, {name:'amadeus-demo.csv',size:state.datasetRows.length});
+    state.datasetRows=parseCSV(DEMO); document.getElementById('rowCount').textContent=String(state.datasetRows.length);
+    prepareSelector(state.datasetRows, {name:'marine-demo.csv',size:state.datasetRows.length});
     drawAdmin(); enforceStartButton();
   });
   btnPickRandom6.addEventListener('click', ()=>{
@@ -816,19 +789,19 @@ function enforceStartButton(){
       ids.forEach(id=>{ const it=pool.find(x=>x.id===id); lines.push([name,it.q,it.a].map(csvEsc).join(',')); });
     });
     const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download=(state.selector.fileLabel||'amadeus')+'-selected.csv'; document.body.appendChild(a); a.click(); a.remove();
+    a.href=URL.createObjectURL(blob); a.download=(state.selector.fileLabel||'marine-jeopardy')+'-selected.csv'; document.body.appendChild(a); a.click(); a.remove();
   });
   function csvEsc(s){ const t=(s??'').replace(/"/g,'""'); return /[,"\n]/.test(t)?`"${t}"`:t; }
 
-  // Timers UI
+  // Timers & Sounds (use new localStorage keys)
   const tLock=document.getElementById('tLock'), tBuzz=document.getElementById('tBuzz'), tAns=document.getElementById('tAns'), tRev=document.getElementById('tRev');
   const presetClassic=document.getElementById('presetClassic'), presetFast=document.getElementById('presetFast'), presetClassroom=document.getElementById('presetClassroom');
   const sndEnable=document.getElementById('sndEnable'), sndVol=document.getElementById('sndVol');
 
   try{
-    const saved=JSON.parse(localStorage.getItem('amj/timers')||'null');
+    const saved=JSON.parse(localStorage.getItem('ocj/timers')||'null');
     if(saved){ state.timers={...DEFAULT_TIMERS, ...saved}; }
-    const sfx=JSON.parse(localStorage.getItem('amj/snd')||'null');
+    const sfx=JSON.parse(localStorage.getItem('ocj/snd')||'null');
     if(sfx){ state.sounds={...state.sounds, ...sfx}; audio.enabled=state.sounds.enabled; audio.vol=state.sounds.vol; }
   }catch{}
 
@@ -838,7 +811,7 @@ function enforceStartButton(){
   function saveTimers(){
     const clamp=(v)=>Math.min(60, Math.max(1, (parseInt(v,10)||0)));
     state.pendingTimers={ lockout:clamp(tLock.value), buzz:clamp(tBuzz.value), answer:clamp(tAns.value), reveal:clamp(tRev.value) };
-    try{ localStorage.setItem('amj/timers', JSON.stringify(state.pendingTimers)); }catch{}
+    try{ localStorage.setItem('ocj/timers', JSON.stringify(state.pendingTimers)); }catch{}
   }
   [tLock,tBuzz,tAns,tRev].forEach(inp=> inp.addEventListener('change', saveTimers));
   presetClassic.addEventListener('click', ()=>{ tLock.value=3; tBuzz.value=4; tAns.value=5; tRev.value=4; saveTimers(); });
@@ -846,11 +819,14 @@ function enforceStartButton(){
   presetClassroom.addEventListener('click', ()=>{ tLock.value=6; tBuzz.value=8; tAns.value=10; tRev.value=8; saveTimers(); });
 
   sndEnable.addEventListener('change', ()=>{ state.sounds.enabled=!!sndEnable.checked; audio.enabled=state.sounds.enabled;
-    try{ localStorage.setItem('amj/snd', JSON.stringify(state.sounds)); }catch{} busSend({type:'SNAPSHOT', payload:snapshot()}); });
+    try{ localStorage.setItem('ocj/snd', JSON.stringify(state.sounds)); }catch{} busSend({type:'SNAPSHOT', payload:snapshot()}); });
   sndVol.addEventListener('input', ()=>{ state.sounds.vol=(parseInt(sndVol.value,10)||0)/100; audio.vol=state.sounds.vol;
-    try{ localStorage.setItem('amj/snd', JSON.stringify(state.sounds)); }catch{} });
+    try{ localStorage.setItem('ocj/snd', JSON.stringify(state.sounds)); }catch{} });
 
-  btnStart.addEventListener('click', ()=>{
+  // Start Game
+  btnStart.addEventListener('click', (e)=>{
+    e.preventDefault();
+    if(btnStart.getAttribute('aria-disabled')==='true') return;
     if(!state.datasetRows?.length) return alert('Load CSV or Demo first.');
     state.players=[{id:rid(),name:'Player 1',score:0},{id:rid(),name:'Player 2',score:0},{id:rid(),name:'Player 3',score:0}];
     state.controlId=state.players[0].id; state.history=[]; resetBuzzer();
@@ -875,7 +851,7 @@ function enforceStartButton(){
   const CARDS = document.querySelectorAll('.card.collapsible');
   CARDS.forEach((card, idx) => {
     const body = card.querySelector('.card-body'); if (!body) return;
-    const key = card.id ? `amj/collapsed/${card.id}` : `amj/collapsed/__idx_${idx}`;
+    const key = card.id ? `ocj/collapsed/${card.id}` : `ocj/collapsed/__idx_${idx}`;
     let saved = localStorage.getItem(key);
     if (saved === null) saved = card.getAttribute('data-default-collapsed') === '1' ? '1' : '0';
     const collapsed = saved === '1';
@@ -889,7 +865,7 @@ function enforceStartButton(){
     const sel = btn.getAttribute('data-collapse-target');
     const card = document.querySelector(sel); if (!card) return;
     const body = card.querySelector('.card-body');
-    const key  = card.id ? `amj/collapsed/${card.id}` : null;
+    const key  = card.id ? `ocj/collapsed/${card.id}` : null;
     const willCollapse = !card.classList.contains('collapsed');
 
     if (willCollapse) {
@@ -911,8 +887,17 @@ function enforceStartButton(){
   });
 })();
 
-/* ===== Boot / ping ===== */
-if(!isAdmin){ setTimeout(()=> busSend({type:'PING'}), 150); }
+/* ===== Boot / handshake ===== */
+setTimeout(()=> busSend({type:'HELLO', role: isAdmin ? 'admin':'board'}), 120);
+
+/* ===== Set admin/board links (after DOM ready) ===== */
+(function(){
+  const base = location.href.split('#')[0];
+  const lAdmin = document.getElementById('lnkOpenAdmin');
+  const lBoard = document.getElementById('lnkOpenBoard');
+  if (lAdmin) lAdmin.href = base + '#admin';
+  if (lBoard) lBoard.href = base;
+})();
 </script>
 </body>
 </html>
