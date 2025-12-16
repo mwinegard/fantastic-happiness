@@ -164,6 +164,50 @@
       letter-spacing:.05em;
     }
 
+    /* NEW: Players table */
+    #admin-players{
+      padding: 12px;
+      overflow:auto;
+    }
+    #admin-players table{
+      width:100%;
+      border-collapse: collapse;
+      min-width: 520px;
+    }
+    #admin-players th, #admin-players td{
+      text-align:left;
+      padding: 10px 8px;
+      border-bottom: 1px solid #ffffff12;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    #admin-players th{
+      color: var(--muted2);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing:.05em;
+      position: sticky;
+      top: 0;
+      background: rgba(11,18,32,.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #ffffff1f;
+      background: rgba(255,255,255,.06);
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .pill.good{ border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.14); }
+    .pill.warn{ border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.14); }
+    .pill.muted{ opacity:.75; }
+
     @media (min-width: 980px){
       .fh-admin-grid{
         grid-template-columns: 1.1fr .9fr;
@@ -247,7 +291,6 @@
         </div>
 
         <div class="fh-sounds">
-          <!-- admin.js listens to any [data-sound] -->
           <button class="fh-btn fh-btn-ghost" type="button" data-sound="start">Start</button>
           <button class="fh-btn fh-btn-ghost" type="button" data-sound="draw">Draw</button>
           <button class="fh-btn fh-btn-ghost" type="button" data-sound="skip">Skip</button>
@@ -262,6 +305,18 @@
         </div>
       </section>
 
+      <!-- NEW: PLAYERS -->
+      <section class="fh-panel span2">
+        <div class="fh-panel-head">
+          <h2 class="fh-panel-title">Players</h2>
+          <div class="fh-chip fh-chip-muted">hand counts</div>
+        </div>
+        <div id="admin-players">
+          <!-- admin.js will render a table here -->
+          <div class="fh-muted">Select a lobby to load players…</div>
+        </div>
+      </section>
+
       <!-- BROADCAST / CHAT -->
       <section class="fh-panel">
         <div class="fh-panel-head">
@@ -270,13 +325,11 @@
         </div>
 
         <div class="fh-admin-chat">
-          <!-- Legacy IDs admin.js uses (both) -->
           <div class="fh-admin-chat-row">
             <input id="admin-msg" class="fh-input" placeholder="Type a message to the table…" />
             <button id="admin-send" class="fh-btn fh-btn-primary" type="button">Send</button>
           </div>
 
-          <!-- Optional second input admin.js also supports; keep in DOM -->
           <div class="fh-admin-chat-row" style="display:none;">
             <input id="admin-chat" class="fh-input" placeholder="(hidden legacy) message" />
             <button id="admin-chat-send" class="fh-btn fh-btn-primary" type="button">Send</button>
