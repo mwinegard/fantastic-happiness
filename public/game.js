@@ -2,7 +2,8 @@
   game.js — Fantastic Happiness UNO client (Refined UI + Mobile friendly)
   MATCHED TO PROVIDED server.js:
   - uses state.penalty (not pendingPenalty)
-  - draw2 filename fixed to *_draw2.png for modal previews
+  - draw2 image snap/previews use *_draw.png (matches assets list)
+  - supports spectator join via ?spectator=1 or ?admin=1
 */
 
 (() => {
@@ -94,7 +95,10 @@
     if (type === "number" && typeof value === "number") return `${color}_${value}.png`;
     if (type === "skip") return `${color}_skip.png`;
     if (type === "reverse") return `${color}_reverse.png`;
-    if (type === "draw2") return `${color}_draw2.png`; // IMPORTANT: matches server.js
+
+    // ✅ FIX: your assets are *_draw.png (NOT *_draw2.png)
+    if (type === "draw2") return `${color}_draw.png`;
+
     return "back.png";
   }
 
@@ -122,14 +126,35 @@
     "draw", "joined", "lose", "number", "reverse", "skip", "special", "start", "uno", "wild", "win"
   ]);
 
+  let audioUnlocked = false;
+
+  function unlockAudioOnce() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+
+    // iOS/Safari: must play during a user gesture at least once
+    try {
+      const a = new Audio("/assets/sounds/start.mp3");
+      a.volume = 0.001;
+      a.play().then(() => {
+        try { a.pause(); a.currentTime = 0; } catch {}
+      }).catch(() => {});
+    } catch {}
+  }
+
   function playSound(key) {
     if (muted) return;
     const k = String(key || "").trim();
     if (!k) return;
+
+    // allow unknown keys too, but keep your canonical list
     const file = SOUND_KEYS.has(k) ? `${k}.mp3` : `${k}.mp3`;
-    const a = new Audio(`assets/sounds/${file}`);
-    a.volume = 0.9;
-    a.play().catch(() => {});
+
+    try {
+      const a = new Audio(`/assets/sounds/${file}`);
+      a.volume = 0.9;
+      a.play().catch(() => {});
+    } catch {}
   }
 
   function setMuteUI() {
@@ -140,6 +165,7 @@
 
   if (muteToggle) {
     muteToggle.addEventListener("click", () => {
+      unlockAudioOnce();
       muted = !muted;
       localStorage.setItem("uno_muted", muted ? "1" : "0");
       setMuteUI();
@@ -215,11 +241,19 @@
   hydrateJoinForm();
 
   function doJoin() {
+    unlockAudioOnce();
+
     const name = (nameInput.value || "").trim() || "Player";
     const lobby = (lobbyInput.value || "").trim() || "default";
+
+    // ✅ spectator/admin never takes a seat:
+    const qs = new URLSearchParams(window.location.search);
+    const spectator = qs.get("spectator") === "1" || qs.get("admin") === "1";
+
     localStorage.setItem("uno_name", name);
     localStorage.setItem("uno_lobby", lobby);
-    socket.emit("join", { name, lobby });
+
+    socket.emit("join", { name, lobby, spectator });
   }
 
   joinBtn.addEventListener("click", doJoin);
@@ -236,7 +270,7 @@
       ds.forEach((d, i) => { if (i === 0) return; d.open = false; });
     }
 
-    toast(`Joined lobby: ${me.lobby}`);
+    toast(`Joined lobby: ${me.lobby}${me.spectator ? " (spectator)" : ""}`);
     playSound("joined");
     loadLeaderboard();
   });
@@ -252,6 +286,7 @@
 
   if (chatSend && chatInput) {
     chatSend.addEventListener("click", () => {
+      unlockAudioOnce();
       const text = (chatInput.value || "").trim();
       if (!text) return;
       socket.emit("chat", { text });
@@ -273,9 +308,9 @@
   });
 
   // ---------------- Actions ----------------
-  if (drawPile) drawPile.addEventListener("click", () => socket.emit("drawCard"));
-  if (unoBtn) unoBtn.addEventListener("click", () => socket.emit("callUno"));
-  if (relaxBtn) relaxBtn.addEventListener("click", () => socket.emit("playRelaxRequested"));
+  if (drawPile) drawPile.addEventListener("click", () => { unlockAudioOnce(); socket.emit("drawCard"); });
+  if (unoBtn) unoBtn.addEventListener("click", () => { unlockAudioOnce(); socket.emit("callUno"); });
+  if (relaxBtn) relaxBtn.addEventListener("click", () => { unlockAudioOnce(); socket.emit("playRelaxRequested"); });
 
   // ---------------- Render ----------------
   function setColorBadge(raw) {
@@ -329,7 +364,7 @@
   function renderTop(state) {
     const top = state.top;
     if (discardTop) {
-      discardTop.src = top && top.img ? `assets/cards/${top.img}` : "assets/cards/back.png";
+      discardTop.src = top && top.img ? `/assets/cards/${top.img}` : "/assets/cards/back.png";
     }
     setColorBadge(state.color);
   }
@@ -345,7 +380,6 @@
     const s = secsLeft(state.turnEndsAt);
     const timerTxt = (s == null) ? "" : ` • ⏳ ${s}s`;
 
-    // IMPORTANT: server.js emits state.penalty
     let penTxt = "";
     if (state.penalty && state.penalty.amount) {
       const target = ps.find(p => p.sid === state.penalty.targetSid);
@@ -365,7 +399,7 @@
     (hand || []).forEach((card, idx) => {
       const img = document.createElement("img");
       img.alt = card.type || "card";
-      img.src = `assets/cards/${card.img || "back.png"}`;
+      img.src = `/assets/cards/${card.img || "back.png"}`;
       img.title = `${card.color || ""} ${card.type || ""}${typeof card.value === "number" ? " " + card.value : ""}`;
 
       if (!isMyTurn) {
@@ -374,6 +408,7 @@
       }
 
       img.addEventListener("click", () => {
+        unlockAudioOnce();
         if (!isMyTurn) return;
         socket.emit("playCard", { index: idx });
       });
@@ -402,7 +437,7 @@
     renderHand(lastState, lastHand);
   });
 
-  socket.on("sound", (key) => playSound(key));
+  socket.on("sound", (key) => { unlockAudioOnce(); playSound(key); });
 
   // ---------------- Specials: chooseColor ----------------
   socket.on("chooseColor", () => {
@@ -577,7 +612,7 @@
 
     cards.forEach(c => {
       const img = document.createElement("img");
-      img.src = `assets/cards/${imgFromSnap(c)}`;
+      img.src = `/assets/cards/${imgFromSnap(c)}`;
       img.alt = c.type || "card";
       img.style.width = "86px";
       img.style.height = "124px";
@@ -637,7 +672,7 @@
 
     cards.forEach(c => {
       const img = document.createElement("img");
-      img.src = `assets/cards/${imgFromSnap(c)}`;
+      img.src = `/assets/cards/${imgFromSnap(c)}`;
       img.alt = c.type || "card";
       img.style.width = "86px";
       img.style.height = "124px";
@@ -741,7 +776,7 @@
 
     cards.forEach(c => {
       const img = document.createElement("img");
-      img.src = `assets/cards/${imgFromSnap(c)}`;
+      img.src = `/assets/cards/${imgFromSnap(c)}`;
       img.alt = c.type || "card";
       img.style.width = "86px";
       img.style.height = "124px";
