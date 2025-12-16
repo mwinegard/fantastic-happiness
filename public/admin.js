@@ -1,22 +1,26 @@
 /*
-  admin.js — Fantastic Happiness UNO admin console (refined UI compatible)
+  admin.js — Fantastic Happiness UNO admin console (MATCHED TO PROVIDED server.js)
 
-  Goals:
-  - Join as a SPECTATOR so it doesn't interfere with seating/turn logic
-  - Select lobby, receive state updates, show basic game state snapshot
-  - Provide safe admin actions (emit existing server events if present)
-  - Broadcast table message
-  - Soundboard buttons (data-sound="key") -> emit "adminSound" or "sound" depending on server
+  Your server supports:
+    - GET /lobbies  (express route)
+    - socket events:
+        admin:pullState   -> emits admin:state
+        admin:chat        -> broadcasts announce
+        admin:sound       -> broadcasts sound
+        admin:forceRoundEnd
+        admin:resetGame
+        admin:lobbyReset
+        admin:lobbyClose
 
-  NOTE:
-  This is written to be tolerant:
-  - If certain events don't exist server-side, it logs a warning instead of crashing.
+  Notes:
+  - Server currently ignores spectator flag on join. I include a tiny server.js patch below
+    so Admin won't auto-seat and trigger auto-start rules.
 */
 
 (() => {
   const socket = io();
 
-  // --------- DOM ----------
+  // -------- DOM --------
   const lobbySelect = document.getElementById("lobby-select");
   const refreshBtn = document.getElementById("refresh-lobbies");
 
@@ -47,11 +51,10 @@
   const customSoundInput = document.getElementById("custom-sound");
   const triggerCustom = document.getElementById("trigger-custom");
 
-  // --------- State ----------
+  // -------- State --------
   let currentLobby = null;
-  let joined = false;
 
-  // --------- Utils ----------
+  // -------- Utils --------
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (m) => ({
       "&": "&amp;",
@@ -82,6 +85,54 @@
     return d.toLocaleString();
   }
 
+  // -------- /lobbies endpoint (authoritative) --------
+  async function fetchLobbies() {
+    try {
+      const res = await fetch("/lobbies", { cache: "no-store" });
+      const data = await res.json();
+      // data: [{name, players, spectators, started}]
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function refreshLobbyDropdown() {
+    if (!lobbySelect) return;
+    const rows = await fetchLobbies();
+
+    const prev = lobbySelect.value || "";
+    lobbySelect.innerHTML =
+      `<option value="">Select a lobby…</option>` +
+      rows
+        .map(r => {
+          const label = `${r.name}  •  players:${r.players}  spec:${r.spectators}  ${r.started ? "• started" : ""}`;
+          return `<option value="${esc(r.name)}">${esc(label)}</option>`;
+        })
+        .join("");
+
+    if (prev && rows.some(r => r.name === prev)) {
+      lobbySelect.value = prev;
+    }
+  }
+
+  // -------- Join lobby as spectator --------
+  function joinLobby(lobby) {
+    if (!lobby) return;
+    currentLobby = lobby;
+    localStorage.setItem("fh_admin_lobby", lobby);
+
+    // Join the lobby room via your server's standard join
+    // (Server currently forces spectator:false — patch below fixes that)
+    socket.emit("join", { name: "Admin", lobby, spectator: true });
+
+    logLine(`Joined lobby <b>${esc(lobby)}</b> (Admin).`);
+    // Immediately request admin state snapshot
+    socket.emit("admin:pullState");
+    loadLeaderboard();
+  }
+
+  // -------- Leaderboard --------
   async function loadLeaderboard() {
     if (!adminLb) return;
     try {
@@ -99,44 +150,8 @@
     return `<table><thead><tr><th>Name</th><th>Wins</th><th>Points</th></tr></thead><tbody>${rows.map(tr).join("")}</tbody></table>`;
   }
 
-  // --------- Lobby discovery ----------
-  function requestLobbies() {
-    // Some server builds expose "lobbies" or "adminLobbies" or "getLobbies"
-    socket.emit("getLobbies");
-    socket.emit("adminGetLobbies");
-    socket.emit("lobbies");
-  }
-
-  function setLobbyOptions(lobbies) {
-    if (!lobbySelect) return;
-    const list = Array.isArray(lobbies) ? lobbies : [];
-
-    // Preserve selection if possible
-    const prev = lobbySelect.value || "";
-
-    lobbySelect.innerHTML = `<option value="">Select a lobby…</option>` + list
-      .map(l => `<option value="${esc(l)}">${esc(l)}</option>`)
-      .join("");
-
-    if (prev && list.includes(prev)) lobbySelect.value = prev;
-  }
-
-  // --------- Join as spectator ----------
-  function joinLobby(lobby) {
-    if (!lobby) return;
-    currentLobby = lobby;
-
-    // Try common server join contracts:
-    // - join({name,lobby,spectator})
-    // - join({name,lobby}) (server ignores spectator)
-    socket.emit("join", { name: "Admin", lobby, spectator: true });
-
-    joined = true;
-    logLine(`Joined lobby <b>${esc(lobby)}</b> as spectator.`);
-  }
-
-  // --------- Event wiring ----------
-  if (refreshBtn) refreshBtn.addEventListener("click", () => requestLobbies());
+  // -------- Wire UI --------
+  if (refreshBtn) refreshBtn.addEventListener("click", refreshLobbyDropdown);
 
   if (lobbySelect) {
     lobbySelect.addEventListener("change", () => {
@@ -146,16 +161,11 @@
     });
   }
 
-  // Broadcast message
+  // Broadcast
   function sendMsg() {
     const msg = (adminMsg?.value || "").trim();
     if (!msg) return;
-
-    // Try common server event names
-    socket.emit("adminAnnounce", { lobby: currentLobby, text: msg });
-    socket.emit("announce", msg); // some servers broadcast based on socket lobby
-    socket.emit("chat", { text: msg }); // fallback to chat channel
-
+    socket.emit("admin:chat", { text: msg });
     logLine(`<span style="opacity:.85;">Broadcast:</span> ${esc(msg)}`);
     adminMsg.value = "";
   }
@@ -165,44 +175,34 @@
     adminMsg.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMsg(); });
   }
 
-  // Admin controls (best-effort emit)
-  function emitAdmin(action, payload) {
-    socket.emit(action, payload || {});
-    logLine(`Sent <span class="mono">${esc(action)}</span>`);
-  }
-
+  // Admin controls (EXACT EVENT NAMES)
   if (btnResetGame) btnResetGame.addEventListener("click", () => {
-    emitAdmin("adminResetGame", { lobby: currentLobby });
-    emitAdmin("resetGame", { lobby: currentLobby });
+    socket.emit("admin:resetGame");
+    logLine(`Sent <span class="mono">${esc("admin:resetGame")}</span>`);
   });
 
   if (btnForceEnd) btnForceEnd.addEventListener("click", () => {
-    emitAdmin("adminForceEnd", { lobby: currentLobby });
-    emitAdmin("forceRoundEnd", { lobby: currentLobby });
+    socket.emit("admin:forceRoundEnd");
+    logLine(`Sent <span class="mono">${esc("admin:forceRoundEnd")}</span>`);
   });
 
   if (btnResetLobby) btnResetLobby.addEventListener("click", () => {
-    emitAdmin("adminResetLobby", { lobby: currentLobby });
-    emitAdmin("resetLobby", { lobby: currentLobby });
+    socket.emit("admin:lobbyReset");
+    logLine(`Sent <span class="mono">${esc("admin:lobbyReset")}</span>`);
   });
 
   if (btnCloseLobby) btnCloseLobby.addEventListener("click", () => {
-    emitAdmin("adminCloseLobby", { lobby: currentLobby });
-    emitAdmin("closeLobby", { lobby: currentLobby });
+    socket.emit("admin:lobbyClose");
+    logLine(`Sent <span class="mono">${esc("admin:lobbyClose")}</span>`);
   });
 
   // Soundboard: click any [data-sound]
   document.addEventListener("click", (e) => {
     const t = e.target;
     if (!(t instanceof HTMLElement)) return;
-
     const key = t.getAttribute("data-sound");
     if (!key) return;
-
-    // Try admin sound channel, then generic
-    socket.emit("adminSound", { lobby: currentLobby, key });
-    socket.emit("sound", key);
-
+    socket.emit("admin:sound", { name: key });
     logLine(`Sound <b>${esc(key)}</b>`);
   });
 
@@ -210,106 +210,66 @@
     triggerCustom.addEventListener("click", () => {
       const k = (customSoundInput.value || "").trim();
       if (!k) return;
-      socket.emit("adminSound", { lobby: currentLobby, key: k });
-      socket.emit("sound", k);
+      socket.emit("admin:sound", { name: k });
       logLine(`Sound <b>${esc(k)}</b>`);
     });
   }
 
-  // --------- Listen for common server responses ----------
-  socket.on("connect", () => {
+  // -------- Listen for server updates --------
+  socket.on("connect", async () => {
     logLine(`Connected <span class="mono">${esc(socket.id)}</span>`);
-    requestLobbies();
+    await refreshLobbyDropdown();
     loadLeaderboard();
+
+    // Auto-join last used lobby
+    const last = localStorage.getItem("fh_admin_lobby");
+    if (last) {
+      // attempt to select it if present
+      if (lobbySelect) lobbySelect.value = last;
+      joinLobby(last);
+    }
   });
 
   socket.on("warn", (msg) => logLine(`<span style="color:#fbbf24;">Warn:</span> ${esc(msg || "")}`));
   socket.on("announce", (txt) => logLine(`<span style="opacity:.85;">•</span> ${esc(txt || "")}`));
   socket.on("chat", ({ fromName, text }) => logLine(`<b>${esc(fromName || "Player")}:</b> ${esc(text || "")}`));
 
-  // Lobby list payloads
-  socket.on("lobbies", (payload) => {
-    // payload could be ["default","x"] or {lobbies:[...]}
-    const list = Array.isArray(payload) ? payload : (payload && payload.lobbies) || [];
-    if (list.length) setLobbyOptions(list);
-  });
-  socket.on("adminLobbies", (payload) => {
-    const list = Array.isArray(payload) ? payload : (payload && payload.lobbies) || [];
-    if (list.length) setLobbyOptions(list);
-  });
-  socket.on("getLobbies", (payload) => {
-    const list = Array.isArray(payload) ? payload : (payload && payload.lobbies) || [];
-    if (list.length) setLobbyOptions(list);
-  });
+  // Your server emits this continuously from emitState()
+  socket.on("admin:state", (s) => {
+    if (!s) return;
 
-  // State updates — your server likely sends "state"
-  socket.on("state", (state) => {
-    if (!state) return;
-
-    // top discard
-    if (topDiscard) topDiscard.src = state.top?.img ? `assets/cards/${state.top.img}` : `assets/cards/back.png`;
+    // Top card
+    if (topDiscard) topDiscard.src = s.topCard?.img ? `assets/cards/${s.topCard.img}` : `assets/cards/back.png`;
     if (topMeta) {
-      const t = state.top || {};
+      const tc = s.topCard || {};
       const meta = [
-        `Top: ${t.color || "—"} ${t.type || ""}${typeof t.value === "number" ? " " + t.value : ""}`,
-        `Lobby: ${currentLobby || "—"}`
+        `Lobby: ${s.lobby || currentLobby || "—"}`,
+        `Top: ${tc.color || "—"} ${tc.type || ""}${typeof tc.value === "number" ? " " + tc.value : ""}`
       ].join("\n");
       topMeta.textContent = meta;
       topMeta.style.whiteSpace = "pre-line";
     }
 
-    // basic fields
-    setText(gsCurrent, state.current || "—");
-    setText(gsDirection, state.direction || "—");
-    setText(gsColor, state.color || "—");
-    setText(gsStarted, String(!!state.started));
-    setText(gsEnds, fmtTime(state.turnEndsAt));
-    setText(gsDeck, state.deck ? state.deck.length : "—");
-    setText(gsDiscard, state.discard ? state.discard.length : "—");
+    setText(gsCurrent, s.currentName ? `${s.currentName} (${s.currentSid || ""})` : (s.currentSid || "—"));
+    setText(gsDirection, s.direction || "—");
+    setText(gsColor, s.color || "—");
+    setText(gsStarted, String(!!s.started));
+    setText(gsEnds, fmtTime(s.turnEndsAt));
+    setText(gsDeck, s.deckSize);
+    setText(gsDiscard, s.discardSize);
 
-    if (state.pendingPenalty?.amount) {
-      setText(gsPenalty, `${state.pendingPenalty.amount} (targetSid=${state.pendingPenalty.targetSid || "?"})`);
+    if (s.penalty && s.penalty.amount) {
+      setText(gsPenalty, `${s.penalty.amount} (${s.penalty.kind || "?"}) on ${s.penalty.targetSid || "?"}`);
     } else {
       setText(gsPenalty, "—");
     }
 
-    const flags = [];
-    if (state.awaitingColorChoice) flags.push("awaitingColorChoice");
-    if (state.awaitingRainbow) flags.push("awaitingRainbow");
-    if (state.awaitingShopping) flags.push("awaitingShopping");
-    if (state.awaitingPromise) flags.push("awaitingPromise");
-    setText(gsFlags, flags.length ? flags.join(", ") : "—");
+    setText(gsFlags, (s.roundFlags && s.roundFlags.length) ? s.roundFlags.join(", ") : "—");
   });
 
-  // Some servers may require an explicit "adminJoin" flow — try it too
-  socket.on("me", (info) => {
-    // If server supports spectator on join, you’ll see spectator=true here.
-    logLine(`Server acknowledged identity: <span class="mono">${esc(info?.sid || "")}</span>`);
-  });
-
-  // Keep leaderboard fresh
-  setInterval(() => loadLeaderboard(), 12000);
-
-  // Try to join last used lobby automatically
-  const lastLobby = localStorage.getItem("fh_admin_lobby");
-  if (lastLobby) {
-    // Preload list (may get replaced) and attempt join
-    joinLobby(lastLobby);
-  }
-
-  // Persist selection
-  if (lobbySelect) {
-    lobbySelect.addEventListener("change", () => {
-      if (lobbySelect.value) localStorage.setItem("fh_admin_lobby", lobbySelect.value);
-    });
-  }
-
-  // If we never got lobby list, give a hint
-  setTimeout(() => {
-    if (!joined && lobbySelect && lobbySelect.options.length <= 1) {
-      logLine(
-        `No lobby list received. If your server doesn't expose lobbies, type /?lobby=YOURLOBBY on the player page and use that name here.`
-      );
-    }
-  }, 2500);
+  // Keep state & leaderboard fresh
+  setInterval(() => {
+    if (currentLobby) socket.emit("admin:pullState");
+    loadLeaderboard();
+  }, 8000);
 })();
