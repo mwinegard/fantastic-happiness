@@ -1,20 +1,6 @@
 /*
   admin.js — Fantastic Happiness UNO admin console (MATCHED TO PROVIDED server.js)
-
-  Your server supports:
-    - GET /lobbies  (express route)
-    - socket events:
-        admin:pullState   -> emits admin:state
-        admin:chat        -> broadcasts announce
-        admin:sound       -> broadcasts sound
-        admin:forceRoundEnd
-        admin:resetGame
-        admin:lobbyReset
-        admin:lobbyClose
-
-  Notes:
-  - Server currently ignores spectator flag on join. I include a tiny server.js patch below
-    so Admin won't auto-seat and trigger auto-start rules.
+  + Renders Players table into #admin-players from admin:state.players
 */
 
 (() => {
@@ -47,6 +33,8 @@
 
   const adminLog = document.getElementById("admin-log");
   const adminLb = document.getElementById("admin-leaderboard");
+
+  const adminPlayers = document.getElementById("admin-players");
 
   const customSoundInput = document.getElementById("custom-sound");
   const triggerCustom = document.getElementById("trigger-custom");
@@ -85,12 +73,15 @@
     return d.toLocaleString();
   }
 
+  function pill(text, cls) {
+    return `<span class="pill ${cls || ""}">${esc(text)}</span>`;
+  }
+
   // -------- /lobbies endpoint (authoritative) --------
   async function fetchLobbies() {
     try {
       const res = await fetch("/lobbies", { cache: "no-store" });
       const data = await res.json();
-      // data: [{name, players, spectators, started}]
       return Array.isArray(data) ? data : [];
     } catch {
       return [];
@@ -122,12 +113,9 @@
     currentLobby = lobby;
     localStorage.setItem("fh_admin_lobby", lobby);
 
-    // Join the lobby room via your server's standard join
-    // (Server currently forces spectator:false — patch below fixes that)
     socket.emit("join", { name: "Admin", lobby, spectator: true });
 
     logLine(`Joined lobby <b>${esc(lobby)}</b> (Admin).`);
-    // Immediately request admin state snapshot
     socket.emit("admin:pullState");
     loadLeaderboard();
   }
@@ -148,6 +136,58 @@
     const tr = r =>
       `<tr><td>${esc(r.name)}</td><td>${Number(r.wins || 0)}</td><td>${Number(r.points || 0)}</td></tr>`;
     return `<table><thead><tr><th>Name</th><th>Wins</th><th>Points</th></tr></thead><tbody>${rows.map(tr).join("")}</tbody></table>`;
+  }
+
+  // -------- Players table --------
+  function renderPlayersPanel(players, currentSid, penalty) {
+    if (!adminPlayers) return;
+
+    const ps = Array.isArray(players) ? players.slice() : [];
+
+    // Sort: seated first, then spectators; within group by name
+    ps.sort((a, b) => {
+      const as = !!a.spectator, bs = !!b.spectator;
+      if (as !== bs) return as ? 1 : -1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
+    const penaltyTarget = penalty?.targetSid || null;
+
+    const rowsHtml = ps.map(p => {
+      const isTurn = currentSid && p.sid === currentSid;
+      const isPenalty = penaltyTarget && p.sid === penaltyTarget;
+
+      const statusBits = [];
+      statusBits.push(p.spectator ? pill("Spectator", "muted") : pill("Seated", "good"));
+      statusBits.push(p.connected ? pill("Connected", "good") : pill("Disconnected", "warn"));
+      if (isTurn) statusBits.push(pill("TURN", "good"));
+      if (isPenalty) statusBits.push(pill("PENALTY TARGET", "warn"));
+
+      const handCount = Number.isFinite(Number(p.hand)) ? Number(p.hand) : 0;
+
+      return `
+        <tr>
+          <td><span style="font-weight:800;">${esc(p.name || "Player")}</span><div class="fh-muted" style="margin-top:4px;">${esc(p.sid || "")}</div></td>
+          <td>${handCount}</td>
+          <td>${statusBits.join(" ")}</td>
+        </tr>
+      `;
+    }).join("");
+
+    adminPlayers.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Hand</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || `<tr><td colspan="3" class="fh-muted">No players in this lobby.</td></tr>`}
+        </tbody>
+      </table>
+    `;
   }
 
   // -------- Wire UI --------
@@ -196,7 +236,7 @@
     logLine(`Sent <span class="mono">${esc("admin:lobbyClose")}</span>`);
   });
 
-  // Soundboard: click any [data-sound]
+  // Soundboard
   document.addEventListener("click", (e) => {
     const t = e.target;
     if (!(t instanceof HTMLElement)) return;
@@ -221,10 +261,8 @@
     await refreshLobbyDropdown();
     loadLeaderboard();
 
-    // Auto-join last used lobby
     const last = localStorage.getItem("fh_admin_lobby");
     if (last) {
-      // attempt to select it if present
       if (lobbySelect) lobbySelect.value = last;
       joinLobby(last);
     }
@@ -234,7 +272,6 @@
   socket.on("announce", (txt) => logLine(`<span style="opacity:.85;">•</span> ${esc(txt || "")}`));
   socket.on("chat", ({ fromName, text }) => logLine(`<b>${esc(fromName || "Player")}:</b> ${esc(text || "")}`));
 
-  // Your server emits this continuously from emitState()
   socket.on("admin:state", (s) => {
     if (!s) return;
 
@@ -265,6 +302,9 @@
     }
 
     setText(gsFlags, (s.roundFlags && s.roundFlags.length) ? s.roundFlags.join(", ") : "—");
+
+    // NEW: Players panel render
+    renderPlayersPanel(s.players || [], s.currentSid || null, s.penalty || null);
   });
 
   // Keep state & leaderboard fresh
