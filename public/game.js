@@ -1,9 +1,6 @@
 /*
-  game.js — Fantastic Happiness UNO client (Refined UI + Mobile friendly)
-  MATCHED TO UPDATED server.js:
-  - uses state.penalty
-  - draw2 filename is *_draw.png
-  - supports join({ spectator:true })
+  game.js — Fantastic Happiness UNO client
+  FIX: setVisible() must NOT set display="" for #game-screen, because CSS has #game-screen{display:none;}
 */
 
 (() => {
@@ -62,9 +59,10 @@
     return Math.max(0, Math.ceil((turnEndsAt - Date.now()) / 1000));
   }
 
-  function setVisible(el, yes) {
+  // ✅ FIXED: show must set an explicit display value
+  function setVisible(el, yes, displayType = "block") {
     if (!el) return;
-    el.style.display = yes ? "" : "none";
+    el.style.display = yes ? displayType : "none";
   }
 
   // Server sends hand snapshots for some specials without .img
@@ -95,14 +93,11 @@
     if (type === "number" && typeof value === "number") return `${color}_${value}.png`;
     if (type === "skip") return `${color}_skip.png`;
     if (type === "reverse") return `${color}_reverse.png`;
-
-    // ✅ FIX: your assets are *_draw.png (not *_draw2.png)
-    if (type === "draw2") return `${color}_draw.png`;
-
+    if (type === "draw2") return `${color}_draw2.png`;
     return "back.png";
   }
 
-  // ---------------- Toast ----------------
+  // ---------------- Toast (single reusable) ----------------
   let toastEl = null;
   let toastTimer = null;
 
@@ -130,7 +125,8 @@
     if (muted) return;
     const k = String(key || "").trim();
     if (!k) return;
-    const a = new Audio(`assets/sounds/${k}.mp3`);
+    const file = SOUND_KEYS.has(k) ? `${k}.mp3` : `${k}.mp3`;
+    const a = new Audio(`assets/sounds/${file}`);
     a.volume = 0.9;
     a.play().catch(() => {});
   }
@@ -149,7 +145,7 @@
     });
   }
 
-  // ---------------- Modals ----------------
+  // ---------------- Modals (standardized, layered) ----------------
   function openModal(title, bodyNode, actions) {
     const overlay = document.createElement("div");
     overlay.className = "fh-modal-overlay";
@@ -217,53 +213,26 @@
 
   hydrateJoinForm();
 
-  function wantsSpectator() {
-    const qs = new URLSearchParams(window.location.search);
-    const urlFlag = (qs.get("spectator") === "1") || (qs.get("admin") === "1");
-    const saved = localStorage.getItem("uno_spectator") === "1";
-    return urlFlag || saved;
-  }
-
   function doJoin() {
     const name = (nameInput.value || "").trim() || "Player";
     const lobby = (lobbyInput.value || "").trim() || "default";
-    const spectator = wantsSpectator();
-
     localStorage.setItem("uno_name", name);
     localStorage.setItem("uno_lobby", lobby);
-
-    socket.emit("join", { name, lobby, spectator });
+    socket.emit("join", { name, lobby });
   }
 
   joinBtn.addEventListener("click", doJoin);
   nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
   lobbyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
 
-  function setSpectatorUI(isSpectator) {
-    const lock = (el) => {
-      if (!el) return;
-      el.style.opacity = isSpectator ? "0.65" : "";
-      el.style.pointerEvents = isSpectator ? "none" : "";
-    };
-    lock(drawPile);
-    lock(unoBtn);
-    lock(relaxBtn);
-  }
-
   socket.on("me", (info) => {
     me = info;
 
+    // ✅ FIX: explicitly show game screen as block
     setVisible(joinScreen, false);
-    setVisible(gameScreen, true);
+    setVisible(gameScreen, true, "block");
 
-    if (window.matchMedia && window.matchMedia("(max-width: 780px)").matches) {
-      const ds = document.querySelectorAll(".fh-rail details");
-      ds.forEach((d, i) => { if (i === 0) return; d.open = false; });
-    }
-
-    setSpectatorUI(!!me.spectator);
-
-    toast(me.spectator ? `Joined as Spectator/Admin: ${me.lobby}` : `Joined lobby: ${me.lobby}`);
+    toast(`Joined lobby: ${me.lobby}`);
     playSound("joined");
     loadLeaderboard();
   });
@@ -295,21 +264,14 @@
     appendChatLine(`<span style="opacity:.85">• ${esc(txt || "")}</span>`);
   });
 
-  socket.on("warn", (msg) => toast(msg || "Warning"));
+  socket.on("warn", (msg) => {
+    toast(msg || "Warning");
+  });
 
   // ---------------- Actions ----------------
-  if (drawPile) drawPile.addEventListener("click", () => {
-    if (me?.spectator) return toast("Spectators can't draw.");
-    socket.emit("drawCard");
-  });
-  if (unoBtn) unoBtn.addEventListener("click", () => {
-    if (me?.spectator) return toast("Spectators can't call UNO.");
-    socket.emit("callUno");
-  });
-  if (relaxBtn) relaxBtn.addEventListener("click", () => {
-    if (me?.spectator) return toast("Spectators can't play.");
-    socket.emit("playRelaxRequested");
-  });
+  if (drawPile) drawPile.addEventListener("click", () => socket.emit("drawCard"));
+  if (unoBtn) unoBtn.addEventListener("click", () => socket.emit("callUno"));
+  if (relaxBtn) relaxBtn.addEventListener("click", () => socket.emit("playRelaxRequested"));
 
   // ---------------- Render ----------------
   function setColorBadge(raw) {
@@ -345,15 +307,6 @@
       const isTurn = (p.sid === currentSid);
       right.textContent = isTurn ? "TURN" : "";
 
-      if (isTurn) {
-        right.style.padding = "2px 8px";
-        right.style.borderRadius = "999px";
-        right.style.border = "1px solid #ffffff26";
-        right.style.background = "rgba(255,255,255,.08)";
-        right.style.fontWeight = "800";
-        right.style.color = "var(--text)";
-      }
-
       row.appendChild(left);
       row.appendChild(right);
       playerList.appendChild(row);
@@ -386,29 +339,28 @@
       penTxt = ` • ⚠️ Stack: ${state.penalty.amount} on ${who}`;
     }
 
-    const specPrefix = me?.spectator ? "👀 Spectating • " : "";
     turnIndicator.textContent =
-      `${specPrefix}${isMyTurn ? "👉 Your turn" : `Turn: ${curName}`}${timerTxt}${penTxt}`;
+      `${isMyTurn ? "👉 Your turn" : `Turn: ${curName}`}${timerTxt}${penTxt}`;
   }
 
   function renderHand(state, hand) {
     if (!handRoot) return;
     const isMyTurn = me && state.current === me.sid;
-    const disabled = !!me?.spectator || !isMyTurn;
 
     handRoot.innerHTML = "";
     (hand || []).forEach((card, idx) => {
       const img = document.createElement("img");
       img.alt = card.type || "card";
       img.src = `assets/cards/${card.img || "back.png"}`;
+      img.title = `${card.color || ""} ${card.type || ""}${typeof card.value === "number" ? " " + card.value : ""}`;
 
-      if (disabled) {
+      if (!isMyTurn) {
         img.style.opacity = "0.65";
         img.style.pointerEvents = "none";
       }
 
       img.addEventListener("click", () => {
-        if (disabled) return;
+        if (!isMyTurn) return;
         socket.emit("playCard", { index: idx });
       });
 
@@ -416,7 +368,9 @@
     });
   }
 
-  setInterval(() => { if (lastState) renderTurn(lastState); }, 250);
+  setInterval(() => {
+    if (lastState) renderTurn(lastState);
+  }, 250);
 
   socket.on("hand", (hand) => {
     lastHand = Array.isArray(hand) ? hand : [];
@@ -426,6 +380,7 @@
   socket.on("state", (state) => {
     lastState = state || null;
     if (!lastState) return;
+
     renderTop(lastState);
     renderPlayers(lastState);
     renderTurn(lastState);
@@ -437,7 +392,6 @@
   // ---------------- Specials: chooseColor ----------------
   socket.on("chooseColor", () => {
     const body = document.createElement("div");
-
     const intro = document.createElement("div");
     intro.style.opacity = "0.9";
     intro.style.marginBottom = "12px";
