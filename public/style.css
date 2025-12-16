@@ -535,3 +535,7 @@ hr{border:none; border-top:1px solid rgba(255,255,255,.10);}
 a{color: rgba(56,189,248,.95);}
 ul{padding-left:18px;}
 li{margin:4px 0;}
+
+/* --- Safety: JS toggles visibility via inline style.display --- */
+#join-screen { display: block; }
+#game-screen { display: none; }
