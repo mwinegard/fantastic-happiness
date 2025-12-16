@@ -1,9 +1,9 @@
 /*
   game.js — Fantastic Happiness UNO client (Refined UI + Mobile friendly)
-  MATCHED TO PROVIDED server.js:
-  - uses state.penalty (not pendingPenalty)
-  - draw2 image snap/previews use *_draw.png (matches assets list)
-  - supports spectator join via ?spectator=1 or ?admin=1
+  MATCHED TO UPDATED server.js:
+  - uses state.penalty
+  - draw2 filename is *_draw.png
+  - supports join({ spectator:true })
 */
 
 (() => {
@@ -96,13 +96,13 @@
     if (type === "skip") return `${color}_skip.png`;
     if (type === "reverse") return `${color}_reverse.png`;
 
-    // ✅ FIX: your assets are *_draw.png (NOT *_draw2.png)
+    // ✅ FIX: your assets are *_draw.png (not *_draw2.png)
     if (type === "draw2") return `${color}_draw.png`;
 
     return "back.png";
   }
 
-  // ---------------- Toast (single reusable) ----------------
+  // ---------------- Toast ----------------
   let toastEl = null;
   let toastTimer = null;
 
@@ -126,35 +126,13 @@
     "draw", "joined", "lose", "number", "reverse", "skip", "special", "start", "uno", "wild", "win"
   ]);
 
-  let audioUnlocked = false;
-
-  function unlockAudioOnce() {
-    if (audioUnlocked) return;
-    audioUnlocked = true;
-
-    // iOS/Safari: must play during a user gesture at least once
-    try {
-      const a = new Audio("/assets/sounds/start.mp3");
-      a.volume = 0.001;
-      a.play().then(() => {
-        try { a.pause(); a.currentTime = 0; } catch {}
-      }).catch(() => {});
-    } catch {}
-  }
-
   function playSound(key) {
     if (muted) return;
     const k = String(key || "").trim();
     if (!k) return;
-
-    // allow unknown keys too, but keep your canonical list
-    const file = SOUND_KEYS.has(k) ? `${k}.mp3` : `${k}.mp3`;
-
-    try {
-      const a = new Audio(`/assets/sounds/${file}`);
-      a.volume = 0.9;
-      a.play().catch(() => {});
-    } catch {}
+    const a = new Audio(`assets/sounds/${k}.mp3`);
+    a.volume = 0.9;
+    a.play().catch(() => {});
   }
 
   function setMuteUI() {
@@ -165,14 +143,13 @@
 
   if (muteToggle) {
     muteToggle.addEventListener("click", () => {
-      unlockAudioOnce();
       muted = !muted;
       localStorage.setItem("uno_muted", muted ? "1" : "0");
       setMuteUI();
     });
   }
 
-  // ---------------- Modals (standardized, layered) ----------------
+  // ---------------- Modals ----------------
   function openModal(title, bodyNode, actions) {
     const overlay = document.createElement("div");
     overlay.className = "fh-modal-overlay";
@@ -240,15 +217,17 @@
 
   hydrateJoinForm();
 
-  function doJoin() {
-    unlockAudioOnce();
+  function wantsSpectator() {
+    const qs = new URLSearchParams(window.location.search);
+    const urlFlag = (qs.get("spectator") === "1") || (qs.get("admin") === "1");
+    const saved = localStorage.getItem("uno_spectator") === "1";
+    return urlFlag || saved;
+  }
 
+  function doJoin() {
     const name = (nameInput.value || "").trim() || "Player";
     const lobby = (lobbyInput.value || "").trim() || "default";
-
-    // ✅ spectator/admin never takes a seat:
-    const qs = new URLSearchParams(window.location.search);
-    const spectator = qs.get("spectator") === "1" || qs.get("admin") === "1";
+    const spectator = wantsSpectator();
 
     localStorage.setItem("uno_name", name);
     localStorage.setItem("uno_lobby", lobby);
@@ -260,8 +239,20 @@
   nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
   lobbyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doJoin(); });
 
+  function setSpectatorUI(isSpectator) {
+    const lock = (el) => {
+      if (!el) return;
+      el.style.opacity = isSpectator ? "0.65" : "";
+      el.style.pointerEvents = isSpectator ? "none" : "";
+    };
+    lock(drawPile);
+    lock(unoBtn);
+    lock(relaxBtn);
+  }
+
   socket.on("me", (info) => {
     me = info;
+
     setVisible(joinScreen, false);
     setVisible(gameScreen, true);
 
@@ -270,7 +261,9 @@
       ds.forEach((d, i) => { if (i === 0) return; d.open = false; });
     }
 
-    toast(`Joined lobby: ${me.lobby}${me.spectator ? " (spectator)" : ""}`);
+    setSpectatorUI(!!me.spectator);
+
+    toast(me.spectator ? `Joined as Spectator/Admin: ${me.lobby}` : `Joined lobby: ${me.lobby}`);
     playSound("joined");
     loadLeaderboard();
   });
@@ -286,7 +279,6 @@
 
   if (chatSend && chatInput) {
     chatSend.addEventListener("click", () => {
-      unlockAudioOnce();
       const text = (chatInput.value || "").trim();
       if (!text) return;
       socket.emit("chat", { text });
@@ -303,14 +295,21 @@
     appendChatLine(`<span style="opacity:.85">• ${esc(txt || "")}</span>`);
   });
 
-  socket.on("warn", (msg) => {
-    toast(msg || "Warning");
-  });
+  socket.on("warn", (msg) => toast(msg || "Warning"));
 
   // ---------------- Actions ----------------
-  if (drawPile) drawPile.addEventListener("click", () => { unlockAudioOnce(); socket.emit("drawCard"); });
-  if (unoBtn) unoBtn.addEventListener("click", () => { unlockAudioOnce(); socket.emit("callUno"); });
-  if (relaxBtn) relaxBtn.addEventListener("click", () => { unlockAudioOnce(); socket.emit("playRelaxRequested"); });
+  if (drawPile) drawPile.addEventListener("click", () => {
+    if (me?.spectator) return toast("Spectators can't draw.");
+    socket.emit("drawCard");
+  });
+  if (unoBtn) unoBtn.addEventListener("click", () => {
+    if (me?.spectator) return toast("Spectators can't call UNO.");
+    socket.emit("callUno");
+  });
+  if (relaxBtn) relaxBtn.addEventListener("click", () => {
+    if (me?.spectator) return toast("Spectators can't play.");
+    socket.emit("playRelaxRequested");
+  });
 
   // ---------------- Render ----------------
   function setColorBadge(raw) {
@@ -364,7 +363,7 @@
   function renderTop(state) {
     const top = state.top;
     if (discardTop) {
-      discardTop.src = top && top.img ? `/assets/cards/${top.img}` : "/assets/cards/back.png";
+      discardTop.src = top && top.img ? `assets/cards/${top.img}` : "assets/cards/back.png";
     }
     setColorBadge(state.color);
   }
@@ -387,29 +386,29 @@
       penTxt = ` • ⚠️ Stack: ${state.penalty.amount} on ${who}`;
     }
 
+    const specPrefix = me?.spectator ? "👀 Spectating • " : "";
     turnIndicator.textContent =
-      `${isMyTurn ? "👉 Your turn" : `Turn: ${curName}`}${timerTxt}${penTxt}`;
+      `${specPrefix}${isMyTurn ? "👉 Your turn" : `Turn: ${curName}`}${timerTxt}${penTxt}`;
   }
 
   function renderHand(state, hand) {
     if (!handRoot) return;
     const isMyTurn = me && state.current === me.sid;
+    const disabled = !!me?.spectator || !isMyTurn;
 
     handRoot.innerHTML = "";
     (hand || []).forEach((card, idx) => {
       const img = document.createElement("img");
       img.alt = card.type || "card";
-      img.src = `/assets/cards/${card.img || "back.png"}`;
-      img.title = `${card.color || ""} ${card.type || ""}${typeof card.value === "number" ? " " + card.value : ""}`;
+      img.src = `assets/cards/${card.img || "back.png"}`;
 
-      if (!isMyTurn) {
+      if (disabled) {
         img.style.opacity = "0.65";
         img.style.pointerEvents = "none";
       }
 
       img.addEventListener("click", () => {
-        unlockAudioOnce();
-        if (!isMyTurn) return;
+        if (disabled) return;
         socket.emit("playCard", { index: idx });
       });
 
@@ -417,10 +416,7 @@
     });
   }
 
-  // keep countdown fresh
-  setInterval(() => {
-    if (lastState) renderTurn(lastState);
-  }, 250);
+  setInterval(() => { if (lastState) renderTurn(lastState); }, 250);
 
   socket.on("hand", (hand) => {
     lastHand = Array.isArray(hand) ? hand : [];
@@ -430,14 +426,13 @@
   socket.on("state", (state) => {
     lastState = state || null;
     if (!lastState) return;
-
     renderTop(lastState);
     renderPlayers(lastState);
     renderTurn(lastState);
     renderHand(lastState, lastHand);
   });
 
-  socket.on("sound", (key) => { unlockAudioOnce(); playSound(key); });
+  socket.on("sound", (key) => playSound(key));
 
   // ---------------- Specials: chooseColor ----------------
   socket.on("chooseColor", () => {
@@ -473,347 +468,6 @@
     });
 
     body.appendChild(row);
-  });
-
-  // ---------------- Specials: Blue Look (reorder top N) ----------------
-  socket.on("lookTop", ({ cards }) => {
-    const list = Array.isArray(cards) ? cards : [];
-    const n = list.length;
-
-    const body = document.createElement("div");
-
-    const msg = document.createElement("div");
-    msg.style.opacity = "0.9";
-    msg.style.marginBottom = "12px";
-    msg.textContent = `Reorder the top ${n} cards of the deck (1 = next draw).`;
-    body.appendChild(msg);
-
-    if (!n) {
-      toast("Nothing to look at.");
-      return;
-    }
-
-    const table = document.createElement("div");
-    table.style.display = "grid";
-    table.style.gap = "10px";
-
-    const selects = [];
-
-    list.forEach((c, idx) => {
-      const row = document.createElement("div");
-      row.style.display = "grid";
-      row.style.gridTemplateColumns = "1fr 120px";
-      row.style.gap = "10px";
-      row.style.alignItems = "center";
-      row.style.padding = "10px";
-      row.style.border = "1px solid #ffffff18";
-      row.style.borderRadius = "14px";
-      row.style.background = "rgba(0,0,0,.18)";
-
-      const left = document.createElement("div");
-      left.textContent = `${String(c.color || "").toUpperCase()} ${String(c.type || "")}${typeof c.value === "number" ? " " + c.value : ""}`;
-      left.style.fontWeight = "700";
-
-      const sel = document.createElement("select");
-      sel.style.padding = "10px 10px";
-      sel.style.borderRadius = "12px";
-      sel.style.border = "1px solid #ffffff22";
-      sel.style.background = "rgba(255,255,255,.06)";
-      sel.style.color = "var(--text)";
-      for (let pos = 1; pos <= n; pos++) {
-        const opt = document.createElement("option");
-        opt.value = String(pos);
-        opt.textContent = String(pos);
-        if (pos === idx + 1) opt.selected = true;
-        sel.appendChild(opt);
-      }
-
-      selects.push(sel);
-
-      row.appendChild(left);
-      row.appendChild(sel);
-      table.appendChild(row);
-    });
-
-    body.appendChild(table);
-
-    openModal("Blue Look", body, [
-      {
-        label: "Confirm Order",
-        primary: true,
-        onClick: ({ close }) => {
-          const used = new Set();
-          const order = new Array(n).fill(null);
-
-          for (let cardIndex = 0; cardIndex < n; cardIndex++) {
-            const pos = Number(selects[cardIndex].value);
-            if (!Number.isInteger(pos) || pos < 1 || pos > n) continue;
-            if (used.has(pos)) { toast("Each position must be unique."); return; }
-            used.add(pos);
-            order[pos - 1] = cardIndex;
-          }
-
-          if (order.some(x => x === null)) { toast("Each position must be assigned once."); return; }
-          socket.emit("lookTopOrder", { order });
-          close();
-        }
-      }
-    ]);
-  });
-
-  // ---------------- Specials: Shopping (target + give 2 + take 1) ----------------
-  socket.on("shoppingChooseTarget", ({ targets }) => {
-    const list = Array.isArray(targets) ? targets : [];
-    const body = document.createElement("div");
-
-    const msg = document.createElement("div");
-    msg.style.opacity = "0.9";
-    msg.style.marginBottom = "12px";
-    msg.textContent = "Choose a target player:";
-    body.appendChild(msg);
-
-    const wrap = document.createElement("div");
-    wrap.style.display = "grid";
-    wrap.style.gap = "10px";
-
-    const modal = openModal("Shopping — Target", body, []);
-
-    list.forEach(t => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "fh-btn fh-btn-primary";
-      b.textContent = t.name || t.sid;
-      b.onclick = () => {
-        socket.emit("shoppingTargetChosen", { sid: t.sid });
-        modal.close();
-      };
-      wrap.appendChild(b);
-    });
-
-    body.appendChild(wrap);
-  });
-
-  socket.on("shoppingPickGive", ({ hand }) => {
-    const cards = Array.isArray(hand) ? hand : [];
-    const body = document.createElement("div");
-
-    const msg = document.createElement("div");
-    msg.style.opacity = "0.9";
-    msg.style.marginBottom = "12px";
-    msg.innerHTML = `Pick <b>two</b> cards to give:`;
-    body.appendChild(msg);
-
-    const chosen = new Set();
-    const grid = document.createElement("div");
-    grid.style.display = "flex";
-    grid.style.flexWrap = "wrap";
-    grid.style.gap = "10px";
-    grid.style.justifyContent = "center";
-
-    cards.forEach(c => {
-      const img = document.createElement("img");
-      img.src = `/assets/cards/${imgFromSnap(c)}`;
-      img.alt = c.type || "card";
-      img.style.width = "86px";
-      img.style.height = "124px";
-      img.style.objectFit = "contain";
-      img.style.borderRadius = "12px";
-      img.style.cursor = "pointer";
-      img.style.filter = "drop-shadow(0 10px 14px rgba(0,0,0,.35))";
-
-      img.onclick = () => {
-        const i = Number(c.i);
-        if (chosen.has(i)) chosen.delete(i);
-        else {
-          if (chosen.size >= 2) return;
-          chosen.add(i);
-        }
-        img.style.outline = chosen.has(i) ? "3px solid rgba(56,189,248,.85)" : "";
-      };
-
-      grid.appendChild(img);
-    });
-
-    body.appendChild(grid);
-
-    openModal("Shopping — Give", body, [
-      {
-        label: "Confirm",
-        primary: true,
-        onClick: ({ close }) => {
-          const arr = Array.from(chosen);
-          if (arr.length !== 2) { toast("Pick exactly two cards."); return; }
-          socket.emit("shoppingGiveChosen", { idx1: arr[0], idx2: arr[1] });
-          close();
-        }
-      }
-    ]);
-  });
-
-  socket.on("shoppingPickTake", ({ hand }) => {
-    const cards = Array.isArray(hand) ? hand : [];
-    const body = document.createElement("div");
-
-    const msg = document.createElement("div");
-    msg.style.opacity = "0.9";
-    msg.style.marginBottom = "12px";
-    msg.innerHTML = `Pick <b>one</b> card to take:`;
-    body.appendChild(msg);
-
-    let chosen = null;
-
-    const grid = document.createElement("div");
-    grid.style.display = "flex";
-    grid.style.flexWrap = "wrap";
-    grid.style.gap = "10px";
-    grid.style.justifyContent = "center";
-
-    const imgs = [];
-
-    cards.forEach(c => {
-      const img = document.createElement("img");
-      img.src = `/assets/cards/${imgFromSnap(c)}`;
-      img.alt = c.type || "card";
-      img.style.width = "86px";
-      img.style.height = "124px";
-      img.style.objectFit = "contain";
-      img.style.borderRadius = "12px";
-      img.style.cursor = "pointer";
-      img.style.filter = "drop-shadow(0 10px 14px rgba(0,0,0,.35))";
-
-      img.onclick = () => {
-        chosen = Number(c.i);
-        imgs.forEach(x => (x.style.outline = ""));
-        img.style.outline = "3px solid rgba(56,189,248,.85)";
-      };
-
-      imgs.push(img);
-      grid.appendChild(img);
-    });
-
-    body.appendChild(grid);
-
-    openModal("Shopping — Take", body, [
-      {
-        label: "Confirm",
-        primary: true,
-        onClick: ({ close }) => {
-          if (chosen == null) { toast("Pick one card."); return; }
-          socket.emit("shoppingTakeChosen", { idx: chosen });
-          close();
-        }
-      }
-    ]);
-  });
-
-  // ---------------- Specials: Pinky Promise ----------------
-  socket.on("promiseChooseTarget", ({ targets }) => {
-    const list = Array.isArray(targets) ? targets : [];
-    const body = document.createElement("div");
-
-    const msg = document.createElement("div");
-    msg.style.opacity = "0.9";
-    msg.style.marginBottom = "12px";
-    msg.textContent = "Choose a player to Pinky Promise with:";
-    body.appendChild(msg);
-
-    const wrap = document.createElement("div");
-    wrap.style.display = "grid";
-    wrap.style.gap = "10px";
-
-    const modal = openModal("Pinky Promise", body, []);
-
-    list.forEach(t => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "fh-btn fh-btn-primary";
-      b.textContent = t.name || t.sid;
-      b.onclick = () => {
-        socket.emit("promiseTargetChosen", { sid: t.sid });
-        modal.close();
-      };
-      wrap.appendChild(b);
-    });
-
-    body.appendChild(wrap);
-  });
-
-  // ---------------- Specials: Rainbow ----------------
-  socket.on("rainbowPick", ({ hand }) => {
-    const cards = Array.isArray(hand) ? hand : [];
-    const needed = ["red", "yellow", "green", "blue"];
-    const pickedByColor = new Map();
-
-    const body = document.createElement("div");
-
-    const msg = document.createElement("div");
-    msg.style.opacity = "0.9";
-    msg.style.marginBottom = "10px";
-    msg.innerHTML = `Pick <b>one of each color</b> (Red, Yellow, Green, Blue).`;
-    body.appendChild(msg);
-
-    const hint = document.createElement("div");
-    hint.style.opacity = "0.8";
-    hint.style.marginBottom = "12px";
-    hint.textContent = "Only one per color counts.";
-    body.appendChild(hint);
-
-    const grid = document.createElement("div");
-    grid.style.display = "flex";
-    grid.style.flexWrap = "wrap";
-    grid.style.gap = "10px";
-    grid.style.justifyContent = "center";
-
-    function refreshOutlines() {
-      Array.from(grid.children).forEach((imgEl) => {
-        const ix = Number(imgEl.getAttribute("data-idx"));
-        const c = cards.find(x => Number(x.i) === ix);
-        const col = c?.color;
-        const picked = pickedByColor.get(col);
-        imgEl.style.outline = (picked === ix) ? "3px solid rgba(56,189,248,.85)" : "";
-      });
-    }
-
-    cards.forEach(c => {
-      const img = document.createElement("img");
-      img.src = `/assets/cards/${imgFromSnap(c)}`;
-      img.alt = c.type || "card";
-      img.style.width = "86px";
-      img.style.height = "124px";
-      img.style.objectFit = "contain";
-      img.style.borderRadius = "12px";
-      img.style.cursor = "pointer";
-      img.style.filter = "drop-shadow(0 10px 14px rgba(0,0,0,.35))";
-      img.setAttribute("data-idx", String(c.i));
-
-      img.onclick = () => {
-        const col = c.color;
-        if (!needed.includes(col)) return;
-        pickedByColor.set(col, Number(c.i));
-        refreshOutlines();
-      };
-
-      grid.appendChild(img);
-    });
-
-    body.appendChild(grid);
-
-    openModal("Rainbow", body, [
-      {
-        label: "Confirm",
-        primary: true,
-        onClick: ({ close }) => {
-          const indices = [];
-          for (const col of needed) {
-            const ix = pickedByColor.get(col);
-            if (ix == null) { toast(`Missing: ${col.toUpperCase()}`); return; }
-            indices.push(ix);
-          }
-          socket.emit("rainbowChosen", { indices });
-          close();
-        }
-      }
-    ]);
   });
 
   // ---------------- Leaderboard ----------------
