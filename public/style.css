@@ -1,32 +1,654 @@
-body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif; margin:0; background:#f6f6f6; color:#222; }
-.panel { max-width: 960px; margin: 20px auto; background:#fff; border:1px solid #e5e5e5; border-radius:8px; padding:16px; }
-.row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-button { padding:6px 10px; border:1px solid #ddd; background:#fafafa; border-radius:6px; cursor:pointer; }
-button:disabled { opacity: .5; cursor: not-allowed; }
-#player-list .row { justify-content: space-between; }
-#chat-log { height: 160px; overflow:auto; background:#fafafa; border:1px solid #eee; padding:8px; border-radius:6px; }
+/* =========================================================
+   Fantastic Happiness UNO — Refined UI (mobile-first)
+   - Sticky top HUD + sticky hand dock
+   - Safe-area padding (iOS notch / home bar)
+   - Consistent modal layering (fallback for legacy IDs/classes)
+   ========================================================= */
 
-#player-hand {
-  display: flex;
+:root{
+  --bg0:#07101f;
+  --bg1:#0b5fb3;
+  --bg2:#6d28d9;
+
+  --card:#0b1220cc;          /* translucent panel */
+  --cardSolid:#0b1220;
+  --stroke:#ffffff1a;
+
+  --text:#eaf2ff;
+  --muted:#b7c7e7;
+  --muted2:#86a0c9;
+
+  --good:#22c55e;
+  --warn:#f59e0b;
+  --danger:#ef4444;
+  --info:#38bdf8;
+
+  --shadow: 0 16px 40px rgba(0,0,0,.35);
+  --shadow2: 0 10px 25px rgba(0,0,0,.28);
+
+  --r12: 12px;
+  --r16: 16px;
+  --r20: 20px;
+
+  --pad: 14px;
+  --pad2: 18px;
+
+  --topbarH: 74px;
+  --dockH: 140px;
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  margin:0;
+  color:var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  background:
+    radial-gradient(1200px 800px at 15% 15%, rgba(56,189,248,.22), transparent 60%),
+    radial-gradient(1100px 700px at 85% 30%, rgba(109,40,217,.20), transparent 55%),
+    radial-gradient(900px 600px at 55% 85%, rgba(34,197,94,.14), transparent 55%),
+    linear-gradient(180deg, var(--bg0), #060b14 55%, #050913);
+  overflow-x:hidden;
+}
+
+/* Prevent iOS tap highlight weirdness */
+button, a { -webkit-tap-highlight-color: transparent; }
+img { max-width:100%; display:block; }
+
+.fh-shell{
+  min-height:100dvh;
+  padding:
+    calc(env(safe-area-inset-top) + 18px)
+    calc(env(safe-area-inset-right) + 14px)
+    calc(env(safe-area-inset-bottom) + 18px)
+    calc(env(safe-area-inset-left) + 14px);
+}
+
+/* ===================== JOIN ===================== */
+.fh-join{
+  display:grid;
+  place-items:center;
+}
+
+.fh-card{
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow);
+  border-radius: var(--r20);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.fh-join-card{
+  width:min(520px, 100%);
+  padding: 22px;
+}
+
+.fh-join-head{
+  display:flex;
+  gap:14px;
+  align-items:center;
+  margin-bottom: 14px;
+}
+
+.fh-badge{
+  width:46px;height:46px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(11,95,179,.95), rgba(109,40,217,.9));
+  box-shadow: 0 10px 26px rgba(0,0,0,.35);
+  display:grid;
+  place-items:center;
+  font-weight: 800;
+  letter-spacing:.04em;
+}
+
+.fh-title{
+  margin:0;
+  font-size: 22px;
+  line-height:1.15;
+}
+.fh-subtitle{
+  margin:4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.fh-form{ display:grid; gap:10px; margin-top: 10px; }
+.fh-label{ font-size: 12px; color: var(--muted2); }
+.fh-input{
+  width:100%;
+  border-radius: 14px;
+  padding: 12px 12px;
+  border: 1px solid #ffffff1f;
+  outline:none;
+  color: var(--text);
+  background: rgba(0,0,0,.22);
+}
+.fh-input::placeholder{ color:#9bb3da; }
+
+.fh-muted{
+  color: var(--muted);
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+/* ===================== BUTTONS ===================== */
+.fh-btn{
+  border: 1px solid #ffffff24;
+  border-radius: 14px;
+  padding: 11px 12px;
+  color: var(--text);
+  background: rgba(255,255,255,.08);
+  cursor:pointer;
+  user-select:none;
+  box-shadow: 0 10px 22px rgba(0,0,0,.18);
+  transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  font-weight: 650;
+  letter-spacing:.01em;
+}
+.fh-btn:active{ transform: translateY(1px) scale(.99); }
+.fh-btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  box-shadow:none;
+}
+
+.fh-btn-primary{
+  background: linear-gradient(135deg, rgba(56,189,248,.9), rgba(11,95,179,.92));
+  border-color: rgba(56,189,248,.35);
+}
+.fh-btn-primary:hover{ background: linear-gradient(135deg, rgba(56,189,248,1), rgba(11,95,179,.95)); }
+
+.fh-btn-ghost{
+  background: rgba(255,255,255,.06);
+}
+.fh-btn-ghost:hover{
+  background: rgba(255,255,255,.10);
+}
+
+.fh-btn-warn{
+  background: linear-gradient(135deg, rgba(245,158,11,.95), rgba(239,68,68,.78));
+  border-color: rgba(245,158,11,.35);
+}
+
+/* ===================== GAME LAYOUT ===================== */
+.fh-game{
+  padding-top: calc(env(safe-area-inset-top) + 10px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--dockH) + 14px);
+}
+
+.fh-topbar{
+  position: sticky;
+  top: env(safe-area-inset-top);
+  z-index: 900;
+  display:flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+
+  min-height: var(--topbarH);
+  padding: 12px 12px;
+  border-radius: var(--r20);
+  background: linear-gradient(180deg, rgba(11,18,32,.72), rgba(11,18,32,.48));
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow2);
+}
+
+.fh-top-left{
+  display:flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.fh-top-right{
+  display:flex;
+  gap: 10px;
+  align-items:center;
   flex-wrap: wrap;
+  justify-content:flex-end;
+}
+
+.fh-top-actions{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+}
+
+.fh-piles{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.fh-pile{
+  border: 1px solid #ffffff1f;
+  background: rgba(255,255,255,.06);
+  border-radius: 18px;
+  padding: 10px 10px;
+  cursor:pointer;
+  box-shadow: 0 10px 22px rgba(0,0,0,.18);
+  display:grid;
   gap: 8px;
-  justify-content: center;
-  align-items: flex-end;
-  padding: 8px;
-  max-width: 100%;
+  place-items:center;
+  min-width: 92px;
+}
+.fh-pile:active{ transform: translateY(1px); }
+
+.fh-pile-label{
+  font-size: 11px;
+  color: var(--muted2);
+  letter-spacing:.04em;
+  text-transform: uppercase;
 }
 
-.card-img {
-  width: clamp(48px, 8vw, 72px);
-  height: auto;
-  user-select: none;
-  transition: transform 80ms ease-in-out, filter 80ms ease-in-out, opacity 80ms;
+.fh-card-img{
+  width: 64px;
+  height: 92px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(0,0,0,.35));
 }
 
-.card-img:hover { transform: translateY(-2px); }
+.fh-status{
+  display:flex;
+  gap: 12px;
+  align-items:center;
+  min-width: 0;
+}
 
-.card-img.disabled {
-  filter: grayscale(100%) brightness(0.8);
-  opacity: 0.6;
-  pointer-events: none;
+.fh-status-label{
+  font-size: 11px;
+  color: var(--muted2);
+  text-transform: uppercase;
+  letter-spacing:.05em;
+}
+
+.fh-color-badge{
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid #ffffff1f;
+  font-weight: 750;
+  font-size: 13px;
+  min-width: 48px;
+  text-align:center;
+}
+
+.fh-turn-wrap{ display:flex; gap:10px; align-items:center; }
+.fh-turn{
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid #ffffff1f;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  max-width: 34vw;
+  overflow:hidden;
+  text-overflow: ellipsis;
+}
+
+/* 2-col layout: players + rail */
+.fh-layout{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.fh-panel{
+  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+  border: 1px solid var(--stroke);
+  border-radius: var(--r20);
+  box-shadow: var(--shadow2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  overflow:hidden;
+}
+
+.fh-panel-head{
+  padding: 12px 14px;
+  border-bottom: 1px solid #ffffff14;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+
+.fh-panel-title{
+  margin:0;
+  font-size: 14px;
+  letter-spacing:.02em;
+}
+
+/* Players */
+.fh-player-list{
+  padding: 10px;
+  display:grid;
+  gap: 8px;
+}
+
+.fh-player-list .player,
+#player-list .player,
+#player-list .playerRow{
+  /* supports legacy renderers that might use these classnames */
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  gap: 10px;
+  padding: 10px 10px;
+  border: 1px solid #ffffff18;
+  border-radius: 14px;
+  background: rgba(0,0,0,.20);
+}
+
+.fh-player-list .player .name,
+#player-list .name{
+  font-weight: 750;
+  overflow:hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fh-player-list .player .meta,
+#player-list .meta{
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Rail (chat + leaderboard) */
+.fh-rail{
+  display:grid;
+  gap: 12px;
+}
+
+.fh-details{
+  padding: 0;
+}
+
+.fh-summary{
+  list-style:none;
+  cursor:pointer;
+  padding: 12px 14px;
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #ffffff14;
+}
+.fh-summary::-webkit-details-marker{ display:none; }
+
+.fh-chip{
+  font-size: 11px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(56,189,248,.14);
+  border: 1px solid rgba(56,189,248,.25);
+  color: #d6f3ff;
+}
+.fh-chip-muted{
+  background: rgba(255,255,255,.08);
+  border-color: #ffffff1f;
+  color: var(--muted);
+}
+
+/* Chat */
+.fh-chat-log,
+#chat-log{
+  padding: 12px 12px 0;
+  height: 220px;
+  overflow:auto;
+  scrollbar-width: thin;
+}
+.fh-chat-log .msg,
+#chat-log .msg,
+#chat-log div{
+  padding: 8px 10px;
+  border: 1px solid #ffffff14;
+  background: rgba(0,0,0,.18);
+  border-radius: 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.fh-chat-row{
+  display:flex;
+  gap: 10px;
+  padding: 12px;
+}
+.fh-chat-input{
+  flex: 1;
+}
+
+/* Leaderboard */
+.fh-leaderboard,
+#leaderboard{
+  padding: 12px;
+  overflow:auto;
+}
+#leaderboard table{
+  width:100%;
+  border-collapse: collapse;
+}
+#leaderboard th, #leaderboard td{
+  text-align:left;
+  padding: 10px 8px;
+  border-bottom: 1px solid #ffffff12;
+  font-size: 13px;
+}
+#leaderboard th{
+  color: var(--muted2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing:.05em;
+}
+
+/* ===================== HAND DOCK ===================== */
+.fh-hand-dock{
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
+  z-index: 850;
+
+  padding:
+    10px
+    calc(env(safe-area-inset-right) + 12px)
+    calc(env(safe-area-inset-bottom) + 10px)
+    calc(env(safe-area-inset-left) + 12px);
+
+  background: linear-gradient(180deg, rgba(5,9,19,.20), rgba(5,9,19,.82));
+  border-top: 1px solid #ffffff14;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.fh-hand-head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 0 6px 8px;
+}
+
+.fh-hand-hint{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fh-hand,
+#player-hand{
+  display:flex;
+  gap: 10px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding: 6px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.fh-hand::-webkit-scrollbar,
+#player-hand::-webkit-scrollbar{ display:none; }
+
+/* Supports a bunch of possible card DOM outputs */
+#player-hand img,
+#player-hand button img,
+.fh-hand img{
+  width: 78px;
+  height: 112px;
+  object-fit: contain;
+  border-radius: 10px;
+  filter: drop-shadow(0 10px 14px rgba(0,0,0,.35));
+  scroll-snap-align: start;
+}
+
+/* If your JS wraps each card in a button/div */
+.hand-card,
+.card,
+.cardBtn,
+.card-button,
+#player-hand .card,
+#player-hand .hand-card,
+#player-hand button{
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor:pointer;
+}
+#player-hand button:active{
+  transform: translateY(1px) scale(.99);
+}
+
+/* ===================== COLOR BADGE HELPERS ===================== */
+.color-red{ background: rgba(239,68,68,.22) !important; border-color: rgba(239,68,68,.35) !important; }
+.color-yellow{ background: rgba(245,158,11,.22) !important; border-color: rgba(245,158,11,.35) !important; }
+.color-green{ background: rgba(34,197,94,.22) !important; border-color: rgba(34,197,94,.35) !important; }
+.color-blue{ background: rgba(56,189,248,.22) !important; border-color: rgba(56,189,248,.35) !important; }
+.color-wild{ background: rgba(255,255,255,.10) !important; border-color: rgba(255,255,255,.24) !important; }
+
+/* ===================== MODALS + TOASTS (layering) ===================== */
+/* New system */
+.fh-modal-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 18px;
+}
+
+.fh-modal{
+  width: min(560px, 100%);
+  border-radius: var(--r20);
+  background: linear-gradient(180deg, rgba(11,18,32,.92), rgba(11,18,32,.78));
+  border: 1px solid #ffffff1f;
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+
+.fh-modal-header{
+  padding: 14px 16px;
+  border-bottom: 1px solid #ffffff14;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+.fh-modal-title{
+  margin:0;
+  font-size: 15px;
+  letter-spacing:.02em;
+}
+
+.fh-modal-body{
+  padding: 14px 16px;
+}
+
+.fh-modal-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+
+.fh-toast{
+  position: fixed;
+  z-index: 3000;
+  left: 12px;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + var(--dockH) + 10px);
+  margin: 0 auto;
+  width: min(540px, 100%);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(0,0,0,.55);
+  border: 1px solid #ffffff1f;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow2);
+  font-size: 13px;
+  display:none;
+}
+.fh-toast.show{ display:block; }
+
+/* Legacy/fallback: if your existing code uses different IDs/classes */
+.modal,
+#modal,
+#colorModal,
+#shoppingModal,
+#pinkyPromiseModal,
+#rainbowModal,
+#blueLookModal{
+  z-index: 2001 !important;
+}
+.overlay,
+#overlay,
+#modal-overlay,
+.modal-overlay{
+  z-index: 2000 !important;
+}
+.modal-content,
+#modal-content{
+  background: rgba(11,18,32,.92);
+  border: 1px solid #ffffff1f;
+  border-radius: var(--r20);
+  box-shadow: var(--shadow);
+}
+
+/* ===================== RESPONSIVE ===================== */
+@media (min-width: 860px){
+  :root{ --dockH: 160px; }
+  .fh-layout{
+    grid-template-columns: 1.25fr .75fr;
+    align-items:start;
+  }
+  .fh-rail{
+    position: sticky;
+    top: calc(env(safe-area-inset-top) + var(--topbarH) + 14px);
+  }
+  .fh-chat-log{ height: 260px; }
+  .fh-card-img{ width: 72px; height: 104px; }
+  #player-hand img, .fh-hand img{ width: 92px; height: 132px; }
+}
+
+@media (max-width: 420px){
+  .fh-topbar{
+    padding: 10px;
+    gap: 10px;
+  }
+  .fh-pile{ min-width: 84px; }
+  .fh-turn{ max-width: 42vw; }
+  #player-hand img, .fh-hand img{ width: 72px; height: 104px; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce){
+  *{ transition:none !important; scroll-behavior:auto !important; }
 }
