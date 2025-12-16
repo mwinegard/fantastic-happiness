@@ -1,479 +1,537 @@
-/* ---------------------------------------------------------
-   Fantastic Happiness UNO — Refined UI + Mobile-first
-   Key layering targets:
-   - Toast: highest
-   - Modal overlay: above EVERYTHING else
-   - Rails/details/chat: below modals
---------------------------------------------------------- */
+/* public/style.css — Fantastic Happiness UNO (Refined, Mobile-first, Modal-safe) */
 
+/* ---------- Theme ---------- */
 :root{
-  --bg0:#060b16;
-  --bg1:#0b1530;
-  --card: rgba(255,255,255,.06);
-  --card2: rgba(255,255,255,.10);
-  --stroke: rgba(255,255,255,.12);
-  --stroke2: rgba(255,255,255,.18);
+  --bg0:#070b14;
+  --bg1:#0b1220;
+  --card:rgba(255,255,255,.06);
+  --stroke:rgba(255,255,255,.12);
+  --stroke2:rgba(255,255,255,.10);
+  --text:#e5e7eb;
+  --muted:rgba(229,231,235,.75);
+  --shadow:0 18px 40px rgba(0,0,0,.45);
+  --radius:18px;
 
-  --text: rgba(255,255,255,.92);
-  --muted: rgba(255,255,255,.70);
+  --accent: rgba(56,189,248,.85);
+  --accent2: rgba(99,102,241,.75);
+  --good: rgba(34,197,94,.90);
+  --warn: rgba(245,158,11,.92);
+  --bad: rgba(239,68,68,.92);
 
-  --accent:#38bdf8;
-  --accent2:#22c55e;
-
-  --shadow: 0 18px 40px rgba(0,0,0,.45);
-  --radius: 18px;
-
-  --z-base: 1;
-  --z-rail: 10;
-  --z-hand: 20;
-  --z-modal: 5000;
-  --z-toast: 6500;
-
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-
-  --handCardW: clamp(66px, 18vw, 98px);
-  --handGap: 10px;
+  --z-topbar: 10;
+  --z-modal: 9999;
+  --z-toast: 10000;
 }
 
-*{ box-sizing:border-box; }
-html,body{ height:100%; }
+html,body{height:100%;}
+*{box-sizing:border-box;}
 body{
   margin:0;
-  color:var(--text);
   background:
-    radial-gradient(1200px 800px at 20% 10%, rgba(56,189,248,.22), transparent 55%),
-    radial-gradient(1200px 800px at 90% 30%, rgba(34,197,94,.14), transparent 55%),
+    radial-gradient(1200px 700px at 20% 0%, rgba(59,130,246,.20), transparent 60%),
+    radial-gradient(1100px 700px at 90% 20%, rgba(34,197,94,.16), transparent 58%),
+    radial-gradient(900px 600px at 50% 110%, rgba(245,158,11,.14), transparent 62%),
     linear-gradient(180deg, var(--bg0), var(--bg1));
+  color:var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  padding:
-    calc(10px + var(--safe-top))
-    calc(10px + var(--safe-right))
-    calc(10px + var(--safe-bottom))
-    calc(10px + var(--safe-left));
   overflow-x:hidden;
 }
 
-/* ---------- generic helpers ---------- */
-a{ color:var(--accent); }
-small{ color:var(--muted); }
-hr{ border:none; border-top:1px solid var(--stroke); margin:14px 0; }
-
-/* ---------- Join screen ---------- */
-#join-screen{
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 22px;
-  border: 1px solid var(--stroke);
-  border-radius: calc(var(--radius) + 2px);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-  box-shadow: var(--shadow);
-}
-#join-screen h1, #join-screen h2, #join-screen h3{ margin:0 0 12px; }
-#join-screen label{
-  display:block;
-  font-weight: 700;
-  margin: 12px 0 6px;
-  color: var(--muted);
-}
-#join-screen input{
-  width:100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke2);
-  background: rgba(0,0,0,.28);
-  color: var(--text);
-  outline: none;
-}
-#join-screen input:focus{
-  border-color: rgba(56,189,248,.55);
-  box-shadow: 0 0 0 4px rgba(56,189,248,.18);
-}
-#joinbtn{ width:100%; margin-top: 14px; }
-
-/* ---------- Game screen base ---------- */
-#game-screen{
-  width:100%;
-  min-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom));
-  display: grid;
-  grid-template-columns: 1.25fr 0.9fr;
-  gap: 14px;
-  align-items: start;
-}
-
-/* If your HTML uses .fh-main /.fh-rail, we style them; otherwise we style any likely blocks */
-.fh-main,
-#board,
-#main,
-.main{
-  min-width: 0;
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius);
-  background: rgba(255,255,255,.03);
-  box-shadow: var(--shadow);
-  padding: 14px;
-  position: relative;
-  z-index: var(--z-base);
-}
-
-.fh-rail,
-#rail,
-#side,
-.sidebar{
-  min-width: 0;
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius);
-  background: rgba(255,255,255,.03);
-  box-shadow: var(--shadow);
-  padding: 14px;
-  position: relative;
-  z-index: var(--z-rail);
-}
-
-/* ---------- Board top area ---------- */
-#turn-indicator{
-  font-weight: 800;
-  letter-spacing: .2px;
-  padding: 10px 12px;
-  border: 1px solid var(--stroke);
-  border-radius: 16px;
-  background: rgba(0,0,0,.22);
-}
-
-#color-badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-width: 70px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.06);
-  font-weight: 900;
-  letter-spacing: .8px;
-  text-transform: uppercase;
-}
-
-#color-badge.color-red{ background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.35); }
-#color-badge.color-yellow{ background: rgba(234,179,8,.18); border-color: rgba(234,179,8,.35); }
-#color-badge.color-green{ background: rgba(34,197,94,.16); border-color: rgba(34,197,94,.32); }
-#color-badge.color-blue{ background: rgba(56,189,248,.16); border-color: rgba(56,189,248,.32); }
-#color-badge.color-wild{ background: rgba(168,85,247,.16); border-color: rgba(168,85,247,.30); }
-
-/* ---------- Piles ---------- */
-#discard-top,
-#draw-pile img,
-#draw-pile{
-  border-radius: 14px;
-}
-
-#discard-top{
-  width: clamp(110px, 16vw, 160px);
-  height: auto;
-  display:block;
-  object-fit: contain;
-  filter: drop-shadow(0 16px 22px rgba(0,0,0,.42));
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(0,0,0,.20);
-}
-
-#draw-pile{
-  width: clamp(110px, 16vw, 160px);
-  aspect-ratio: 3/4.3;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(0,0,0,.22);
+/* ---------- App Shell ---------- */
+.fh-app{
+  min-height:100%;
   display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  user-select:none;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform .08s ease, border-color .15s ease, background .15s ease;
+  flex-direction:column;
 }
-#draw-pile:active{ transform: scale(.98); }
-#draw-pile:hover{ border-color: rgba(56,189,248,.30); }
 
-/* ---------- Players list ---------- */
-#player-list{
-  display:grid;
-  gap: 10px;
-  margin-top: 10px;
+.fh-topbar{
+  position:sticky;
+  top:0;
+  z-index:var(--z-topbar);
+  backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(0,0,0,.40), rgba(0,0,0,.10));
+  border-bottom:1px solid rgba(255,255,255,.08);
+  padding:12px 14px;
 }
-.player{
+
+.fh-topbar-inner{
+  max-width:1200px;
+  margin:0 auto;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid var(--stroke);
-  background: rgba(0,0,0,.18);
+  gap:12px;
 }
-.player .name{
-  font-weight: 800;
-  overflow:hidden;
-  white-space:nowrap;
-  text-overflow:ellipsis;
-  max-width: 75%;
+
+.fh-brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
 }
-.player .meta{
-  font-weight: 800;
-  color: var(--muted);
+
+.fh-logo{
+  width:38px;height:38px;border-radius:12px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(56,189,248,.95), rgba(99,102,241,.70) 55%, rgba(0,0,0,0) 70%),
+    rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow: 0 12px 30px rgba(0,0,0,.35);
+  flex:0 0 auto;
+}
+
+.fh-title{display:flex; flex-direction:column; line-height:1.05; min-width:0;}
+.fh-title b{font-size:15px; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.fh-title span{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+.fh-wrap{
+  width:100%;
+  max-width:1200px;
+  margin:0 auto;
+  padding: 14px;
+  flex:1;
 }
 
 /* ---------- Buttons ---------- */
 .fh-btn{
   appearance:none;
-  border: 1px solid var(--stroke2);
+  border:1px solid rgba(255,255,255,.16);
   background: rgba(255,255,255,.06);
   color: var(--text);
-  padding: 10px 12px;
+  padding:10px 12px;
   border-radius: 14px;
-  font-weight: 900;
-  letter-spacing: .2px;
+  font-weight:900;
+  letter-spacing:.2px;
   cursor:pointer;
+  box-shadow: 0 10px 24px rgba(0,0,0,.25);
   user-select:none;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform .08s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
 }
-.fh-btn:active{ transform: translateY(1px) scale(.99); }
-.fh-btn:focus{ outline:none; box-shadow: 0 0 0 4px rgba(56,189,248,.18); border-color: rgba(56,189,248,.45); }
+
+.fh-btn:hover{filter:brightness(1.06);}
+.fh-btn:active{transform:translateY(1px);}
+.fh-btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  filter:saturate(.85);
+}
 
 .fh-btn-primary{
-  background: linear-gradient(180deg, rgba(56,189,248,.20), rgba(56,189,248,.10));
-  border-color: rgba(56,189,248,.38);
+  border-color: rgba(56,189,248,.35);
+  background: linear-gradient(180deg, rgba(56,189,248,.26), rgba(56,189,248,.10));
 }
-.fh-btn-primary:hover{ border-color: rgba(56,189,248,.55); }
 
 .fh-btn-ghost{
   background: rgba(255,255,255,.04);
-  border-color: rgba(255,255,255,.12);
+  box-shadow:none;
 }
 
-/* ---------- Hand tray (mobile-first) ---------- */
-#player-hand{
-  position: relative;
-  z-index: var(--z-hand);
-  margin-top: 12px;
+/* ---------- Cards / Containers ---------- */
+.fh-card{
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
 
+details.fh-card > summary{
+  list-style:none;
+  cursor:pointer;
+  padding: 12px 14px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+  user-select:none;
+}
+
+details.fh-card > summary::-webkit-details-marker{display:none;}
+details.fh-card[open] > summary{background: rgba(0,0,0,.14);}
+
+.fh-pane{
+  padding:12px 14px;
+  display:grid;
+  gap:10px;
+}
+
+/* ---------- Join Screen ---------- */
+#join-screen{
+  max-width:520px;
+  margin: 22px auto 0;
+  padding: 18px;
+}
+
+.fh-join-grid{
+  display:grid;
+  gap:12px;
+  margin-top:12px;
+}
+
+.fh-field label{
+  display:block;
+  font-size:12px;
+  color:var(--muted);
+  margin:0 0 6px;
+  font-weight:800;
+  letter-spacing:.15px;
+}
+
+.fh-field input{
+  width:100%;
+  padding:12px 12px;
+  border-radius: 14px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  color: var(--text);
+  outline:none;
+  font-weight:800;
+}
+
+.fh-field input:focus{
+  border-color: rgba(56,189,248,.45);
+  box-shadow: 0 0 0 4px rgba(56,189,248,.12);
+}
+
+.fh-join-actions{
   display:flex;
-  gap: var(--handGap);
-  padding: 12px;
-  border-radius: 18px;
-  border: 1px solid var(--stroke);
-  background: rgba(0,0,0,.22);
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  margin-top:10px;
+}
 
+.fh-join-hint{
+  margin-top:10px;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.35;
+}
+
+/* ---------- Game Layout ---------- */
+#game-screen{display:none;}
+
+.fh-grid{
+  display:grid;
+  grid-template-columns: 1.25fr .85fr;
+  gap: 14px;
+  align-items:start;
+}
+
+@media (max-width: 980px){
+  .fh-grid{grid-template-columns:1fr;}
+}
+
+.fh-board{
+  padding:14px;
+  display:grid;
+  gap:12px;
+}
+
+.fh-row{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.fh-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  font-weight:1000;
+  letter-spacing:.3px;
+}
+
+#color-badge{
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.06);
+  font-weight:1000;
+  letter-spacing:.4px;
+}
+
+/* Optional color classes if you ever want them */
+#color-badge.color-red{border-color: rgba(239,68,68,.35);}
+#color-badge.color-yellow{border-color: rgba(245,158,11,.35);}
+#color-badge.color-green{border-color: rgba(34,197,94,.35);}
+#color-badge.color-blue{border-color: rgba(59,130,246,.35);}
+#color-badge.color-wild{border-color: rgba(168,85,247,.35);}
+
+#turn-indicator{
+  font-size:13px;
+  color: var(--muted);
+  font-weight:900;
+  letter-spacing:.2px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width: 100%;
+}
+
+.fh-piles{
+  display:flex;
+  gap:14px;
+  justify-content:center;
+  align-items:center;
+  padding: 6px 0 4px;
+}
+
+.fh-pile{
+  display:grid;
+  gap:8px;
+  justify-items:center;
+}
+
+.fh-pile label{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:900;
+  letter-spacing:.25px;
+}
+
+.fh-cardimg{
+  width: 118px;
+  height: 170px;
+  object-fit: contain;
+  border-radius: 14px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.20);
+  box-shadow: 0 16px 30px rgba(0,0,0,.35);
+}
+
+@media (max-width: 420px){
+  .fh-cardimg{width:104px;height:150px;}
+}
+
+#draw-pile{
+  cursor:pointer;
+  transition: transform .12s ease, filter .12s ease;
+}
+#draw-pile:hover{filter:brightness(1.05);}
+#draw-pile:active{transform: translateY(1px) scale(.995);}
+
+.fh-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:center;
+  padding-top: 2px;
+}
+
+/* ---------- Hand ---------- */
+.fh-hand{
+  padding: 12px 12px 14px;
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+
+.fh-hand-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding: 8px 2px 10px;
+}
+
+.fh-hand-head b{font-size:13px; letter-spacing:.2px;}
+
+#player-hand{
+  display:flex;
+  gap:10px;
   overflow-x:auto;
-  overflow-y:hidden;
-  -webkit-overflow-scrolling: touch;
+  padding-bottom:6px;
   scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
 
 #player-hand img{
-  width: var(--handCardW);
-  height: auto;
-  flex: 0 0 auto;
+  width: 92px;
+  height: 132px;
   object-fit: contain;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(0,0,0,.20);
-  filter: drop-shadow(0 14px 18px rgba(0,0,0,.40));
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  box-shadow: 0 14px 28px rgba(0,0,0,.35);
+  scroll-snap-align: start;
   cursor:pointer;
-  scroll-snap-align: center;
-  transition: transform .10s ease, outline-color .10s ease;
-  -webkit-tap-highlight-color: transparent;
+  transition: transform .10s ease, filter .10s ease;
 }
-#player-hand img:active{ transform: scale(.98); }
 
-/* Desktop: allow wrap so you can see more cards at once */
+#player-hand img:hover{filter:brightness(1.05);}
+#player-hand img:active{transform: translateY(1px) scale(.995);}
+
 @media (min-width: 980px){
   #player-hand{
-    flex-wrap: wrap;
-    overflow-x:hidden;
-    scroll-snap-type: none;
+    flex-wrap:wrap;
+    overflow:visible;
+    justify-content:center;
   }
+}
+
+/* ---------- Players ---------- */
+.player{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.16);
+}
+
+.player .name{
+  font-weight:1000;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.player .meta{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:900;
 }
 
 /* ---------- Chat ---------- */
 #chat-log{
-  height: min(38vh, 360px);
+  min-height: 140px;
+  max-height: 220px;
   overflow:auto;
-  padding: 10px;
-  border-radius: 16px;
-  border: 1px solid var(--stroke);
-  background: rgba(0,0,0,.18);
-  line-height: 1.35;
-}
-#chat-input{
-  width:100%;
-  margin-top: 10px;
-  padding: 12px 12px;
+  padding:10px 12px;
   border-radius: 14px;
-  border: 1px solid var(--stroke2);
-  background: rgba(0,0,0,.22);
-  color: var(--text);
-  outline:none;
-}
-#chat-input:focus{
-  border-color: rgba(56,189,248,.55);
-  box-shadow: 0 0 0 4px rgba(56,189,248,.18);
-}
-#chat-send{
-  width:100%;
-  margin-top: 10px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  font-size:13px;
+  line-height:1.35;
 }
 
-/* ---------- Leaderboard table ---------- */
+.fh-chatbar{
+  display:grid;
+  grid-template-columns: 1fr auto;
+  gap:10px;
+}
+
+#chat-input{
+  width:100%;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  color: var(--text);
+  outline:none;
+  font-weight:900;
+}
+
+#chat-input:focus{
+  border-color: rgba(56,189,248,.45);
+  box-shadow: 0 0 0 4px rgba(56,189,248,.12);
+}
+
+/* ---------- Leaderboard ---------- */
 #leaderboard table{
   width:100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
 }
+
 #leaderboard th, #leaderboard td{
-  padding: 10px 8px;
+  padding: 8px 8px;
   border-bottom: 1px solid rgba(255,255,255,.10);
-}
-#leaderboard th{
   text-align:left;
-  color: var(--muted);
-  font-weight: 900;
+  vertical-align:top;
 }
 
-/* ---------- Toast ---------- */
-.fh-toast{
-  position: fixed;
-  left: 50%;
-  bottom: calc(16px + var(--safe-bottom));
-  transform: translateX(-50%) translateY(12px);
-  opacity: 0;
-  pointer-events:none;
-  z-index: var(--z-toast);
-
-  max-width: min(92vw, 560px);
-  padding: 12px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.72);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 18px 40px rgba(0,0,0,.55);
-  font-weight: 900;
-}
-.fh-toast.show{
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-  transition: opacity .16s ease, transform .16s ease;
+#leaderboard th{
+  color:var(--muted);
+  font-weight:1000;
+  font-size:12px;
+  letter-spacing:.25px;
 }
 
-/* ---------- Modal overlay (layering fix) ---------- */
+#leaderboard td{
+  font-weight:900;
+}
+
+/* ---------- Modal (game.js relies on these exact class names) ---------- */
 .fh-modal-overlay{
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
+  position:fixed; inset:0;
+  background: rgba(0,0,0,.62);
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:
-    calc(18px + var(--safe-top))
-    calc(14px + var(--safe-right))
-    calc(18px + var(--safe-bottom))
-    calc(14px + var(--safe-left));
-  background: rgba(0,0,0,.65);
-  backdrop-filter: blur(10px);
+  padding: 18px;
+  z-index: var(--z-modal);
 }
 
 .fh-modal{
-  width: min(720px, 94vw);
-  max-height: min(82dvh, 720px);
-  overflow: hidden;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: linear-gradient(180deg, rgba(20,28,54,.92), rgba(10,12,22,.92));
-  box-shadow: 0 26px 70px rgba(0,0,0,.65);
-  position: relative;
+  width:min(720px, 100%);
+  max-height: min(80vh, 720px);
+  overflow:auto;
+  background: rgba(18,24,38,.96);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius: 18px;
+  box-shadow: 0 22px 70px rgba(0,0,0,.60);
 }
 
 .fh-modal-header{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding: 14px 14px;
+  gap:10px;
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(255,255,255,.10);
 }
+
 .fh-modal-title{
   margin:0;
-  font-size: 16px;
-  font-weight: 1000;
-  letter-spacing: .3px;
+  font-size:15px;
+  letter-spacing:.2px;
+  font-weight:1000;
 }
-.fh-modal-body{
-  padding: 14px;
-  overflow:auto;
-  max-height: calc(min(82dvh, 720px) - 132px);
-}
+
+.fh-modal-body{padding: 12px 14px;}
 .fh-modal-actions{
   display:flex;
-  gap: 10px;
-  padding: 14px;
-  border-top: 1px solid rgba(255,255,255,.10);
+  gap:10px;
   justify-content:flex-end;
-}
-.fh-modal-actions .fh-btn{
-  min-width: 120px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255,255,255,.10);
 }
 
-/* ---------- Details blocks inside rail (nice collapsibles) ---------- */
-details{
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius: 16px;
-  background: rgba(0,0,0,.14);
-  padding: 10px 12px;
-}
-details + details{ margin-top: 10px; }
-summary{
-  cursor:pointer;
-  font-weight: 900;
+/* ---------- Toast (game.js uses .fh-toast + .show) ---------- */
+.fh-toast{
+  position:fixed;
+  left:50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.72);
+  border:1px solid rgba(255,255,255,.14);
   color: var(--text);
-  list-style: none;
-  -webkit-tap-highlight-color: transparent;
-}
-summary::-webkit-details-marker{ display:none; }
-
-/* ---------- Mobile layout ---------- */
-@media (max-width: 980px){
-  #game-screen{
-    grid-template-columns: 1fr;
-  }
-
-  /* Make rails feel like cards under the board */
-  .fh-rail, #rail, #side, .sidebar{
-    order: 2;
-  }
-  .fh-main, #board, #main, .main{
-    order: 1;
-  }
-
-  #chat-log{
-    height: min(32vh, 300px);
-  }
-
-  /* Reduce modal height on small screens so close button is always reachable */
-  .fh-modal{
-    max-height: min(86dvh, 680px);
-  }
+  padding: 10px 12px;
+  border-radius: 999px;
+  font-weight:1000;
+  letter-spacing:.2px;
+  opacity:0;
+  pointer-events:none;
+  transition: opacity .16s ease, transform .16s ease;
+  z-index: var(--z-toast);
+  box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  max-width: min(92vw, 520px);
+  white-space: nowrap;
+  overflow:hidden;
+  text-overflow: ellipsis;
 }
 
-/* ---------- Tiny phones ---------- */
-@media (max-width: 420px){
-  :root{ --handGap: 8px; }
-  #turn-indicator{ font-size: 14px; }
-  .player .name{ max-width: 68%; }
+.fh-toast.show{
+  opacity:1;
+  transform: translateX(-50%) translateY(-6px);
 }
 
-/* ---------- Reduce motion (accessibility) ---------- */
-@media (prefers-reduced-motion: reduce){
-  *{ transition:none !important; scroll-behavior:auto !important; }
-}
+/* ---------- Small UX niceties ---------- */
+hr{border:none; border-top:1px solid rgba(255,255,255,.10);}
+a{color: rgba(56,189,248,.95);}
+ul{padding-left:18px;}
+li{margin:4px 0;}
