@@ -1,14 +1,8 @@
 /*
   game.js — Fantastic Happiness UNO client (Refined UI + Mobile friendly)
-  - Socket.IO client for server.js protocol in this project
-  - Renders state + hand + players
-  - Handles specials:
-      chooseColor
-      lookTop (Blue Look reorder)
-      yellow_shopping (target + give 2 + take 1)
-      yellow_pinkypromise (target)
-      wild_rainbow (pick 1 of each color)
-  - Standardized modal/toast layering to match style.css
+  MATCHED TO PROVIDED server.js:
+  - uses state.penalty (not pendingPenalty)
+  - draw2 filename fixed to *_draw2.png for modal previews
 */
 
 (() => {
@@ -100,8 +94,7 @@
     if (type === "number" && typeof value === "number") return `${color}_${value}.png`;
     if (type === "skip") return `${color}_skip.png`;
     if (type === "reverse") return `${color}_reverse.png`;
-    if (type === "draw2") return `${color}_draw.png`;
-
+    if (type === "draw2") return `${color}_draw2.png`; // IMPORTANT: matches server.js
     return "back.png";
   }
 
@@ -155,7 +148,6 @@
 
   // ---------------- Modals (standardized, layered) ----------------
   function openModal(title, bodyNode, actions) {
-    // actions: [{label, onClick, primary}]
     const overlay = document.createElement("div");
     overlay.className = "fh-modal-overlay";
 
@@ -239,7 +231,6 @@
     setVisible(joinScreen, false);
     setVisible(gameScreen, true);
 
-    // On small screens, collapse any rail details except the first one (optional)
     if (window.matchMedia && window.matchMedia("(max-width: 780px)").matches) {
       const ds = document.querySelectorAll(".fh-rail details");
       ds.forEach((d, i) => { if (i === 0) return; d.open = false; });
@@ -318,7 +309,7 @@
       right.className = "meta";
 
       const isTurn = (p.sid === currentSid);
-      right.textContent = isTurn ? "TURN" : `${(p.handCount ?? p.hand ?? "") ? "" : ""}`; // server doesn't send counts to clients; keep clean
+      right.textContent = isTurn ? "TURN" : "";
 
       if (isTurn) {
         right.style.padding = "2px 8px";
@@ -354,14 +345,16 @@
     const s = secsLeft(state.turnEndsAt);
     const timerTxt = (s == null) ? "" : ` • ⏳ ${s}s`;
 
+    // IMPORTANT: server.js emits state.penalty
     let penTxt = "";
-    if (state.pendingPenalty && state.pendingPenalty.amount) {
-      const target = ps.find(p => p.sid === state.pendingPenalty.targetSid);
+    if (state.penalty && state.penalty.amount) {
+      const target = ps.find(p => p.sid === state.penalty.targetSid);
       const who = target ? target.name : "someone";
-      penTxt = ` • ⚠️ Stack: ${state.pendingPenalty.amount} on ${who}`;
+      penTxt = ` • ⚠️ Stack: ${state.penalty.amount} on ${who}`;
     }
 
-    turnIndicator.textContent = `${isMyTurn ? "👉 Your turn" : `Turn: ${curName}`}${timerTxt}${penTxt}`;
+    turnIndicator.textContent =
+      `${isMyTurn ? "👉 Your turn" : `Turn: ${curName}`}${timerTxt}${penTxt}`;
   }
 
   function renderHand(state, hand) {
