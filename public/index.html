@@ -2,72 +2,129 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>UNO</title>
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  />
+  <meta name="theme-color" content="#0b5fb3" />
+  <title>Fantastic Happiness UNO</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-  <div class="panel" id="join-screen">
-    <h1>Join a Lobby</h1>
-    <div class="row">
-      <input id="name" placeholder="Your name" />
-      <input id="lobby" placeholder="Lobby (e.g., default)" />
-      <button id="joinbtn">Join</button>
+  <!-- JOIN -->
+  <main id="join-screen" class="fh-shell fh-join">
+    <section class="fh-card fh-join-card">
+      <header class="fh-join-head">
+        <div class="fh-badge">FH</div>
+        <div>
+          <h1 class="fh-title">Fantastic Happiness UNO</h1>
+          <p class="fh-subtitle">Join a lobby and start slinging chaos.</p>
+        </div>
+      </header>
+
+      <div class="fh-form">
+        <label class="fh-label" for="name">Name</label>
+        <input id="name" class="fh-input" placeholder="Your name" autocomplete="name" />
+
+        <label class="fh-label" for="lobby">Lobby</label>
+        <input id="lobby" class="fh-input" placeholder="Lobby (e.g., default)" />
+
+        <button id="joinbtn" class="fh-btn fh-btn-primary">Join Lobby</button>
+
+        <p class="fh-muted">
+          Tip: your last name & lobby are remembered for quick join.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- GAME -->
+  <main id="game-screen" class="fh-shell fh-game" style="display:none;">
+    <!-- Top HUD -->
+    <header class="fh-topbar">
+      <div class="fh-top-left">
+        <div class="fh-piles">
+          <button class="fh-pile" type="button" aria-label="Discard pile">
+            <div class="fh-pile-label">Discard</div>
+            <img id="discard-top" src="assets/cards/back.png" alt="Top Discard" class="fh-card-img" />
+          </button>
+
+          <button class="fh-pile" type="button" aria-label="Draw pile">
+            <div class="fh-pile-label">Draw</div>
+            <img id="draw-pile" src="assets/cards/back.png" alt="Draw Pile" class="fh-card-img" />
+          </button>
+        </div>
+
+        <div class="fh-status">
+          <div class="fh-status-label">Color</div>
+          <div id="color-badge" class="fh-color-badge">—</div>
+
+          <div class="fh-turn-wrap">
+            <div class="fh-status-label">Turn</div>
+            <div id="turn-indicator" class="fh-turn">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fh-top-right">
+        <button id="mute-toggle" class="fh-btn fh-btn-ghost" type="button">🔊 Sound On</button>
+        <div class="fh-top-actions">
+          <button id="uno-btn" class="fh-btn fh-btn-warn" type="button">Call UNO</button>
+          <button id="relax-btn" class="fh-btn fh-btn-ghost" type="button">RELAX</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <div class="fh-layout">
+      <!-- Players -->
+      <section class="fh-panel fh-players">
+        <div class="fh-panel-head">
+          <h2 class="fh-panel-title">Players</h2>
+        </div>
+        <div id="player-list" class="fh-player-list"></div>
+      </section>
+
+      <!-- Right rail: chat + leaderboard (collapsible on mobile) -->
+      <aside class="fh-rail">
+        <section class="fh-panel">
+          <details class="fh-details" open>
+            <summary class="fh-summary">
+              <span>Table Chat</span>
+              <span class="fh-chip">live</span>
+            </summary>
+
+            <div id="chat-log" class="fh-chat-log"></div>
+
+            <div class="fh-chat-row">
+              <input id="chat-input" class="fh-input fh-chat-input" placeholder="Type a message…" />
+              <button id="chat-send" class="fh-btn fh-btn-primary" type="button">Send</button>
+            </div>
+          </details>
+        </section>
+
+        <section class="fh-panel">
+          <details class="fh-details">
+            <summary class="fh-summary">
+              <span>Global Leaderboard</span>
+              <span class="fh-chip fh-chip-muted">stats</span>
+            </summary>
+            <div id="leaderboard" class="fh-leaderboard"></div>
+          </details>
+        </section>
+      </aside>
     </div>
-    <p class="muted">Your last name and lobby are remembered for quick join.</p>
-  </div>
 
-  <div class="panel" id="game-screen" style="display:none;">
-    <h1>UNO</h1>
-
-    <!-- Top area: discard & draw -->
-    <div class="row" style="gap:16px;">
-      <div>
-        <div>Discard</div>
-        <img id="discard-top" src="assets/cards/back.png" alt="Top Discard" class="card-img" />
+    <!-- Hand dock -->
+    <footer class="fh-hand-dock" aria-label="Your hand">
+      <div class="fh-hand-head">
+        <h2 class="fh-panel-title">Your Hand</h2>
+        <div class="fh-muted fh-hand-hint">Tap a card to play • Swipe to scroll</div>
       </div>
-      <div>
-        <div>Draw</div>
-        <img id="draw-pile" src="assets/cards/back.png" alt="Draw Pile" class="card-img" />
-      </div>
-      <div>
-        <div>Color</div>
-        <div id="color-badge" style="font-weight:bold;">—</div>
-      </div>
-      <div style="margin-left:auto;">
-        <button id="mute-toggle">🔊 Sound On</button>
-      </div>
-    </div>
-
-    <!-- Turn indicator -->
-    <div class="row" style="margin-top:8px;">
-      <div id="turn-indicator">—</div>
-      <div>
-        <button id="uno-btn">Call UNO</button>
-        <button id="relax-btn">RELAX</button>
-      </div>
-    </div>
-
-    <!-- Players -->
-    <h3>Players</h3>
-    <div id="player-list"></div>
-
-    <!-- Hand -->
-    <h3>Your Hand</h3>
-    <div id="player-hand"></div>
-
-    <!-- Chat -->
-    <h3>Table Chat</h3>
-    <div id="chat-log"></div>
-    <div class="row" style="margin-top:6px;">
-      <input id="chat-input" placeholder="Type a message…" />
-      <button id="chat-send">Send</button>
-    </div>
-
-    <!-- Leaderboard -->
-    <h3>Global Leaderboard</h3>
-    <div id="leaderboard"></div>
-  </div>
+      <div id="player-hand" class="fh-hand"></div>
+    </footer>
+  </main>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
