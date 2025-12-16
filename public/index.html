@@ -2,130 +2,150 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width,initial-scale=1,viewport-fit=cover"
-  />
-  <meta name="theme-color" content="#0b5fb3" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Fantastic Happiness UNO</title>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
-  <!-- JOIN -->
-  <main id="join-screen" class="fh-shell fh-join">
-    <section class="fh-card fh-join-card">
-      <header class="fh-join-head">
-        <div class="fh-badge">FH</div>
-        <div>
-          <h1 class="fh-title">Fantastic Happiness UNO</h1>
-          <p class="fh-subtitle">Join a lobby and start slinging chaos.</p>
+  <!-- ---------------- JOIN SCREEN ---------------- -->
+  <div id="join-screen">
+    <h2 style="margin:0 0 8px;">Fantastic Happiness UNO</h2>
+    <div style="opacity:.75; margin-bottom:14px;">Join a lobby and play. Mobile-friendly + specials enabled.</div>
+
+    <label for="name">Your name</label>
+    <input id="name" autocomplete="nickname" placeholder="Player" />
+
+    <label for="lobby">Lobby</label>
+    <input id="lobby" autocomplete="off" placeholder="default" />
+
+    <div style="margin-top:14px; display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid rgba(255,255,255,.12); border-radius:14px; background: rgba(0,0,0,.18);">
+      <input id="spectator-flag" type="checkbox" style="width:18px; height:18px; margin:0;" />
+      <label for="spectator-flag" style="margin:0; font-weight:900; cursor:pointer;">
+        Join as Spectator/Admin (no seat)
+        <span style="display:block; font-weight:700; opacity:.75; margin-top:2px;">
+          You can watch + use admin tools without ever taking a seat.
+        </span>
+      </label>
+    </div>
+
+    <button id="joinbtn" class="fh-btn fh-btn-primary" type="button">Join</button>
+
+    <div style="margin-top:14px; opacity:.75; font-size:13px; line-height:1.35;">
+      Tip: Open on another device as <b>Spectator/Admin</b> to run the lobby without taking a seat.
+    </div>
+  </div>
+
+  <!-- ---------------- GAME SCREEN ---------------- -->
+  <div id="game-screen" style="display:none;">
+    <!-- MAIN BOARD -->
+    <section class="fh-main">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+        <div id="turn-indicator">Connecting…</div>
+
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div id="color-badge" class="">—</div>
+          <button id="mute-toggle" class="fh-btn fh-btn-ghost" type="button">🔊 Sound On</button>
         </div>
-      </header>
-
-      <div class="fh-form">
-        <label class="fh-label" for="name">Name</label>
-        <input id="name" class="fh-input" placeholder="Your name" autocomplete="name" />
-
-        <label class="fh-label" for="lobby">Lobby</label>
-        <input id="lobby" class="fh-input" placeholder="Lobby (e.g., default)" />
-
-        <button id="joinbtn" class="fh-btn fh-btn-primary">Join Lobby</button>
-
-        <p class="fh-muted">
-          Tip: your last name & lobby are remembered for quick join.
-        </p>
       </div>
-    </section>
-  </main>
 
-  <!-- GAME -->
-  <main id="game-screen" class="fh-shell fh-game" style="display:none;">
-    <!-- Top HUD -->
-    <header class="fh-topbar">
-      <div class="fh-top-left">
-        <div class="fh-piles">
-          <button class="fh-pile" type="button" aria-label="Discard pile">
-            <div class="fh-pile-label">Discard</div>
-            <img id="discard-top" src="assets/cards/back.png" alt="Top Discard" class="fh-card-img" />
-          </button>
-
-          <button class="fh-pile" type="button" aria-label="Draw pile">
-            <div class="fh-pile-label">Draw</div>
-            <img id="draw-pile" src="assets/cards/back.png" alt="Draw Pile" class="fh-card-img" />
-          </button>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-top:14px; align-items:start;">
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+          <div style="opacity:.75; font-weight:900;">Discard</div>
+          <img id="discard-top" src="/assets/cards/back.png" alt="Top of discard pile" />
         </div>
 
-        <div class="fh-status">
-          <div class="fh-status-label">Color</div>
-          <div id="color-badge" class="fh-color-badge">—</div>
-
-          <div class="fh-turn-wrap">
-            <div class="fh-status-label">Turn</div>
-            <div id="turn-indicator" class="fh-turn">—</div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+          <div style="opacity:.75; font-weight:900;">Draw</div>
+          <div id="draw-pile" role="button" aria-label="Draw a card" tabindex="0">
+            <img src="/assets/cards/back.png" alt="Draw pile" style="width:85%; height:auto; object-fit:contain; filter: drop-shadow(0 16px 22px rgba(0,0,0,.42));" />
           </div>
         </div>
       </div>
 
-      <div class="fh-top-right">
-        <button id="mute-toggle" class="fh-btn fh-btn-ghost" type="button">🔊 Sound On</button>
-        <div class="fh-top-actions">
-          <button id="uno-btn" class="fh-btn fh-btn-warn" type="button">Call UNO</button>
-          <button id="relax-btn" class="fh-btn fh-btn-ghost" type="button">RELAX</button>
-        </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:14px;">
+        <button id="uno-btn" class="fh-btn fh-btn-primary" type="button">📣 UNO</button>
+        <button id="relax-btn" class="fh-btn fh-btn-ghost" type="button">🧘 RELAX</button>
       </div>
-    </header>
 
-    <!-- Main content -->
-    <div class="fh-layout">
-      <!-- Players -->
-      <section class="fh-panel fh-players">
-        <div class="fh-panel-head">
-          <h2 class="fh-panel-title">Players</h2>
+      <div style="margin-top:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div style="font-weight:1000; letter-spacing:.2px;">Your Hand</div>
+          <div style="opacity:.75; font-weight:800; font-size:13px;">Tap a card on your turn to play</div>
         </div>
-        <div id="player-list" class="fh-player-list"></div>
-      </section>
-
-      <!-- Right rail: chat + leaderboard (collapsible on mobile) -->
-      <aside class="fh-rail">
-        <section class="fh-panel">
-          <details class="fh-details" open>
-            <summary class="fh-summary">
-              <span>Table Chat</span>
-              <span class="fh-chip">live</span>
-            </summary>
-
-            <div id="chat-log" class="fh-chat-log"></div>
-
-            <div class="fh-chat-row">
-              <input id="chat-input" class="fh-input fh-chat-input" placeholder="Type a message…" />
-              <button id="chat-send" class="fh-btn fh-btn-primary" type="button">Send</button>
-            </div>
-          </details>
-        </section>
-
-        <section class="fh-panel">
-          <details class="fh-details">
-            <summary class="fh-summary">
-              <span>Global Leaderboard</span>
-              <span class="fh-chip fh-chip-muted">stats</span>
-            </summary>
-            <div id="leaderboard" class="fh-leaderboard"></div>
-          </details>
-        </section>
-      </aside>
-    </div>
-
-    <!-- Hand dock -->
-    <footer class="fh-hand-dock" aria-label="Your hand">
-      <div class="fh-hand-head">
-        <h2 class="fh-panel-title">Your Hand</h2>
-        <div class="fh-muted fh-hand-hint">Tap a card to play • Swipe to scroll</div>
+        <div id="player-hand" aria-label="Your hand of cards"></div>
       </div>
-      <div id="player-hand" class="fh-hand"></div>
-    </footer>
-  </main>
 
+      <div style="margin-top:14px;">
+        <div style="font-weight:1000; letter-spacing:.2px;">Players</div>
+        <div id="player-list" aria-label="Players list"></div>
+      </div>
+    </section>
+
+    <!-- RIGHT RAIL -->
+    <aside class="fh-rail">
+      <details open>
+        <summary>Chat</summary>
+        <div style="margin-top:10px;">
+          <div id="chat-log" aria-label="Chat log"></div>
+          <input id="chat-input" placeholder="Type a message…" autocomplete="off" />
+          <button id="chat-send" class="fh-btn fh-btn-primary" type="button">Send</button>
+        </div>
+      </details>
+
+      <details>
+        <summary>Leaderboard</summary>
+        <div style="margin-top:10px;" id="leaderboard">Loading…</div>
+      </details>
+
+      <details>
+        <summary>Quick Help</summary>
+        <div style="margin-top:10px; opacity:.82; line-height:1.4;">
+          <div><b>Draw:</b> tap the draw pile.</div>
+          <div><b>UNO:</b> only valid at 2 cards.</div>
+          <div><b>Wilds:</b> you’ll be prompted to choose a color.</div>
+          <div style="margin-top:10px;"><b>Spectator/Admin:</b> use the join toggle (no seat).</div>
+        </div>
+      </details>
+    </aside>
+  </div>
+
+  <!-- Keep spectator/admin flag synced to URL (?spectator=1) so game.js can read it -->
+  <script>
+    (function () {
+      const cb = document.getElementById("spectator-flag");
+      if (!cb) return;
+
+      const qs = new URLSearchParams(window.location.search);
+      const stored = localStorage.getItem("uno_spectator") === "1";
+      const fromUrl = qs.get("spectator") === "1" || qs.get("admin") === "1";
+
+      cb.checked = fromUrl || stored;
+
+      function syncUrl() {
+        localStorage.setItem("uno_spectator", cb.checked ? "1" : "0");
+
+        const next = new URLSearchParams(window.location.search);
+        if (cb.checked) {
+          next.set("spectator", "1");
+          next.delete("admin");
+        } else {
+          next.delete("spectator");
+          next.delete("admin");
+        }
+
+        const q = next.toString();
+        const newUrl = window.location.pathname + (q ? ("?" + q) : "") + window.location.hash;
+        try { window.history.replaceState(null, "", newUrl); } catch {}
+      }
+
+      cb.addEventListener("change", syncUrl);
+      syncUrl();
+    })();
+  </script>
+
+  <!-- socket.io + game -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
