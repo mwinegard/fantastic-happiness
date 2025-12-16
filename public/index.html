@@ -5,444 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Fantastic Happiness UNO</title>
   <meta name="theme-color" content="#0b1220" />
-
-  <!-- If you already have a style.css, keep this link. -->
   <link rel="stylesheet" href="style.css" />
-
-  <style>
-    /* Lightweight layout polish + mobile safety (keeps your existing style.css in charge) */
-    :root{
-      --bg0:#070b14;
-      --bg1:#0b1220;
-      --card:rgba(255,255,255,.06);
-      --stroke:rgba(255,255,255,.12);
-      --text:#e5e7eb;
-      --muted:rgba(229,231,235,.75);
-      --shadow:0 18px 40px rgba(0,0,0,.45);
-      --radius:18px;
-    }
-    html,body{height:100%;}
-    body{
-      margin:0;
-      background: radial-gradient(1200px 700px at 20% 0%, rgba(59,130,246,.20), transparent 60%),
-                  radial-gradient(1100px 700px at 90% 20%, rgba(34,197,94,.16), transparent 58%),
-                  radial-gradient(900px 600px at 50% 110%, rgba(245,158,11,.14), transparent 62%),
-                  linear-gradient(180deg, var(--bg0), var(--bg1));
-      color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      overflow-x:hidden;
-    }
-    .fh-app{
-      min-height:100%;
-      display:flex;
-      flex-direction:column;
-    }
-    .fh-topbar{
-      position:sticky;
-      top:0;
-      z-index:10;
-      backdrop-filter: blur(10px);
-      background: linear-gradient(180deg, rgba(0,0,0,.40), rgba(0,0,0,.10));
-      border-bottom:1px solid rgba(255,255,255,.08);
-      padding:12px 14px;
-    }
-    .fh-topbar-inner{
-      max-width:1200px;
-      margin:0 auto;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-    }
-    .fh-brand{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      min-width:0;
-    }
-    .fh-logo{
-      width:38px;height:38px;border-radius:12px;
-      background: radial-gradient(circle at 30% 30%, rgba(56,189,248,.95), rgba(99,102,241,.70) 55%, rgba(0,0,0,.0) 70%),
-                  rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.12);
-      box-shadow: 0 12px 30px rgba(0,0,0,.35);
-      flex:0 0 auto;
-    }
-    .fh-title{
-      display:flex;
-      flex-direction:column;
-      line-height:1.05;
-      min-width:0;
-    }
-    .fh-title b{font-size:15px; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-    .fh-title span{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-
-    .fh-btn{
-      appearance:none;
-      border:1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      padding:10px 12px;
-      border-radius: 14px;
-      font-weight:800;
-      letter-spacing:.2px;
-      cursor:pointer;
-      box-shadow: 0 10px 24px rgba(0,0,0,.25);
-    }
-    .fh-btn:hover{filter:brightness(1.06);}
-    .fh-btn:active{transform:translateY(1px);}
-    .fh-btn-primary{
-      border-color: rgba(56,189,248,.35);
-      background: linear-gradient(180deg, rgba(56,189,248,.26), rgba(56,189,248,.10));
-    }
-    .fh-btn-ghost{
-      background: rgba(255,255,255,.04);
-      box-shadow:none;
-    }
-
-    .fh-wrap{
-      width:100%;
-      max-width:1200px;
-      margin:0 auto;
-      padding: 14px;
-      box-sizing:border-box;
-      flex:1;
-    }
-
-    /* Join screen */
-    #join-screen{
-      max-width:520px;
-      margin: 22px auto 0;
-      background: rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.12);
-      border-radius: 22px;
-      box-shadow: var(--shadow);
-      padding: 18px;
-    }
-    .fh-join-grid{
-      display:grid;
-      gap:12px;
-      margin-top:12px;
-    }
-    .fh-field label{
-      display:block;
-      font-size:12px;
-      color:var(--muted);
-      margin:0 0 6px;
-      font-weight:700;
-      letter-spacing:.15px;
-    }
-    .fh-field input{
-      width:100%;
-      box-sizing:border-box;
-      padding:12px 12px;
-      border-radius: 14px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      color: var(--text);
-      outline:none;
-      font-weight:700;
-    }
-    .fh-field input:focus{
-      border-color: rgba(56,189,248,.45);
-      box-shadow: 0 0 0 4px rgba(56,189,248,.12);
-    }
-    .fh-join-actions{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      justify-content:space-between;
-      margin-top:10px;
-    }
-    .fh-join-hint{
-      margin-top:10px;
-      font-size:12px;
-      color:var(--muted);
-      line-height:1.35;
-    }
-
-    /* Game layout */
-    #game-screen{display:none;}
-    .fh-grid{
-      display:grid;
-      grid-template-columns: 1.25fr .85fr;
-      gap: 14px;
-      align-items:start;
-    }
-    @media (max-width: 980px){
-      .fh-grid{grid-template-columns:1fr;}
-    }
-
-    .fh-card{
-      background: rgba(255,255,255,.06);
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    details.fh-card > summary{
-      list-style:none;
-      cursor:pointer;
-      padding: 12px 14px;
-      border-bottom:1px solid rgba(255,255,255,.10);
-      user-select:none;
-    }
-    details.fh-card > summary::-webkit-details-marker{display:none;}
-    details.fh-card[open] > summary{background: rgba(0,0,0,.14);}
-
-    .fh-board{
-      padding:14px;
-      display:grid;
-      gap:12px;
-    }
-    .fh-row{
-      display:flex;
-      gap:12px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:space-between;
-    }
-    .fh-badge{
-      display:inline-flex;
-      align-items:center;
-      gap:10px;
-      padding: 10px 12px;
-      border-radius: 999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      font-weight:900;
-      letter-spacing:.3px;
-    }
-    #color-badge{
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.06);
-      font-weight:1000;
-      letter-spacing:.4px;
-    }
-    #turn-indicator{
-      font-size:13px;
-      color: var(--muted);
-      font-weight:800;
-      letter-spacing:.2px;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-      max-width: 100%;
-    }
-
-    .fh-piles{
-      display:flex;
-      gap:14px;
-      justify-content:center;
-      align-items:center;
-      padding: 6px 0 4px;
-    }
-    .fh-pile{
-      display:grid;
-      gap:8px;
-      justify-items:center;
-    }
-    .fh-pile label{
-      font-size:12px;
-      color:var(--muted);
-      font-weight:800;
-      letter-spacing:.25px;
-    }
-    .fh-cardimg{
-      width: 118px;
-      height: 170px;
-      object-fit: contain;
-      border-radius: 14px;
-      border:1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.20);
-      box-shadow: 0 16px 30px rgba(0,0,0,.35);
-    }
-    @media (max-width: 420px){
-      .fh-cardimg{width:104px;height:150px;}
-    }
-
-    .fh-actions{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      justify-content:center;
-      padding-top: 2px;
-    }
-
-    .fh-hand{
-      padding: 12px 12px 14px;
-      border-top: 1px solid rgba(255,255,255,.10);
-    }
-    .fh-hand-head{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding: 8px 2px 10px;
-    }
-    .fh-hand-head b{font-size:13px; letter-spacing:.2px;}
-    #player-hand{
-      display:flex;
-      gap:10px;
-      overflow-x:auto;
-      padding-bottom:6px;
-      scroll-snap-type: x mandatory;
-    }
-    #player-hand img{
-      width: 92px;
-      height: 132px;
-      object-fit: contain;
-      border-radius: 14px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.18);
-      box-shadow: 0 14px 28px rgba(0,0,0,.35);
-      scroll-snap-align: start;
-    }
-    @media (min-width: 980px){
-      #player-hand{
-        flex-wrap:wrap;
-        overflow:visible;
-        justify-content:center;
-      }
-    }
-
-    /* Rail */
-    .fh-rail{
-      display:grid;
-      gap:14px;
-    }
-    .fh-pane{
-      padding:12px 14px;
-      display:grid;
-      gap:10px;
-    }
-
-    .player{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.16);
-    }
-    .player .name{font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-    .player .meta{font-size:12px; color:var(--muted); font-weight:800;}
-
-    #chat-log{
-      min-height: 140px;
-      max-height: 220px;
-      overflow:auto;
-      padding:10px 12px;
-      border-radius: 14px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.18);
-      font-size:13px;
-      line-height:1.35;
-    }
-    .fh-chatbar{
-      display:grid;
-      grid-template-columns: 1fr auto;
-      gap:10px;
-    }
-    #chat-input{
-      width:100%;
-      box-sizing:border-box;
-      padding: 12px 12px;
-      border-radius: 14px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      color: var(--text);
-      outline:none;
-      font-weight:800;
-    }
-    #chat-input:focus{
-      border-color: rgba(56,189,248,.45);
-      box-shadow: 0 0 0 4px rgba(56,189,248,.12);
-    }
-
-    #leaderboard table{
-      width:100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    #leaderboard th, #leaderboard td{
-      padding: 8px 8px;
-      border-bottom: 1px solid rgba(255,255,255,.10);
-      text-align:left;
-      vertical-align:top;
-    }
-    #leaderboard th{color:var(--muted); font-weight:900; font-size:12px; letter-spacing:.25px;}
-    #leaderboard td{font-weight:800;}
-
-    /* Modal baseline (game.js uses these classes) */
-    .fh-modal-overlay{
-      position:fixed; inset:0;
-      background: rgba(0,0,0,.62);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding: 18px;
-      z-index: 9999;
-    }
-    .fh-modal{
-      width:min(720px, 100%);
-      max-height: min(80vh, 720px);
-      overflow:auto;
-      background: rgba(18,24,38,.96);
-      border:1px solid rgba(255,255,255,.14);
-      border-radius: 18px;
-      box-shadow: 0 22px 70px rgba(0,0,0,.60);
-    }
-    .fh-modal-header{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding: 12px 14px;
-      border-bottom: 1px solid rgba(255,255,255,.10);
-    }
-    .fh-modal-title{margin:0; font-size:15px; letter-spacing:.2px;}
-    .fh-modal-body{padding: 12px 14px;}
-    .fh-modal-actions{
-      display:flex;
-      gap:10px;
-      justify-content:flex-end;
-      padding: 12px 14px;
-      border-top: 1px solid rgba(255,255,255,.10);
-    }
-
-    /* Toast baseline (game.js uses .fh-toast) */
-    .fh-toast{
-      position:fixed;
-      left:50%;
-      bottom: calc(18px + env(safe-area-inset-bottom));
-      transform: translateX(-50%);
-      background: rgba(0,0,0,.72);
-      border:1px solid rgba(255,255,255,.14);
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 999px;
-      font-weight:900;
-      letter-spacing:.2px;
-      opacity:0;
-      pointer-events:none;
-      transition: opacity .16s ease, transform .16s ease;
-      z-index: 10000;
-      box-shadow: 0 18px 50px rgba(0,0,0,.55);
-      max-width: min(92vw, 520px);
-      white-space: nowrap;
-      overflow:hidden;
-      text-overflow: ellipsis;
-    }
-    .fh-toast.show{
-      opacity:1;
-      transform: translateX(-50%) translateY(-6px);
-    }
-  </style>
 </head>
 
 <body>
@@ -464,41 +27,43 @@
     </header>
 
     <main class="fh-wrap">
-      <!-- JOIN -->
+      <!-- JOIN SCREEN (must be a sibling of #game-screen) -->
       <section id="join-screen" class="fh-card" aria-label="Join">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-          <div>
-            <div style="font-weight:1000; letter-spacing:.2px; font-size:16px;">Join a Lobby</div>
-            <div style="color:var(--muted); font-weight:800; font-size:12px; margin-top:4px;">
-              Tip: use the same lobby name to play together.
+        <div style="padding:18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div>
+              <div style="font-weight:1000; letter-spacing:.2px; font-size:16px;">Join a Lobby</div>
+              <div style="color:var(--muted); font-weight:800; font-size:12px; margin-top:4px;">
+                Tip: use the same lobby name to play together.
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="fh-join-grid">
-          <div class="fh-field">
-            <label for="name">Your name</label>
-            <input id="name" autocomplete="nickname" placeholder="Matt" />
-          </div>
+          <div class="fh-join-grid">
+            <div class="fh-field">
+              <label for="name">Your name</label>
+              <input id="name" autocomplete="nickname" placeholder="Matt" />
+            </div>
 
-          <div class="fh-field">
-            <label for="lobby">Lobby</label>
-            <input id="lobby" autocomplete="off" placeholder="default" />
-          </div>
+            <div class="fh-field">
+              <label for="lobby">Lobby</label>
+              <input id="lobby" autocomplete="off" placeholder="default" />
+            </div>
 
-          <div class="fh-join-actions">
-            <button id="joinbtn" class="fh-btn fh-btn-primary" type="button">Join</button>
-            <div style="flex:1;"></div>
-          </div>
+            <div class="fh-join-actions">
+              <button id="joinbtn" class="fh-btn fh-btn-primary" type="button">Join</button>
+              <div style="flex:1;"></div>
+            </div>
 
-          <div class="fh-join-hint">
-            Game starts automatically when <b>2+ seated players</b> join the same lobby.<br/>
-            Card assets live at <b>/public/assets/cards/</b> and sounds at <b>/public/assets/sounds/</b>.
+            <div class="fh-join-hint">
+              Game starts automatically when <b>2+ seated players</b> join the same lobby.<br/>
+              Cards: <b>/public/assets/cards/</b> • Sounds: <b>/public/assets/sounds/</b>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- GAME -->
+      <!-- GAME SCREEN (must be a sibling of #join-screen) -->
       <section id="game-screen" aria-label="Game">
         <div class="fh-grid">
           <!-- Left: Board + Hand -->
@@ -561,11 +126,10 @@
               </div>
             </details>
 
-            <!-- ✅ Quick Help with specialty cards -->
             <details class="fh-card" open>
               <summary><b>Quick Help — Specialty Cards</b></summary>
-
               <div class="fh-pane" style="line-height:1.35;">
+                <!-- (Keep your help content here — unchanged) -->
                 <div style="display:grid; gap:10px;">
                   <div>
                     <b>🃏 Draw Stacks (+2 / +4)</b><br/>
@@ -575,92 +139,6 @@
                       <li>Play <b>RELAX</b> (cancels the stack), or</li>
                       <li><b>Draw</b> the full stack (then the stack clears and your turn ends).</li>
                     </ul>
-                  </div>
-
-                  <hr style="opacity:.18; width:100%;" />
-
-                  <div>
-                    <b>🧘 RELAX (Wild)</b><br/>
-                    Can be played as a normal <b>Wild on your turn</b> (choose a color),
-                    or played <b>out of turn</b> to <b>cancel a draw stack</b>.
-                  </div>
-
-                  <div>
-                    <b>🌈 Rainbow (Wild)</b><br/>
-                    Requires you to have <b>one of each color</b>: <b>Red + Yellow + Green + Blue</b>.
-                    You discard one of each under the pile, then <b>choose a color</b>.
-                  </div>
-
-                  <div>
-                    <b>👑 The Boss (Wild)</b><br/>
-                    Picks “The Boss” by scoreboard (points/wins). <b>If Lori is playing, Lori is always The Boss.</b><br/>
-                    Every player gifts <b>1 random card</b> to the Boss, then the player who played it <b>chooses a color</b>.
-                  </div>
-
-                  <div>
-                    <b>🧳 Pack Your Bags (Wild)</b><br/>
-                    Randomly swaps <b>seats</b> — and you take the <b>hand of the seat</b> you land in (hands move with seats).<br/>
-                    <b>Cannot be played during a draw stack</b>. (Stack must be resolved first.)<br/>
-                    Then <b>choose a color</b>.
-                  </div>
-
-                  <hr style="opacity:.18; width:100%;" />
-
-                  <div>
-                    <b>🛒 Shopping (Yellow-only)</b><br/>
-                    Only playable when the <b>active color is Yellow</b>.<br/>
-                    You pick a target, secretly give <b>2</b> of your cards, then secretly take <b>1</b> from them.
-                  </div>
-
-                  <div>
-                    <b>🤝 Pinky Promise (Yellow-only)</b><br/>
-                    Only playable when the <b>active color is Yellow</b>.<br/>
-                    Always allowed. You choose another player; both hands combine, shuffle, and split again.
-                  </div>
-
-                  <hr style="opacity:.18; width:100%;" />
-
-                  <div>
-                    <b>♻️ Recycle (Green-only)</b><br/>
-                    Only playable when the <b>active color is Green</b>.<br/>
-                    Everyone’s hands combine, shuffle, and are re-dealt.
-                    The game will force draws as needed so every player receives <b>at least 1</b> card.
-                  </div>
-
-                  <div>
-                    <b>😊 Happy Mode (Green)</b><br/>
-                    Turns on “Happy Mode.” While active:<br/>
-                    If someone types <b>rude</b> in chat, the <b>previous chatter</b> draws <b>1</b> card.
-                  </div>
-
-                  <hr style="opacity:.18; width:100%;" />
-
-                  <div>
-                    <b>🌙 To The Moon (Blue-only)</b><br/>
-                    Only playable when the <b>active color is Blue</b>.<br/>
-                    A random other player gets <b>+1 card</b>.
-                  </div>
-
-                  <div>
-                    <b>👀 Blue Look (Blue-only)</b><br/>
-                    Only playable when the <b>active color is Blue</b>.<br/>
-                    You look at the top cards of the deck and reorder them (1 = next draw).
-                  </div>
-
-                  <hr style="opacity:.18; width:100%;" />
-
-                  <div>
-                    <b>📄 NOC Notice (Red-only)</b><br/>
-                    Only playable when the <b>active color is Red</b>.<br/>
-                    First time: picks a random target (including <b>yourself</b>) who draws <b>3</b>.<br/>
-                    Later uses the same target again for another <b>+3</b>.
-                  </div>
-
-                  <div>
-                    <b>🧢 IT (Red-only)</b><br/>
-                    Only playable when the <b>active color is Red</b>.<br/>
-                    With <b>3+</b> players: moves 1 random card from the previous player to the next player (“we all float…”).<br/>
-                    With <b>2</b> players: behaves like <b>Draw 2</b>.
                   </div>
                 </div>
               </div>
@@ -678,7 +156,6 @@
     </main>
   </div>
 
-  <!-- socket.io served by express/socket.io -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>
