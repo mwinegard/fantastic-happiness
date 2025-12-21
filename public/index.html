@@ -1,159 +1,72 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Fantastic Happiness UNO</title>
-  <meta name="theme-color" content="#0b1220" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UNO</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
-  <div class="fh-app">
-    <header class="fh-topbar">
-      <div class="fh-topbar-inner">
-        <div class="fh-brand">
-          <div class="fh-logo" aria-hidden="true"></div>
-          <div class="fh-title">
-            <b>Fantastic Happiness UNO</b>
-            <span>Play in a lobby • Chat • Specials • Mobile-friendly</span>
-          </div>
-        </div>
+  <div class="panel" id="join-screen">
+    <h1>Join a Lobby</h1>
+    <div class="row">
+      <input id="name" placeholder="Your name" />
+      <input id="lobby" placeholder="Lobby (e.g., default)" />
+      <button id="joinbtn">Join</button>
+    </div>
+    <p class="muted">Your last name and lobby are remembered for quick join.</p>
+  </div>
 
-        <div style="display:flex; gap:10px; align-items:center;">
-          <button id="mute-toggle" class="fh-btn fh-btn-ghost" type="button">🔊 Sound On</button>
-        </div>
+  <div class="panel" id="game-screen" style="display:none;">
+    <h1>UNO</h1>
+
+    <!-- Top area: discard & draw -->
+    <div class="row" style="gap:16px;">
+      <div>
+        <div>Discard</div>
+        <img id="discard-top" src="assets/cards/back.png" alt="Top Discard" class="card-img" />
       </div>
-    </header>
+      <div>
+        <div>Draw</div>
+        <img id="draw-pile" src="assets/cards/back.png" alt="Draw Pile" class="card-img" />
+      </div>
+      <div>
+        <div>Color</div>
+        <div id="color-badge" style="font-weight:bold;">—</div>
+      </div>
+      <div style="margin-left:auto;">
+        <button id="mute-toggle">🔊 Sound On</button>
+      </div>
+    </div>
 
-    <main class="fh-wrap">
-      <!-- JOIN SCREEN (must be a sibling of #game-screen) -->
-      <section id="join-screen" class="fh-card" aria-label="Join">
-        <div style="padding:18px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <div style="font-weight:1000; letter-spacing:.2px; font-size:16px;">Join a Lobby</div>
-              <div style="color:var(--muted); font-weight:800; font-size:12px; margin-top:4px;">
-                Tip: use the same lobby name to play together.
-              </div>
-            </div>
-          </div>
+    <!-- Turn indicator -->
+    <div class="row" style="margin-top:8px;">
+      <div id="turn-indicator">—</div>
+      <div>
+        <button id="uno-btn">Call UNO</button>
+        <button id="relax-btn">RELAX</button>
+      </div>
+    </div>
 
-          <div class="fh-join-grid">
-            <div class="fh-field">
-              <label for="name">Your name</label>
-              <input id="name" autocomplete="nickname" placeholder="Matt" />
-            </div>
+    <!-- Players -->
+    <h3>Players</h3>
+    <div id="player-list"></div>
 
-            <div class="fh-field">
-              <label for="lobby">Lobby</label>
-              <input id="lobby" autocomplete="off" placeholder="default" />
-            </div>
+    <!-- Hand -->
+    <h3>Your Hand</h3>
+    <div id="player-hand"></div>
 
-            <div class="fh-join-actions">
-              <button id="joinbtn" class="fh-btn fh-btn-primary" type="button">Join</button>
-              <div style="flex:1;"></div>
-            </div>
+    <!-- Chat -->
+    <h3>Table Chat</h3>
+    <div id="chat-log"></div>
+    <div class="row" style="margin-top:6px;">
+      <input id="chat-input" placeholder="Type a message…" />
+      <button id="chat-send">Send</button>
+    </div>
 
-            <div class="fh-join-hint">
-              Game starts automatically when <b>2+ seated players</b> join the same lobby.<br/>
-              Cards: <b>/public/assets/cards/</b> • Sounds: <b>/public/assets/sounds/</b>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- GAME SCREEN (must be a sibling of #join-screen) -->
-      <section id="game-screen" aria-label="Game">
-        <div class="fh-grid">
-          <!-- Left: Board + Hand -->
-          <div class="fh-card">
-            <div class="fh-board">
-              <div class="fh-row">
-                <div class="fh-badge">
-                  <span style="opacity:.85;">Active:</span>
-                  <span id="color-badge">—</span>
-                </div>
-
-                <div id="turn-indicator">Connecting…</div>
-              </div>
-
-              <div class="fh-piles" aria-label="Piles">
-                <div class="fh-pile">
-                  <label>Discard</label>
-                  <img id="discard-top" class="fh-cardimg" src="assets/cards/back.png" alt="Discard pile top card" />
-                </div>
-
-                <div class="fh-pile">
-                  <label>Draw</label>
-                  <img id="draw-pile" class="fh-cardimg" src="assets/cards/back.png" alt="Draw pile" />
-                  <div style="font-size:12px; color:var(--muted); font-weight:800;">tap to draw</div>
-                </div>
-              </div>
-
-              <div class="fh-actions" aria-label="Actions">
-                <button id="uno-btn" class="fh-btn fh-btn-primary" type="button">UNO!</button>
-                <button id="relax-btn" class="fh-btn fh-btn-ghost" type="button">RELAX</button>
-              </div>
-            </div>
-
-            <div class="fh-hand" aria-label="Hand">
-              <div class="fh-hand-head">
-                <b>Your Hand</b>
-                <span style="color:var(--muted); font-weight:800; font-size:12px;">tap a card to play on your turn</span>
-              </div>
-              <div id="player-hand" aria-label="Cards"></div>
-            </div>
-          </div>
-
-          <!-- Right rail -->
-          <aside class="fh-rail">
-            <details class="fh-card" open>
-              <summary><b>Players</b></summary>
-              <div class="fh-pane">
-                <div id="player-list"></div>
-              </div>
-            </details>
-
-            <details class="fh-card" open>
-              <summary><b>Chat</b></summary>
-              <div class="fh-pane">
-                <div id="chat-log" aria-label="Chat log"></div>
-                <div class="fh-chatbar">
-                  <input id="chat-input" placeholder="Type message…" />
-                  <button id="chat-send" class="fh-btn fh-btn-primary" type="button">Send</button>
-                </div>
-              </div>
-            </details>
-
-            <details class="fh-card" open>
-              <summary><b>Quick Help — Specialty Cards</b></summary>
-              <div class="fh-pane" style="line-height:1.35;">
-                <!-- (Keep your help content here — unchanged) -->
-                <div style="display:grid; gap:10px;">
-                  <div>
-                    <b>🃏 Draw Stacks (+2 / +4)</b><br/>
-                    Draw penalties <b>stack</b>. If a draw stack is on you, you must either:
-                    <ul style="margin:6px 0 0 18px;">
-                      <li><b>Stack</b> another <b>Draw 2</b> or <b>Wild Draw 4</b>, or</li>
-                      <li>Play <b>RELAX</b> (cancels the stack), or</li>
-                      <li><b>Draw</b> the full stack (then the stack clears and your turn ends).</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </details>
-
-            <details class="fh-card">
-              <summary><b>Leaderboard</b></summary>
-              <div class="fh-pane">
-                <div id="leaderboard">Loading…</div>
-              </div>
-            </details>
-          </aside>
-        </div>
-      </section>
-    </main>
+    <!-- Leaderboard -->
+    <h3>Global Leaderboard</h3>
+    <div id="leaderboard"></div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

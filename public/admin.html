@@ -2,364 +2,118 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width,initial-scale=1,viewport-fit=cover"
-  />
-  <meta name="theme-color" content="#0b5fb3" />
-  <title>FH UNO — Admin</title>
-
-  <!-- Reuse the refined theme -->
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UNO Admin</title>
   <link rel="stylesheet" href="style.css" />
-
-  <!-- Admin-only layout helpers -->
   <style>
-    .fh-admin-shell{
-      min-height:100dvh;
-      padding:
-        calc(env(safe-area-inset-top) + 18px)
-        calc(env(safe-area-inset-right) + 14px)
-        calc(env(safe-area-inset-bottom) + 18px)
-        calc(env(safe-area-inset-left) + 14px);
-    }
-    .fh-admin-top{
-      position: sticky;
-      top: env(safe-area-inset-top);
-      z-index: 900;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 12px;
-      padding: 12px;
-      border-radius: var(--r20);
-      background: linear-gradient(180deg, rgba(11,18,32,.72), rgba(11,18,32,.48));
-      border: 1px solid var(--stroke);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      box-shadow: var(--shadow2);
-      margin-bottom: 12px;
-    }
-    .fh-admin-top .left,
-    .fh-admin-top .right{
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .fh-select{
-      border-radius: 14px;
-      padding: 11px 12px;
-      border: 1px solid #ffffff1f;
-      outline:none;
-      color: var(--text);
-      background: rgba(0,0,0,.22);
-      min-width: 220px;
-    }
-    .fh-admin-grid{
-      display:grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
-      align-items:start;
-    }
-    .fh-admin-grid .fh-panel{ overflow: hidden; }
-    .fh-kv{
-      display:grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-      padding: 12px;
-    }
-    .fh-kv-row{
-      display:grid;
-      grid-template-columns: 140px 1fr;
-      gap: 10px;
-      align-items:center;
-      padding: 10px;
-      border: 1px solid #ffffff14;
-      border-radius: 14px;
-      background: rgba(0,0,0,.18);
-    }
-    .fh-k{ color: var(--muted2); font-size: 12px; text-transform: uppercase; letter-spacing:.05em; }
-    .fh-v{ font-weight: 750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
-
-    .fh-admin-stateTop{
-      display:flex;
-      gap: 12px;
-      align-items:center;
-      padding: 12px;
-      border-bottom: 1px solid #ffffff14;
-    }
-    #top-discard{
-      width: 64px;
-      height: 92px;
-      object-fit: contain;
-      filter: drop-shadow(0 10px 14px rgba(0,0,0,.35));
-    }
-    #top-meta{
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.25;
-    }
-
-    .fh-actions{
-      padding: 12px;
-      display:flex;
-      flex-wrap:wrap;
-      gap: 10px;
-    }
-    .fh-sounds{
-      padding: 12px;
-      display:flex;
-      flex-wrap:wrap;
-      gap: 10px;
-    }
-    .fh-sounds .fh-input{ max-width: 220px; }
-
-    .fh-admin-chat{
-      padding: 12px;
-      display:grid;
-      gap: 10px;
-    }
-    .fh-admin-chat-row{
-      display:flex;
-      gap: 10px;
-    }
-    .fh-admin-chat-row .fh-input{ flex: 1; }
-
-    #admin-log{
-      padding: 12px;
-      max-height: 260px;
-      overflow:auto;
-      scrollbar-width: thin;
-    }
-    #admin-log .line,
-    #admin-log div{
-      padding: 8px 10px;
-      border: 1px solid #ffffff14;
-      background: rgba(0,0,0,.18);
-      border-radius: 14px;
-      margin-bottom: 8px;
-      font-size: 13px;
-      line-height: 1.25;
-    }
-
-    #admin-leaderboard{
-      padding: 12px;
-      overflow:auto;
-    }
-    #admin-leaderboard table{
-      width:100%;
-      border-collapse: collapse;
-    }
-    #admin-leaderboard th, #admin-leaderboard td{
-      text-align:left;
-      padding: 10px 8px;
-      border-bottom: 1px solid #ffffff12;
-      font-size: 13px;
-    }
-    #admin-leaderboard th{
-      color: var(--muted2);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing:.05em;
-    }
-
-    /* NEW: Players table */
-    #admin-players{
-      padding: 12px;
-      overflow:auto;
-    }
-    #admin-players table{
-      width:100%;
-      border-collapse: collapse;
-      min-width: 520px;
-    }
-    #admin-players th, #admin-players td{
-      text-align:left;
-      padding: 10px 8px;
-      border-bottom: 1px solid #ffffff12;
-      font-size: 13px;
-      vertical-align: middle;
-    }
-    #admin-players th{
-      color: var(--muted2);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing:.05em;
-      position: sticky;
-      top: 0;
-      background: rgba(11,18,32,.78);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid #ffffff1f;
-      background: rgba(255,255,255,.06);
-      font-weight: 700;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .pill.good{ border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.14); }
-    .pill.warn{ border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.14); }
-    .pill.muted{ opacity:.75; }
-
-    @media (min-width: 980px){
-      .fh-admin-grid{
-        grid-template-columns: 1.1fr .9fr;
-      }
-      .fh-admin-grid .span2{
-        grid-column: 1 / -1;
-      }
-      #admin-log{ max-height: 340px; }
-    }
+    .grid { display: grid; gap: 8px; }
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    .grid.three { grid-template-columns: 1fr 1fr 1fr; }
+    .card { border: 1px solid #ddd; padding: 10px; border-radius: 6px; background:#fff; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .list { max-height: 220px; overflow: auto; }
+    .muted { opacity: .7; }
+    .row { display:flex; align-items:center; gap:8px; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:10px; background:#eee; margin-right:6px; }
+    .topcard { width: 96px; height: auto; border:1px solid #ccc; border-radius:4px; background:#fafafa; }
+    table.compact td, table.compact th { padding:4px 6px; }
   </style>
 </head>
-
 <body>
-  <main class="fh-admin-shell">
-    <!-- TOP BAR -->
-    <header class="fh-admin-top">
-      <div class="left">
-        <div class="fh-badge" aria-hidden="true">FH</div>
+  <div class="panel">
+    <h1>Admin</h1>
 
-        <div>
-          <div style="font-weight:850; letter-spacing:.02em;">Admin Console</div>
-          <div class="fh-muted" style="margin:2px 0 0;">Join a lobby to control it.</div>
-        </div>
-
-        <select id="lobby-select" class="fh-select" aria-label="Lobby select">
-          <option value="">Select a lobby…</option>
-        </select>
-
-        <button id="refresh-lobbies" class="fh-btn fh-btn-ghost" type="button">Refresh</button>
+    <!-- Lobby Controls -->
+    <div class="card">
+      <div class="row">
+        <select id="lobby-select"></select>
+        <button id="refresh-lobbies">Refresh</button>
+        <span class="muted">Join a lobby to control it.</span>
+        <a href="/leaderboard.html" style="margin-left:auto;">Open Leaderboard ↗</a>
       </div>
-
-      <div class="right">
-        <a class="fh-btn fh-btn-ghost" href="/" target="_blank" rel="noreferrer">Open Player View</a>
+      <div class="row" style="margin-top:8px;">
+        <input id="admin-msg" placeholder="Send announcement to selected lobby" />
+        <button id="admin-send">Send</button>
       </div>
-    </header>
+      <div class="row" style="margin-top:8px; flex-wrap:wrap; gap:6px;">
+        <button id="btn-force-end">Force Round End</button>
+        <button id="btn-reset-game">Reset Game</button>
+        <button id="btn-reset-lobby">Reset Lobby</button>
+        <button id="btn-close-lobby">Close Lobby</button>
+      </div>
+    </div>
 
-    <!-- GRID -->
-    <section class="fh-admin-grid">
-      <!-- STATE -->
-      <section class="fh-panel">
-        <div class="fh-panel-head">
-          <h2 class="fh-panel-title">Game State</h2>
-          <div class="fh-chip fh-chip-muted">live</div>
-        </div>
+    <!-- Game State -->
+    <div class="card">
+      <h3>Game State</h3>
+      <div class="grid three">
+        <div><div>Started</div><div id="gs-started" class="mono">—</div></div>
+        <div><div>Direction</div><div id="gs-direction" class="mono">—</div></div>
+        <div><div>Color</div><div id="gs-color" class="mono">—</div></div>
+        <div><div>Current Turn</div><div id="gs-current" class="mono">—</div></div>
+        <div><div>Turn Ends</div><div id="gs-ends" class="mono">—</div></div>
+        <div><div>Deck Size</div><div id="gs-deck" class="mono">—</div></div>
+        <div><div>Discard Size</div><div id="gs-discard" class="mono">—</div></div>
+        <div><div>Penalty</div><div id="gs-penalty" class="mono">—</div></div>
+        <div><div>Round Flags</div><div id="gs-flags" class="mono">—</div></div>
+      </div>
+    </div>
 
-        <div class="fh-admin-stateTop">
-          <img id="top-discard" src="assets/cards/back.png" alt="Top discard" />
-          <div id="top-meta">—</div>
-        </div>
+    <!-- Players -->
+    <div class="card">
+      <h3>Players</h3>
+      <div class="list">
+        <table class="compact" id="players-table">
+          <thead><tr><th>Name</th><th>Hand</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
 
-        <div class="fh-kv">
-          <div class="fh-kv-row"><div class="fh-k">Current</div><div id="gs-current" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Direction</div><div id="gs-direction" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Color</div><div id="gs-color" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Started</div><div id="gs-started" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Turn Ends</div><div id="gs-ends" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Deck Size</div><div id="gs-deck" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Discard Size</div><div id="gs-discard" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Penalty</div><div id="gs-penalty" class="fh-v mono">—</div></div>
-          <div class="fh-kv-row"><div class="fh-k">Flags</div><div id="gs-flags" class="fh-v mono">—</div></div>
-        </div>
-      </section>
+    <!-- Log -->
+    <div class="card">
+      <h3>Log</h3>
+      <div id="admin-log" class="list mono" style="min-height:120px;"></div>
+    </div>
 
-      <!-- CONTROLS -->
-      <section class="fh-panel">
-        <div class="fh-panel-head">
-          <h2 class="fh-panel-title">Controls</h2>
-          <div class="fh-chip fh-chip-muted">admin</div>
-        </div>
+    <!-- Top Discard -->
+    <div class="card">
+      <h3>Top Discard</h3>
+      <img id="top-discard" class="topcard" src="assets/cards/back.png" alt="Top card" />
+      <div id="top-meta" class="mono muted">—</div>
+    </div>
 
-        <div class="fh-actions">
-          <button id="btn-reset-game" class="fh-btn fh-btn-primary" type="button">Reset Game</button>
-          <button id="btn-force-end" class="fh-btn fh-btn-warn" type="button">Force Round End</button>
-          <button id="btn-reset-lobby" class="fh-btn fh-btn-ghost" type="button">Reset Lobby</button>
-          <button id="btn-close-lobby" class="fh-btn fh-btn-ghost" type="button">Close Lobby</button>
-        </div>
+    <!-- Table Chat (Admin) -->
+    <div class="card">
+      <h3>Table Chat (Admin)</h3>
+      <div class="row">
+        <input id="admin-chat" placeholder="Type a message to the table…" />
+        <button id="admin-chat-send">Send</button>
+      </div>
+    </div>
 
-        <div class="fh-panel-head" style="border-top:1px solid #ffffff14;">
-          <h2 class="fh-panel-title">Soundboard</h2>
-          <div class="fh-chip fh-chip-muted">broadcast</div>
-        </div>
+    <!-- Sound Triggers -->
+    <div class="card">
+      <h3>Sound Triggers</h3>
+      <div class="row" style="flex-wrap:wrap; gap:8px;">
+        <button class="snd" data-sound="draw">Draw</button>
+        <button class="snd" data-sound="skip">Skip</button>
+        <button class="snd" data-sound="reverse">Reverse</button>
+        <button class="snd" data-sound="wild">Wild</button>
+        <button class="snd" data-sound="win">Win</button>
+        <button class="snd" data-sound="joined">Joined</button>
+        <button class="snd" data-sound="uno">UNO</button>
+        <input id="custom-sound" placeholder="Custom sound key…" style="max-width:220px;" />
+        <button id="trigger-custom">Trigger Custom</button>
+      </div>
+    </div>
 
-        <div class="fh-sounds">
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="start">Start</button>
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="draw">Draw</button>
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="skip">Skip</button>
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="reverse">Reverse</button>
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="wild">Wild</button>
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="uno">UNO</button>
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="win">Win</button>
-          <button class="fh-btn fh-btn-ghost" type="button" data-sound="lose">Lose</button>
-
-          <input id="custom-sound" class="fh-input" placeholder="custom key (e.g. special)" />
-          <button id="trigger-custom" class="fh-btn fh-btn-primary" type="button">Trigger</button>
-        </div>
-      </section>
-
-      <!-- NEW: PLAYERS -->
-      <section class="fh-panel span2">
-        <div class="fh-panel-head">
-          <h2 class="fh-panel-title">Players</h2>
-          <div class="fh-chip fh-chip-muted">hand counts</div>
-        </div>
-        <div id="admin-players">
-          <!-- admin.js will render a table here -->
-          <div class="fh-muted">Select a lobby to load players…</div>
-        </div>
-      </section>
-
-      <!-- BROADCAST / CHAT -->
-      <section class="fh-panel">
-        <div class="fh-panel-head">
-          <h2 class="fh-panel-title">Broadcast Message</h2>
-          <div class="fh-chip">live</div>
-        </div>
-
-        <div class="fh-admin-chat">
-          <div class="fh-admin-chat-row">
-            <input id="admin-msg" class="fh-input" placeholder="Type a message to the table…" />
-            <button id="admin-send" class="fh-btn fh-btn-primary" type="button">Send</button>
-          </div>
-
-          <div class="fh-admin-chat-row" style="display:none;">
-            <input id="admin-chat" class="fh-input" placeholder="(hidden legacy) message" />
-            <button id="admin-chat-send" class="fh-btn fh-btn-primary" type="button">Send</button>
-          </div>
-
-          <div class="fh-muted">
-            This sends a table-wide message in the selected lobby.
-          </div>
-        </div>
-      </section>
-
-      <!-- LOG -->
-      <section class="fh-panel">
-        <div class="fh-panel-head">
-          <h2 class="fh-panel-title">Admin Log</h2>
-          <div class="fh-chip fh-chip-muted">events</div>
-        </div>
-        <div id="admin-log"></div>
-      </section>
-
-      <!-- LEADERBOARD -->
-      <section class="fh-panel span2">
-        <div class="fh-panel-head">
-          <h2 class="fh-panel-title">Global Leaderboard</h2>
-          <div class="fh-chip fh-chip-muted">stats</div>
-        </div>
-        <div id="admin-leaderboard"></div>
-      </section>
-    </section>
-  </main>
+    <!-- Global Leaderboard -->
+    <div class="card">
+      <h3>Global Leaderboard</h3>
+      <div id="admin-leaderboard"></div>
+    </div>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="admin.js"></script>
