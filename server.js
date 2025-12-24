@@ -116,17 +116,25 @@ function drawCards(G, n){
 
 function drawExactOrEnd(L, n, reason){
   const G = L.game;
-  const drawn = drawCards(G, n);
-  if (drawn.length < n) {
-    // House rule fallback: if we cannot draw the required cards (even after reshuffle), the game ends with no winner.
+  const need = Math.max(0, Number(n)||0);
+  if (need === 0) return [];
+
+  if (!Array.isArray(G.deck)) G.deck = [];
+  restockDeckIfNeeded(G, need);
+
+  // House rule fallback (STRICT): if we cannot draw the required cards (even after reshuffle), the game ends with no winner.
+  if (G.deck.length < need) {
     G.started = false;
     G.turnEndsAt = null;
     G.pendingPenalty = null;
-    announce(L, `🛑 Game over (no winner) — draw pile exhausted${reason ? `: ${reason}` : ""}.`);
+    announce(L, `🛑 Game over (no winner) — required draw failed${reason ? `: ${reason}` : ""}.`);
     emitState(L);
     return null;
   }
-  return drawn;
+
+  const out = [];
+  for (let i=0; i<need; i++) out.push(G.deck.pop());
+  return out;
 }
 
 function reshuffleCardsIntoDeck(G, cards){
@@ -280,12 +288,12 @@ function deal(L){
 
   for (const p of L.players){
     if (p.spectator) continue;
-    const dealt = drawExactOrEnd(L, START_HAND, "initial deal");
-    if (!dealt) return;
+    const dealt = drawExactOrEnd(L, START_HAND, `initial deal (${START_HAND})`);
+    if (!dealt) return; // ended no-winner
     G.hands[p.sid] = dealt;
   }
 
-  const firstDraw = drawExactOrEnd(L, 1, "starting discard");
+  const firstDraw = drawExactOrEnd(L, 1, "initial flip");
   if (!firstDraw) return;
   const first = firstDraw[0];
 
@@ -345,11 +353,11 @@ function beginPenalty(L, fromSid, kind){
   const add = (kind==="wild_draw4") ? 4 : 2;
 
   if (G.pendingPenalty) {
-    // ✅ CONFIRMED: same-type stacking only
+    // ✅ SAME-TYPE stacking only
     if (G.pendingPenalty.kind !== kind) return false;
     G.pendingPenalty.amount += add;
     G.pendingPenalty.lastFromSid = fromSid;
-    // penalty passes to the next seated player after the stacker
+    // ✅ stacking moves the penalty target to the NEXT player after the stacker
     G.pendingPenalty.targetSid = targetSid;
   } else {
     G.pendingPenalty = { kind, amount: add, targetSid, lastFromSid: fromSid };
@@ -406,10 +414,10 @@ io.on("connection", (socket)=>{
       delete G.hands[p.sid];
     } else {
       if (G.started && !Array.isArray(G.hands[p.sid])) {
-        const dealt = drawExactOrEnd(L, START_HAND, "late join deal");
-        if (!dealt) return;
+        const dealt = drawExactOrEnd(L, START_HAND, `Could not deal ${START_HAND} cards to ${p.name} (deck too low)`);
+        if (!dealt) return; // ended no-winner
         G.hands[p.sid] = dealt;
-        announce(L, `🪑 ${p.name} took a seat and was dealt ${G.hands[p.sid].length} card(s).`);
+        announce(L, `🪑 ${p.name} took a seat and was dealt ${START_HAND} card(s).`);
       }
     }
 
@@ -543,6 +551,59 @@ io.on("connection", (socket)=>{
     announce(L, `🔊 Admin triggered sound: ${sound}`);
   });
 
+  // Admin: reset/force controls (expected by public/admin.js)
+  socket.on("admin:resetGame", ()=>{
+    const L = findLobbyBySocket(socket); if (!L) return;
+    L.game = emptyGame();
+    announce(L, `🛠️ Admin reset the round.`);
+    emitState(L);
+  });
+
+  socket.on("admin:forceRoundEnd", ()=>{
+    const L = findLobbyBySocket(socket); if (!L) return;
+    const G = L.game;
+    if (!G.started) {
+      io.to(socket.id).emit("warn", "No active round.");
+      return;
+    }
+    const acts = seatedPlayers(L);
+    if (!acts.length) return endNoWinner(L, "Admin force end: no seated players");
+
+    // Winner = fewest cards (tie random) — CONFIRMED
+    const counts = acts.map(p=>({ sid:p.sid, name:p.name, n:(G.hands[p.sid]||[]).length }));
+    const min = Math.min(...counts.map(x=>x.n));
+    const tied = counts.filter(x=>x.n===min);
+    const winnerSid = sample(tied).sid;
+    announce(L, `🛠️ Admin forced round end — winner is fewest cards (${min}).`);
+    settleAndQueueNext(L, winnerSid);
+  });
+
+  socket.on("admin:lobbyReset", ()=>{
+    const L = findLobbyBySocket(socket); if (!L) return;
+    L.lastChatSid = null;
+    L.log = [];
+    L.game = emptyGame();
+    announce(L, `🛠️ Admin reset the lobby.`);
+    emitState(L);
+  });
+
+  socket.on("admin:lobbyClose", async ()=>{
+    const L = findLobbyBySocket(socket); if (!L) return;
+    announce(L, `🛠️ Admin closed lobby ${L.name}.`);
+    io.in(L.room).emit("lobbyClosed");
+
+    // Best-effort: remove all sockets from the room so they can rejoin elsewhere.
+    try {
+      const socks = await io.in(L.room).fetchSockets();
+      for (const s of socks) {
+        try { s.leave(L.room); } catch {}
+        try { s.emit("warn", "Lobby closed by admin."); } catch {}
+      }
+    } catch {}
+
+    lobbies.delete(L.name);
+  });
+
   // Chat (Happy Mode rude penalty)
   socket.on("chat", ({text})=>{
     const L = findLobbyBySocket(socket); if (!L) return;
@@ -555,7 +616,7 @@ io.on("connection", (socket)=>{
     const lower = msg.toLowerCase();
 
     // Happy Mode: if message contains "rude", previous chatter draws 1
-    if (G?.started && G?.roundFlags?.happy && lower.includes("rude")) {
+    if (G?.started && G?.roundFlags?.happy && /\brude\b/i.test(text)) {
       const prevSid = L.lastChatSid;
       const prevPlayer = prevSid ? sidToPlayer(L, prevSid) : null;
 
@@ -563,14 +624,10 @@ io.on("connection", (socket)=>{
         const d = drawExactOrEnd(L, 1, "Happy Mode draw");
         if (!d) return;
         const c = d[0];
-        if (c) {
-          (G.hands[prevSid] = G.hands[prevSid] || []).push(c);
-          announce(L, `😊 Happy Mode: "${me.name}" said RUDE — ${prevPlayer.name} draws 1.`);
-          emitSoundToRoom(L, "draw");
-          emitState(L);
-        } else {
-          announce(L, `😊 Happy Mode triggered, but the deck is empty.`);
-        }
+        (G.hands[prevSid] = G.hands[prevSid] || []).push(c);
+        announce(L, `😊 Happy Mode: "${me.name}" said RUDE — ${prevPlayer.name} draws 1.`);
+        emitSoundToRoom(L, "draw");
+        emitState(L);
       }
     }
 
@@ -593,15 +650,19 @@ io.on("connection", (socket)=>{
     const card = hand.splice(i,1)[0];
     G.discard.push(card); G.top = card;
 
-    // Draw-stack enforcement (✅ CONFIRMED): target may ONLY stack the SAME penalty type, play RELAX, or draw the stack.
+    // Draw-stack enforcement: only stack (+2/+4) or RELAX, otherwise must draw stack
     if (G.pendingPenalty && G.pendingPenalty.targetSid === me.sid) {
       const kind = G.pendingPenalty.kind;
-      const allowed = new Set([kind, "wild_relax"]);
-      if (!allowed.has(card.type)) {
+      const ok = (
+        card.type === "wild_relax" ||
+        (kind === "draw2" && card.type === "draw2") ||
+        (kind === "wild_draw4" && card.type === "wild_draw4")
+      );
+      if (!ok) {
         G.discard.pop();
         G.top = G.discard[G.discard.length - 1] || null;
         hand.splice(i, 0, card);
-        io.to(me.id).emit("warn", "⚠️ Draw stack active: you must stack the SAME draw card, play RELAX, or draw the stack.");
+        io.to(me.id).emit("warn", "⚠️ Draw stack active: you must stack (+2 / +4), RELAX, or draw the stack.");
         emitState(L);
         return;
       }
@@ -646,13 +707,12 @@ io.on("connection", (socket)=>{
     if (card.type==="draw2"){
       G.color = card.color; G.value = "draw2";
       emitSoundToRoom(L, "wild");
-      const ok = beginPenalty(L, me.sid, "draw2");
-      if (!ok) {
-        // should not happen because we enforce same-type stacks, but keep it safe
+      if (!beginPenalty(L, me.sid, "draw2")) {
+        // should be unreachable due to enforcement, but keep it safe
         G.discard.pop();
-        G.top = G.discard[G.discard.length - 1] || null;
-        hand.splice(i, 0, card);
-        io.to(me.id).emit("warn", "⚠️ Draw stack active: Draw 2 can only stack on Draw 2.");
+        G.top = G.discard[G.discard.length-1] || null;
+        hand.splice(i,0,card);
+        io.to(me.id).emit("warn", "⚠️ Same-type stacking only (Draw 2 stacks with Draw 2)." );
         emitState(L);
         return;
       }
@@ -690,8 +750,9 @@ io.on("connection", (socket)=>{
       }
       emitSoundToRoom(L, "special");
 
+      // restock first (top discard stays), then peek up to 4
+      restockDeckIfNeeded(G, 4);
       const viewCount = Math.min(4, G.deck.length);
-      restockDeckIfNeeded(G, viewCount);
       const peek = G.deck.slice(-viewCount);
       const safePeek = peek.map((c,idx)=>({ i: idx, color:c.color, type:c.type, value:c.value??null }));
 
@@ -725,6 +786,14 @@ io.on("connection", (socket)=>{
 
     // Green Happy — enables happy mode
     if (card.type==="green_happy"){
+      if (G.color!=="green"){
+        G.discard.pop();
+        G.top = G.discard[G.discard.length-1] || null;
+        hand.splice(i,0,card);
+        io.to(me.id).emit("warn","😊 Happy may only be played when the active color is GREEN.");
+        emitState(L);
+        return;
+      }
       emitSoundToRoom(L, "special");
       G.roundFlags = G.roundFlags || {};
       G.roundFlags.happy = true;
@@ -768,9 +837,9 @@ io.on("connection", (socket)=>{
         if (!eligible.includes(targetSid)) { clearTimeout(t); return revert("🛒 Invalid target."); }
 
         const mySnap = (G.hands[me.sid]||[]).map((c,i)=>({i,color:c.color,type:c.type,value:c.value??null}));
-        const tgSnap = (G.hands[targetSid]||[]).map((c,i)=>({i,color:c.color,type:c.type,value:c.value??null}));
+        const tgCount = (G.hands[targetSid]||[]).length;
 
-        if (mySnap.length<2 || tgSnap.length<1){ clearTimeout(t); return revert("🛒 Not enough cards to trade."); }
+        if (mySnap.length<2 || tgCount<1){ clearTimeout(t); return revert("🛒 Not enough cards to trade."); }
         io.to(me.id).emit("shoppingPickGive",{ hand: mySnap });
 
         sock.once("shoppingGiveChosen", ({idx1,idx2})=>{
@@ -778,10 +847,12 @@ io.on("connection", (socket)=>{
           const a=Number(idx1), b=Number(idx2);
           if (!Number.isInteger(a)||!Number.isInteger(b)||a===b){ clearTimeout(t); return revert("🛒 Pick two different cards."); }
 
-          io.to(me.id).emit("shoppingPickTake",{ hand: tgSnap });
+          // ✅ Target hand stays hidden (CONFIRMED)
+          io.to(me.id).emit("shoppingPickTake",{ hiddenCount: tgCount });
 
           sock.once("shoppingTakeChosen", ({idx})=>{
             clearTimeout(t);
+            if (canceled) return;
 
             const myHand = G.hands[me.sid]||[], tgHand = G.hands[targetSid]||[];
             if (myHand.length<2 || idx<0 || idx>=tgHand.length) return revert("🛒 Selection invalid.");
@@ -829,15 +900,31 @@ io.on("connection", (socket)=>{
       const resolvePP = (targetSid)=>{
         const a = G.hands[me.sid] = (G.hands[me.sid]||[]);
         const b = G.hands[targetSid] = (G.hands[targetSid]||[]);
-        const pool = a.splice(0,a.length).concat(b.splice(0,b.length));
+
+        // Combine both hands
+        let pool = a.splice(0,a.length).concat(b.splice(0,b.length));
+
+        // Minimum enforcement (CONFIRMED): ensure total >= 2 so each can receive at least 1
+        while (pool.length < 2) {
+          const d = drawExactOrEnd(L, 1, "Pinky Promise: could not draw to reach minimum of 2 cards");
+          if (!d) return; // ended no-winner
+          pool.push(d[0]);
+        }
+
+        // ODD total handling (CONFIRMED): if odd, draw 1 extra to make even
+        if (pool.length % 2 === 1) {
+          const d = drawExactOrEnd(L, 1, "Pinky Promise: could not draw to make total even");
+          if (!d) return; // ended no-winner
+          pool.push(d[0]);
+        }
+
+        // Shuffle & split evenly
         for (let i=pool.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [pool[i],pool[j]]=[pool[j],pool[i]]; }
-        const base = Math.floor(pool.length/2), extra = pool.length%2;
-        const giveExtraToA = extra ? (Math.random()<0.5) : false;
-        const aCount = base + (giveExtraToA?1:0);
-        const bCount = base + (giveExtraToA?0:1);
-        G.hands[me.sid] = pool.splice(0, aCount);
-        G.hands[targetSid] = pool.splice(0, bCount);
-        announce(L, `🤝 Pinky Promise! ${me.name} & ${sidToName(L,targetSid)} reshuffled and split (${aCount} & ${bCount}${extra?"; one extra assigned randomly":""}).`);
+        const half = pool.length / 2;
+        G.hands[me.sid] = pool.splice(0, half);
+        G.hands[targetSid] = pool.splice(0, half);
+
+        announce(L, `🤝 Pinky Promise! ${me.name} & ${sidToName(L,targetSid)} reshuffled and split evenly (${half} & ${half}).`);
         G.color = card.color; G.value = "yellow_pinkypromise";
         const w = winnerIfAny(L); if (w){ return settleAndQueueNext(L,w); }
         advanceTurn(L,1); emitState(L);
@@ -895,49 +982,34 @@ io.on("connection", (socket)=>{
         announce(L, `♻️ Recycle canceled — not enough players.`); emitState(L); return;
       }
 
-      const pool=[];
+      // Collect all seated hands into a pool
+      let pool = [];
       for (const p of acts){
         const h = G.hands[p.sid] || [];
-        while(h.length) pool.push(h.pop());
+        pool.push(...h);
+        G.hands[p.sid] = [];
       }
 
+      // Enforce minimum 1 card each (CONFIRMED)
       if (pool.length < acts.length) {
         const need = acts.length - pool.length;
-        const got = drawExactOrEnd(L, need, "Recycle refill");
-        if (!got) return;
-        pool.push(...got);
+        const d = drawExactOrEnd(L, need, `Recycle: could not draw ${need} to guarantee 1 card each`);
+        if (!d) return; // ended no-winner
+        pool.push(...d);
       }
 
+      // Shuffle pool
       for (let i=pool.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [pool[i],pool[j]]=[pool[j],pool[i]]; }
 
+      // Deal evenly; extras go "under the pile" (CONFIRMED)
+      const base = Math.floor(pool.length / acts.length);
       const newHands = {};
-      for (const p of acts) newHands[p.sid] = [];
-
-      for (const p of acts) {
-        let c = pool.shift();
-        if (!c) {
-          const got = drawExactOrEnd(L, 1, "Recycle minimum enforcement");
-          if (!got) return;
-          c = got[0];
-        }
-        newHands[p.sid].push(c);
-      }
-
-      let idx=0;
-      while (pool.length) {
-        const p = acts[idx % acts.length];
-        newHands[p.sid].push(pool.shift());
-        idx++;
-      }
-
+      for (const p of acts) newHands[p.sid] = pool.splice(0, base);
+      const extras = pool.splice(0, pool.length);
+      putUnderSpecial(G, extras);
       for (const p of acts) G.hands[p.sid] = newHands[p.sid];
 
-      const zeros = acts.filter(p => (G.hands[p.sid]||[]).length === 0);
-      if (zeros.length) {
-        announce(L, `♻️ Recycle warning: could not guarantee 1 card for: ${zeros.map(z=>z.name).join(", ")} (deck empty).`);
-      } else {
-        announce(L, `♻️ Recycle! Everyone received at least 1 card.`);
-      }
+      announce(L, `♻️ Recycle! Everyone received ${base} card(s). ${extras.length ? `(${extras.length} under the pile.)` : ""}`);
 
       G.color = card.color; G.value = "green_recycle";
       const w = winnerIfAny(L); if (w){ return settleAndQueueNext(L,w); }
@@ -968,7 +1040,8 @@ io.on("connection", (socket)=>{
           (G.hands[target.sid]=G.hands[target.sid]||[]).push(...drawnNoc2);
           announce(L, `📄 NOC reminder: ${target.name} draws 3 more.`);
         } else {
-          announce(L, `📄 NOC reminder: previous target left.`);
+          announce(L, `📄 NOC reminder: previous target left — target cleared.`);
+          G.nocTarget = null;
         }
       }
 
@@ -989,8 +1062,15 @@ io.on("connection", (socket)=>{
       if (order.length === 2) {
         // ✅ Treat as Draw 2 against the other player
         announce(L, `🧢 IT! “We all float down here…” With only two players, IT becomes a Draw 2.`);
-        G.color = card.color; G.value = "red_it";
-        beginPenalty(L, me.sid, "draw2");
+        G.color = card.color; G.value = "draw2";
+        if (!beginPenalty(L, me.sid, "draw2")) {
+          G.discard.pop();
+          G.top = G.discard[G.discard.length-1] || null;
+          hand.splice(i,0,card);
+          io.to(me.id).emit("warn", "⚠️ Same-type stacking only (Draw 2 stacks with Draw 2)." );
+          emitState(L);
+          return;
+        }
         return emitState(L);
       }
 
@@ -1068,21 +1148,46 @@ io.on("connection", (socket)=>{
 
       const order = activeOrder(L);
       if (order.length>1){
-        const seatHands = order.map(sid=> (G.hands[sid]||[]));
-        const curSeatIdx = order.indexOf(G.current);
+        // CONFIRMED: Players move into different seats (sid assignments permuted)
+        // and hands stay with seats (hands remain attached to seat/sid).
+        const seated = L.players.filter(p=>!p.spectator);
+        const beforeBySeat = order.map(sid => ({ sid, name: sidToName(L, sid) }));
 
-        const newOrder = order.slice();
-        for (let j=newOrder.length-1;j>0;j--){ const k=(Math.random()*(j+1))|0; [newOrder[j],newOrder[k]]=[newOrder[k],newOrder[j]]; }
+        // Track last chatter's player so Happy Mode stays player-correct after swap
+        const lastChatter = L.lastChatSid ? sidToPlayer(L, L.lastChatSid) : null;
 
-        for (let j=0;j<newOrder.length;j++) G.hands[newOrder[j]] = seatHands[j];
-        if (curSeatIdx>=0) G.current = newOrder[curSeatIdx];
+        const sidPool = seated.map(p=>p.sid);
+        const shuffled = sidPool.slice();
+        for (let j=shuffled.length-1;j>0;j--){ const k=(Math.random()*(j+1))|0; [shuffled[j],shuffled[k]]=[shuffled[k],shuffled[j]]; }
 
-        const pairs=[];
-        for (let j=0;j<order.length;j++){
-          const a=sidToName(L, order[j]), b=sidToName(L, newOrder[j]);
-          if (a!==b) pairs.push(`${a} → ${b}`);
+        // Map old seat-id -> new seat-id (so pointers that track PEOPLE can follow them)
+        const sidMap = {};
+        for (let j=0;j<sidPool.length;j++) sidMap[sidPool[j]] = shuffled[j];
+
+        for (let j=0;j<seated.length;j++) seated[j].sid = shuffled[j];
+
+        if (lastChatter && lastChatter.id) {
+          const now = seated.find(p=>p.id===lastChatter.id);
+          if (now) L.lastChatSid = now.sid;
         }
-        if (pairs.length) announce(L, `🪑 Seats swapped: ${pairs.join(", ")}.`);
+
+        // Remap any seat-linked pointers that should follow the PLAYER (CONFIRMED)
+        const remap = (sid)=> (sid && sidMap[sid]) ? sidMap[sid] : sid;
+        if (G.pendingPenalty) {
+          G.pendingPenalty.targetSid = remap(G.pendingPenalty.targetSid);
+          G.pendingPenalty.lastFromSid = remap(G.pendingPenalty.lastFromSid);
+        }
+        if (G.nocTarget) G.nocTarget = remap(G.nocTarget);
+        if (L.lastChatSid) L.lastChatSid = remap(L.lastChatSid);
+
+        const afterBySeat = order.map(sid => ({ sid, name: sidToName(L, sid) }));
+        const swaps = [];
+        for (let j=0;j<order.length;j++){
+          if (beforeBySeat[j].name !== afterBySeat[j].name) {
+            swaps.push(`${beforeBySeat[j].name} → ${afterBySeat[j].name}`);
+          }
+        }
+        if (swaps.length) announce(L, `🪑 Seats swapped: ${swaps.join(", ")}.`);
       }
 
       return endChooseColorAndFinish({
@@ -1169,13 +1274,11 @@ io.on("connection", (socket)=>{
     // Wild Draw4 (stackable)
     if (card.type==="wild_draw4"){
       emitSoundToRoom(L, "wild");
-      const ok = beginPenalty(L, me.sid, "wild_draw4");
-      if (!ok) {
-        // should not happen because we enforce same-type stacks, but keep it safe
+      if (!beginPenalty(L, me.sid, "wild_draw4")) {
         G.discard.pop();
-        G.top = G.discard[G.discard.length - 1] || null;
-        hand.splice(i, 0, card);
-        io.to(me.id).emit("warn", "⚠️ Draw stack active: Wild Draw 4 can only stack on Wild Draw 4.");
+        G.top = G.discard[G.discard.length-1] || null;
+        hand.splice(i,0,card);
+        io.to(me.id).emit("warn", "⚠️ Same-type stacking only (Draw 4 stacks with Draw 4)." );
         emitState(L);
         return;
       }

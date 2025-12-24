@@ -7,11 +7,12 @@
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.x",
+    "npm": "10.x"
   },
+  "packageManager": "npm@10.9.0",
   "dependencies": {
     "express": "^4.19.2",
-    "socket.io": "^4.7.5",
-    "socket.io-client": "^4.8.1"
+    "socket.io": "^4.7.5"
   }
 }
