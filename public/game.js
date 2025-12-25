@@ -432,6 +432,296 @@
     body.appendChild(row);
   });
 
+  // ---------------- Specials: Blue Look (reorder top of deck) ----------------
+  socket.on("lookTop", ({ cards }) => {
+    const list = Array.isArray(cards) ? cards : [];
+    if (!list.length) return;
+
+    const picked = [];
+    const used = new Set();
+
+    const body = document.createElement("div");
+    const p = document.createElement("div");
+    p.style.marginBottom = "10px";
+    p.style.opacity = "0.9";
+    p.textContent = "Tap cards in the order you want them to be drawn (1st tap = next draw).";
+    body.appendChild(p);
+
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.gap = "10px";
+    grid.style.flexWrap = "wrap";
+
+    const status = document.createElement("div");
+    status.style.marginTop = "10px";
+    status.style.fontWeight = "800";
+    const updateStatus = () => {
+      status.textContent = `Selected: ${picked.length}/${list.length}`;
+    };
+    updateStatus();
+
+    const modal = openModal("Blue Look — Reorder", body, [
+      { label: "Keep Unchanged", primary: false, onClick: ({ close }) => { socket.emit("lookTopOrder", { order: list.map(c => c.i) }); close(); } },
+      { label: "Reset", primary: false, onClick: () => { picked.length = 0; used.clear(); Array.from(grid.children).forEach(el => el.removeAttribute("data-picked")); updateStatus(); } },
+      { label: "Confirm Order", primary: true, onClick: ({ close }) => { socket.emit("lookTopOrder", { order: picked.slice() }); close(); } }
+    ]);
+
+    // Show from top → down (server uses deck.pop, so last is top)
+    const show = list.slice().reverse();
+    show.forEach((c) => {
+      const img = document.createElement("img");
+      img.className = "fh-cardimg";
+      img.style.width = "84px";
+      img.style.height = "auto";
+      img.style.cursor = "pointer";
+      img.src = `assets/cards/${imgFromSnap(c)}`;
+      img.title = "Tap to add to order";
+      img.onclick = () => {
+        if (used.has(c.i)) return;
+        used.add(c.i);
+        picked.push(c.i);
+        img.setAttribute("data-picked", "1");
+        img.style.outline = "3px solid rgba(255,255,255,.5)";
+        img.style.outlineOffset = "2px";
+        updateStatus();
+        if (picked.length === list.length) {
+          // auto-confirm if complete
+          socket.emit("lookTopOrder", { order: picked.slice() });
+          modal.close();
+        }
+      };
+      grid.appendChild(img);
+    });
+
+    body.appendChild(grid);
+    body.appendChild(status);
+  });
+
+  // ---------------- Specials: Yellow Shopping ----------------
+  socket.on("shoppingChooseTarget", ({ targets }) => {
+    const ts = Array.isArray(targets) ? targets : [];
+    const body = document.createElement("div");
+    body.textContent = "Choose who to shop with:";
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gap = "10px";
+    wrap.style.marginTop = "12px";
+    body.appendChild(wrap);
+
+    const modal = openModal("Shopping — Choose Target", body, []);
+    ts.forEach(t => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "fh-btn fh-btn-primary";
+      b.textContent = t.name || t.sid;
+      b.onclick = () => { socket.emit("shoppingTargetChosen", { sid: t.sid }); modal.close(); };
+      wrap.appendChild(b);
+    });
+  });
+
+  socket.on("shoppingPickGive", ({ hand }) => {
+    const h = Array.isArray(hand) ? hand : [];
+    const chosen = [];
+    const body = document.createElement("div");
+    const info = document.createElement("div");
+    info.style.opacity = "0.9";
+    info.style.marginBottom = "10px";
+    info.textContent = "Pick 2 cards to give:";
+    body.appendChild(info);
+
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.gap = "10px";
+
+    const status = document.createElement("div");
+    status.style.marginTop = "10px";
+    status.style.fontWeight = "800";
+    const update = () => status.textContent = `Selected: ${chosen.length}/2`;
+    update();
+
+    const modal = openModal("Shopping — Give 2", body, [
+      { label: "Cancel", primary: false, onClick: ({ close }) => close() },
+      { label: "Confirm", primary: true, onClick: ({ close }) => {
+        if (chosen.length !== 2) return toast("Pick exactly 2 cards.");
+        socket.emit("shoppingGiveChosen", { idx1: chosen[0], idx2: chosen[1] });
+        close();
+      } }
+    ]);
+
+    h.forEach(c => {
+      const img = document.createElement("img");
+      img.className = "fh-cardimg";
+      img.style.width = "84px";
+      img.style.cursor = "pointer";
+      img.src = `assets/cards/${imgFromSnap(c)}`;
+      img.onclick = () => {
+        const i = Number(c.i);
+        if (!Number.isInteger(i)) return;
+        const at = chosen.indexOf(i);
+        if (at >= 0) {
+          chosen.splice(at, 1);
+          img.style.outline = "";
+        } else {
+          if (chosen.length >= 2) return;
+          chosen.push(i);
+          img.style.outline = "3px solid rgba(255,255,255,.5)";
+          img.style.outlineOffset = "2px";
+        }
+        update();
+      };
+      grid.appendChild(img);
+    });
+
+    body.appendChild(grid);
+    body.appendChild(status);
+  });
+
+  socket.on("shoppingPickTake", ({ hiddenCount, hand }) => {
+    const n = Number.isInteger(hiddenCount) ? hiddenCount : (Array.isArray(hand) ? hand.length : 0);
+    if (n <= 0) return;
+
+    const body = document.createElement("div");
+    const info = document.createElement("div");
+    info.style.opacity = "0.9";
+    info.style.marginBottom = "10px";
+    info.textContent = "Pick 1 card to take (cards are hidden):";
+    body.appendChild(info);
+
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.gap = "10px";
+
+    const modal = openModal("Shopping — Take 1", body, []);
+
+    for (let i = 0; i < n; i++) {
+      const img = document.createElement("img");
+      img.className = "fh-cardimg";
+      img.style.width = "84px";
+      img.style.cursor = "pointer";
+      img.src = "assets/cards/back.png";
+      img.title = `Hidden card ${i + 1}`;
+      img.onclick = () => { socket.emit("shoppingTakeChosen", { idx: i }); modal.close(); };
+      grid.appendChild(img);
+    }
+
+    body.appendChild(grid);
+  });
+
+  // ---------------- Specials: Pinky Promise ----------------
+  socket.on("promiseChooseTarget", ({ targets }) => {
+    const ts = Array.isArray(targets) ? targets : [];
+    const body = document.createElement("div");
+    body.textContent = "Choose who to make a Pinky Promise with:";
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gap = "10px";
+    wrap.style.marginTop = "12px";
+    body.appendChild(wrap);
+
+    const modal = openModal("Pinky Promise", body, []);
+    ts.forEach(t => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "fh-btn fh-btn-primary";
+      b.textContent = t.name || t.sid;
+      b.onclick = () => { socket.emit("promiseTargetChosen", { sid: t.sid }); modal.close(); };
+      wrap.appendChild(b);
+    });
+  });
+
+  // ---------------- Specials: Rainbow ----------------
+  socket.on("rainbowPick", ({ hand }) => {
+    const h = Array.isArray(hand) ? hand : [];
+    if (!h.length) return;
+
+    const selected = new Map(); // color -> idx
+
+    const body = document.createElement("div");
+    const info = document.createElement("div");
+    info.style.opacity = "0.9";
+    info.style.marginBottom = "10px";
+    info.textContent = "Pick exactly 1 of each color (Red, Yellow, Green, Blue) to discard under the pile:";
+    body.appendChild(info);
+
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.gap = "10px";
+
+    const status = document.createElement("div");
+    status.style.marginTop = "10px";
+    status.style.fontWeight = "800";
+    const update = () => {
+      const got = Array.from(selected.keys());
+      status.textContent = `Selected colors: ${got.length}/4 ${got.length ? `(${got.join(", ")})` : ""}`;
+    };
+    update();
+
+    const modal = openModal("Rainbow — Pick 4", body, [
+      { label: "Auto", primary: false, onClick: () => {
+        selected.clear();
+        const need = ["red","yellow","green","blue"];
+        need.forEach(col => {
+          const c = h.find(x => x && String(x.color) === col);
+          if (c && Number.isInteger(c.i)) selected.set(col, c.i);
+        });
+        Array.from(grid.children).forEach(img => {
+          const idx = Number(img.getAttribute("data-idx"));
+          const card = h.find(x => Number(x.i) === idx);
+          const col = card ? String(card.color) : "";
+          img.style.outline = selected.get(col) === idx ? "3px solid rgba(255,255,255,.5)" : "";
+          img.style.outlineOffset = "2px";
+        });
+        update();
+      } },
+      { label: "Confirm", primary: true, onClick: ({ close }) => {
+        if (selected.size !== 4) return toast("You must pick 1 of each color.");
+        socket.emit("rainbowChosen", { indices: Array.from(selected.values()) });
+        close();
+      } }
+    ]);
+
+    h.forEach(c => {
+      const idx = Number(c.i);
+      const col = String(c.color || "");
+      const img = document.createElement("img");
+      img.className = "fh-cardimg";
+      img.style.width = "84px";
+      img.style.cursor = "pointer";
+      img.src = `assets/cards/${imgFromSnap(c)}`;
+      img.setAttribute("data-idx", String(idx));
+      img.onclick = () => {
+        if (!["red","yellow","green","blue"].includes(col)) return;
+
+        const existing = selected.get(col);
+        if (existing === idx) {
+          selected.delete(col);
+          img.style.outline = "";
+        } else {
+          // only one card per color
+          selected.set(col, idx);
+          // clear outline on any previous for this color
+          Array.from(grid.children).forEach(el => {
+            const i2 = Number(el.getAttribute("data-idx"));
+            const c2 = h.find(x => Number(x.i) === i2);
+            const col2 = c2 ? String(c2.color) : "";
+            if (col2 === col) {
+              el.style.outline = (i2 === idx) ? "3px solid rgba(255,255,255,.5)" : "";
+              el.style.outlineOffset = "2px";
+            }
+          });
+        }
+        update();
+      };
+      grid.appendChild(img);
+    });
+
+    body.appendChild(grid);
+    body.appendChild(status);
+  });
+
   // ---------------- Leaderboard ----------------
   async function loadLeaderboard() {
     if (!leaderboardRoot) return;
