@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "prestart": "node -e \"require('express');require('socket.io');\" || npm ci --omit=dev --no-audit --no-fund",
+    "prestart": "node -e \"require('express');require('socket.io');\" || npm install --omit=dev --no-audit --no-fund --progress=false --loglevel=error",
     "start": "node server.js"
   },
   "engines": {
