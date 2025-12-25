@@ -57,8 +57,26 @@ function emptyGame(){
     turnEndsAt: null,
     pendingPenalty: null, // { kind, amount, targetSid, lastFromSid }
     roundFlags: {}, // e.g., { happy: true }
-    nocTarget: null
+    nocTarget: null,
+    // Temporary server-side interaction lock to prevent "modal" actions from stalling or desyncing turns.
+    // { sid, reason } while awaiting a required response (chooseColor/lookTop/shopping/pinky/rainbow).
+    actionLock: null,
+    _promptNonce: 0
   };
+}
+
+function setActionLock(G, sid, reason){
+  // Increment nonce so any previously-open prompts can safely no-op on response/timeout.
+  G._promptNonce = (G._promptNonce || 0) + 1;
+  const token = G._promptNonce;
+  G.actionLock = { sid, reason: String(reason || ""), token };
+  return token;
+}
+function clearActionLock(G){
+  G.actionLock = null;
+}
+function isLockedOut(G, sid){
+  return !!(G.actionLock && G.actionLock.sid && sid && G.actionLock.sid !== sid);
 }
 function sidToPlayer(L, sid){ return L.players.find(p=>p.sid===sid) || null; }
 function sidToName(L, sid){ const p = sidToPlayer(L, sid); return p ? p.name : sid; }
@@ -79,6 +97,19 @@ function announce(L, txt){
   L.log.push(`[${new Date().toLocaleTimeString()}] ${txt}`);
   if (L.log.length > 500) L.log.shift();
   io.in(L.room).emit("announce", txt);
+}
+
+// End immediately with no winner (house rule fallback)
+function endNoWinner(L, reason){
+  const G = L.game;
+  G.started = false;
+  G.turnEndsAt = null;
+  G.pendingPenalty = null;
+  G.nocTarget = null;
+  G.roundFlags = {};
+  clearActionLock(G);
+  announce(L, `🛑 Game over (no winner)${reason ? ` — ${reason}` : ""}.`);
+  emitState(L);
 }
 function emitSoundToRoom(L, key){
   io.in(L.room).emit("sound", key);
@@ -127,6 +158,9 @@ function drawExactOrEnd(L, n, reason){
     G.started = false;
     G.turnEndsAt = null;
     G.pendingPenalty = null;
+    G.nocTarget = null;
+    G.roundFlags = {};
+    clearActionLock(G);
     announce(L, `🛑 Game over (no winner) — required draw failed${reason ? `: ${reason}` : ""}.`);
     emitState(L);
     return null;
@@ -202,6 +236,8 @@ function endChooseColorAndFinish({ io, L, G, me, specialType, afterColor }){
   const sock = io.sockets.sockets.get(me.id);
 
   // Ask the player for a color, but NEVER stall the game.
+  // Lock actions for other players until the color is chosen (prevents draw-stack targets acting before color is set).
+  const lockToken = setActionLock(G, me.sid, "chooseColor");
   io.to(me.id).emit("chooseColor");
   G.turnEndsAt = now() + TURN_SECONDS*1000;
   emitState(L);
@@ -210,6 +246,9 @@ function endChooseColorAndFinish({ io, L, G, me, specialType, afterColor }){
   const finalize = (color) => {
     if (done) return;
     done = true;
+    // If another prompt superseded this one, no-op.
+    if (!G.actionLock || G.actionLock.token !== lockToken) return;
+    clearActionLock(G);
     const chosen = COLORS.includes(color) ? color : sample(COLORS);
     G.color = chosen;
     G.value = specialType;
@@ -325,7 +364,10 @@ function settleAndQueueNext(L, winnerSid){
   scores[winnerName].wins++; scores[winnerName].points += pts;
 
   G.started = false;
+  G.turnEndsAt = null;
+  G.pendingPenalty = null;
   G.nocTarget = null;
+  G.roundFlags = {};
   io.in(L.room).emit("announce", `+${pts} points to ${winnerName}`);
   emitState(L);
 }
@@ -450,6 +492,10 @@ io.on("connection", (socket)=>{
     const L = findLobbyBySocket(socket); if (!L) return;
     const G = L.game; if (!G.started) return;
     const me = L.players.find(p=>p.id===socket.id); if (!me || me.spectator) return;
+    if (isLockedOut(G, me.sid)) {
+      io.to(me.id).emit("warn", "⏳ Waiting for another player to finish an action.");
+      return;
+    }
     if (me.sid!==G.current) return;
 
     // penalty draw resolves the entire stack + ends turn
@@ -641,6 +687,10 @@ io.on("connection", (socket)=>{
     const G = L.game; if (!G.started) return;
     const me = L.players.find(p=>p.id===socket.id);
     if (!me || me.spectator) return;
+    if (isLockedOut(G, me.sid)) {
+      io.to(me.id).emit("warn", "⏳ Waiting for another player to finish an action.");
+      return;
+    }
     if (me.sid!==G.current) return;
 
     const hand = G.hands[me.sid] || [];
@@ -694,6 +744,7 @@ io.on("connection", (socket)=>{
       announce(L, `🔁 Order reversed.`);
       emitSoundToRoom(L, "reverse");
       G.color = card.color; G.value = "reverse";
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
       advanceTurn(L,1); return emitState(L);
     }
 
@@ -701,12 +752,14 @@ io.on("connection", (socket)=>{
       announce(L, `⏭️ Skip!`);
       emitSoundToRoom(L, "skip");
       G.color = card.color; G.value = "skip";
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
       advanceTurn(L,2); return emitState(L);
     }
 
     if (card.type==="draw2"){
       G.color = card.color; G.value = "draw2";
       emitSoundToRoom(L, "wild");
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
       if (!beginPenalty(L, me.sid, "draw2")) {
         // should be unreachable due to enforcement, but keep it safe
         G.discard.pop();
@@ -722,6 +775,9 @@ io.on("connection", (socket)=>{
     // RELAX card from hand
     if (card.type==="wild_relax") {
       emitSoundToRoom(L, "special");
+
+      // If you went out, you win (color choice no longer matters).
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
 
       if (G.pendingPenalty) {
         const targetSid = G.pendingPenalty?.targetSid || G.current;
@@ -748,7 +804,11 @@ io.on("connection", (socket)=>{
         io.to(me.id).emit("warn","👀 Blue Look may only be played when the active color is BLUE.");
         emitState(L); return;
       }
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
       emitSoundToRoom(L, "special");
+
+      // If you went out, you win (no need to reorder).
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
 
       // restock first (top discard stays), then peek up to 4
       restockDeckIfNeeded(G, 4);
@@ -756,11 +816,14 @@ io.on("connection", (socket)=>{
       const peek = G.deck.slice(-viewCount);
       const safePeek = peek.map((c,idx)=>({ i: idx, color:c.color, type:c.type, value:c.value??null }));
 
+      const lockToken = setActionLock(G, me.sid, "blue_look");
+
       io.to(me.id).emit("lookTop", { cards: safePeek });
       const sock = io.sockets.sockets.get(me.id);
       const original = safePeek.map(x=>x.i);
 
       const applyOrder = (order)=>{
+        if (G.actionLock && G.actionLock.token === lockToken) clearActionLock(G);
         const clean = Array.from(new Set((order||[]).map(Number))).filter(n=>Number.isInteger(n) && n>=0 && n<safePeek.length);
         if (clean.length!==safePeek.length){
           announce(L, `👀 Blue Look timed out/invalid; deck unchanged.`);
@@ -818,10 +881,12 @@ io.on("connection", (socket)=>{
       }
 
       announce(L, `🛒 ${me.name} is shopping…`);
+      const lockToken = setActionLock(G, me.sid, "shopping");
       let canceled=false;
 
       const revert= (msg)=>{
         if (canceled) return; canceled=true;
+        if (G.actionLock && G.actionLock.token === lockToken) clearActionLock(G);
         G.discard.pop(); G.top = G.discard[G.discard.length-1] || null; hand.push(card);
         if (msg) io.to(me.id).emit("warn", msg); emitState(L);
       };
@@ -867,6 +932,8 @@ io.on("connection", (socket)=>{
 
             tgHand.push(...giving); myHand.push(taking);
 
+            if (G.actionLock && G.actionLock.token === lockToken) clearActionLock(G);
+
             announce(L, `🛒 ${me.name} swapped 2→1 with ${sidToName(L,targetSid)}.`);
             G.color = card.color; G.value = "yellow_shopping";
 
@@ -894,10 +961,12 @@ io.on("connection", (socket)=>{
       }
 
       announce(L, `🤝 ${me.name} is making a Pinky Promise…`);
+      const lockToken = setActionLock(G, me.sid, "pinky_promise");
       const sock = io.sockets.sockets.get(me.id);
       const targets = others.map(sid=>({sid, name:sidToName(L,sid)}));
 
       const resolvePP = (targetSid)=>{
+        if (G.actionLock && G.actionLock.token === lockToken) clearActionLock(G);
         const a = G.hands[me.sid] = (G.hands[me.sid]||[]);
         const b = G.hands[targetSid] = (G.hands[targetSid]||[]);
 
@@ -1190,6 +1259,9 @@ io.on("connection", (socket)=>{
         if (swaps.length) announce(L, `🪑 Seats swapped: ${swaps.join(", ")}.`);
       }
 
+      // Seat swap can create an empty-hand winner (hands stay with seats).
+      const w = winnerIfAny(L); if (w) return settleAndQueueNext(L, w);
+
       return endChooseColorAndFinish({
         io, L, G, me, specialType:"wild_packyourbags",
         afterColor: ()=>{ advanceTurn(L,1); emitState(L); }
@@ -1209,11 +1281,13 @@ io.on("connection", (socket)=>{
       }
 
       const sock = io.sockets.sockets.get(me.id);
+      const lockToken = setActionLock(G, me.sid, "rainbow");
       io.to(me.id).emit("rainbowPick", { hand: my.map((c,i)=>({i,color:c.color,type:c.type,value:c.value??null})) });
 
       const t = setTimeout(()=> autoPick(), 20000);
 
       function autoPick(){
+        if (G.actionLock && G.actionLock.token === lockToken) clearActionLock(G);
         const picks=[];
         const used=new Set();
         for (let j=0;j<my.length && used.size<4;j++){
@@ -1226,6 +1300,7 @@ io.on("connection", (socket)=>{
 
       function applyPick(indices){
         clearTimeout(t);
+        if (G.actionLock && G.actionLock.token === lockToken) clearActionLock(G);
 
         const sorted = Array.from(new Set(indices)).sort((a,b)=>b-a);
         const chosen=[]; const used=new Set();
@@ -1251,6 +1326,9 @@ io.on("connection", (socket)=>{
           announce(L, `🌈 Rainbow! ${me.name} discarded one of each color.`);
         }
 
+        // If Rainbow empties your hand, you win immediately.
+        if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
+
         endChooseColorAndFinish({
           io, L, G, me, specialType:"wild_rainbow",
           afterColor: ()=>{ advanceTurn(L,1); emitState(L); }
@@ -1265,6 +1343,7 @@ io.on("connection", (socket)=>{
     // Wild
     if (card.type==="wild"){
       emitSoundToRoom(L, "wild");
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
       return endChooseColorAndFinish({
         io, L, G, me, specialType:"wild",
         afterColor: ()=>{ advanceTurn(L,1); emitState(L); }
@@ -1274,6 +1353,7 @@ io.on("connection", (socket)=>{
     // Wild Draw4 (stackable)
     if (card.type==="wild_draw4"){
       emitSoundToRoom(L, "wild");
+      if ((G.hands[me.sid]||[]).length===0) return settleAndQueueNext(L, me.sid);
       if (!beginPenalty(L, me.sid, "wild_draw4")) {
         G.discard.pop();
         G.top = G.discard[G.discard.length-1] || null;
@@ -1313,6 +1393,21 @@ io.on("connection", (socket)=>{
     const L = foundLobby;
     const G = L.game;
     const leaving = L.players.splice(foundIdx, 1)[0];
+
+    // If NOC target leaves, clear it so the game doesn't break later.
+    if (G?.nocTarget && leaving?.sid && G.nocTarget === leaving.sid) {
+      G.nocTarget = null;
+      announce(L, `📄 NOC target left — NOC target cleared.`);
+    }
+
+    // If a draw-stack target or stacker leaves, cancel the stack to prevent a stuck turn.
+    if (G?.pendingPenalty && leaving?.sid) {
+      const pp = G.pendingPenalty;
+      if (pp.targetSid === leaving.sid || pp.lastFromSid === leaving.sid) {
+        G.pendingPenalty = null;
+        announce(L, `🧯 Draw stack canceled because a player left.`);
+      }
+    }
 
     if (leaving && G && G.hands && G.hands[leaving.sid]) {
       reshuffleCardsIntoDeck(G, G.hands[leaving.sid]);
