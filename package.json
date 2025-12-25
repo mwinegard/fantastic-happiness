@@ -7,7 +7,7 @@
     "start": "node server.js"
   },
   "engines": {
-    "node": "22.x",
+    "node": "20.x",
     "npm": "10.x"
   },
   "packageManager": "npm@10.9.0",
